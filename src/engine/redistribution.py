@@ -15,7 +15,8 @@ class RedistributionEngine:
         Returns a DataFrame where historical volumes for restricted countries are zeroed out.
         """
         df_frozen = df.copy()
-        mask = df_frozen[chargeability_col].str.lower().isin(self.restricted_countries)
+        # Case-insensitive match
+        mask = df_frozen[chargeability_col].str.lower().isin([c.lower() for c in self.restricted_countries])
         df_frozen.loc[mask, count_col] = 0
         return df_frozen
 
@@ -32,8 +33,7 @@ class RedistributionEngine:
         """
         Returns the default list of restricted countries for the 75-Country Freeze.
         """
-        # Placeholder for the 75 countries. Using examples from the prompt.
         return {
             "Dominican Republic", "Philippines", "Bangladesh", "Vietnam", 
-            "Mexico", "China", "India" # Note: India is often restricted in FB
+            "Mexico", "China - mainland born", "India"
         }

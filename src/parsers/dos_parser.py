@@ -1,5 +1,6 @@
 from .base import BaseParser
 import pandas as pd
+import os
 
 class DOSParser(BaseParser):
     """
@@ -9,12 +10,38 @@ class DOSParser(BaseParser):
     
     FB_CATEGORIES = ['F1', 'F2A', 'F2B', 'F3', 'F4', 'FX']
 
+    def load_data(self, prevent_recursion: bool = False, **kwargs) -> pd.DataFrame:
+        """Overridden to find header automatically for DOS format."""
+        if not prevent_recursion:
+            self.find_header_row(["Foreign State", "Issuances"])
+        else:
+            super().load_data(**kwargs)
+        return self.df
+
+    @classmethod
+    def load_from_directory(cls, dir_path: str) -> pd.DataFrame:
+        """Loads all Excel files in a directory and concatenates them."""
+        all_dfs = []
+        for file in os.listdir(dir_path):
+            if file.endswith('.xlsx'):
+                parser = cls(os.path.join(dir_path, file))
+                parser.load_data()
+                parser.clean()
+                if parser.df is not None:
+                    all_dfs.append(parser.df)
+        
+        if not all_dfs:
+            return pd.DataFrame()
+        
+        combined_df = pd.concat(all_dfs, ignore_index=True)
+        return combined_df
+
     def clean(self):
         """Clean and normalize DOS specific data."""
         super().clean()
         # DOS files often have 'visa_class' or 'class_of_admission'
         def category_mapper(col: str) -> str:
-            if any(h in col.lower() for h in ['class', 'category', 'symbol']):
+            if any(h in col.lower() for h in ['class', 'category', 'symbol', 'admission']):
                 return "visa_category"
             return col
 
@@ -41,7 +68,4 @@ class DOSParser(BaseParser):
         Visas not used in FB (up to the 226k floor) spill over to EB.
         """
         usage = self.get_total_fb_usage()
-        # Technically spillover is (480k - usage), but never less than 226k floor.
-        # For this model, we look at 'savings' relative to the 226k floor or 
-        # higher limits if applicable.
         return max(0, statutory_limit - usage)

@@ -10,9 +10,9 @@ st.title("Visa Flow Waterfall Chart")
 st.markdown("This chart visualizes the path from the statutory FB limit to the final EB-1 supply.")
 
 # Load Data
-dos_parser = DOSParser("data/dos_issuances_2025.csv")
-df = dos_parser.load_data()
-dos_parser.clean()
+dos_df = DOSParser.load_from_directory("data/DOS")
+dos_parser = DOSParser("data/DOS") # Dummy instance for logic methods
+dos_parser.df = dos_df
 
 # Constants
 FB_STATUTORY_LIMIT = 226000
