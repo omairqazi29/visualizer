@@ -13,7 +13,7 @@ class DOSParser(BaseParser):
     def load_data(self, prevent_recursion: bool = False, **kwargs) -> pd.DataFrame:
         """Overridden to find header automatically for DOS format."""
         if not prevent_recursion:
-            self.find_header_row(["Foreign State", "Issuances"])
+            self.find_header_row(["Visa Class", "Issuances"])
         else:
             super().load_data(**kwargs)
         return self.df
@@ -41,7 +41,8 @@ class DOSParser(BaseParser):
         super().clean()
         # DOS files often have 'visa_class' or 'class_of_admission'
         def category_mapper(col: str) -> str:
-            if any(h in col.lower() for h in ['class', 'category', 'symbol', 'admission']):
+            lower_col = col.lower()
+            if any(h in lower_col for h in ['class', 'category', 'symbol', 'admission']):
                 return "visa_category"
             return col
 
