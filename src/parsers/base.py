@@ -8,6 +8,8 @@ class BaseParser:
     Handles common issues like 'D' disclosure strings and header normalization.
     """
     
+    DEPENDENT_MULTIPLIER = 2.2
+
     # Common variations of the chargeability header
     CHARGEABILITY_HEADERS = [
         "Foreign State of Chargeability",
@@ -56,12 +58,19 @@ class BaseParser:
         if self.df is None:
             return
 
-        def mapper(col: str) -> str:
-            if any(h.lower() in col.lower() for h in self.CHARGEABILITY_HEADERS):
-                return "chargeability"
-            return col.lower().replace(" ", "_")
+        new_cols = []
+        found_chargeability = False
+        
+        for col in self.df.columns:
+            col_str = str(col).strip()
+            # More specific matching for chargeability to avoid collisions
+            if not found_chargeability and any(h.lower() == col_str.lower() or h.lower() in col_str.lower() for h in self.CHARGEABILITY_HEADERS):
+                new_cols.append("chargeability")
+                found_chargeability = True
+            else:
+                new_cols.append(col_str.lower().replace(" ", "_").replace("-", "_"))
 
-        self.df.columns = [mapper(str(c)).strip() for c in self.df.columns]
+        self.df.columns = new_cols
         
         # Strip values in 'chargeability' if it exists
         if 'chargeability' in self.df.columns:
@@ -83,10 +92,22 @@ class BaseParser:
         for col in columns:
             if col in self.df.columns:
                 # Replace 'D' or any string starting with 'D' with 1
-                self.df[col] = self.df[col].apply(
-                    lambda x: 1 if str(x).strip().upper() == 'D' else x
-                )
+                # Also handle cases like '<10' or '1-5' which sometimes appear
+                def _handle_val(val):
+                    s_val = str(val).strip().upper()
+                    if s_val == 'D':
+                        return 1
+                    if s_val.startswith('<'):
+                        # '<10' -> return 5 as a midpoint estimate
+                        try:
+                            return int(s_val[1:]) // 2
+                        except ValueError:
+                            return 1
+                    return val
+
+                self.df[col] = self.df[col].apply(_handle_val)
                 # Force numeric, turning other errors into NaN then 0
+                # We log if we coerced something unexpected (optional, but good for debug)
                 self.df[col] = pd.to_numeric(self.df[col], errors='coerce').fillna(0).astype(int)
 
     def clean(self):

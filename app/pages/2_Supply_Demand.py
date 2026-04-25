@@ -20,8 +20,7 @@ inv_stats = inv_parser.get_india_eb1_queue()
 # Load Pipeline Data (Approved I-140 awaiting visa)
 pipe_parser = PipelineParser("data/eb_i140_i360_i526_performance_data_fy2025_q4_v1.xlsx")
 pipe_parser.load_data()
-pipe_count = pipe_parser.get_india_eb1_backlog()
-pipe_total = int(pipe_count * 2.2) # Apply dependent multiplier
+pipe_total = pipe_parser.get_india_eb1_backlog() # Multiplier already applied in parser
 
 total_queue = inv_stats['total'] + pipe_total
 
@@ -32,14 +31,19 @@ col2.metric("I-140 Pipeline (est.)", f"{pipe_total:,}")
 col3.metric("Total Queue", f"{total_queue:,}")
 col4.metric("Burn Rate", "2,000/mo")
 
+# Load DOS Data for Burn Rate calculation
+dos_df = DOSParser.load_from_directory("data/DOS")
+# Assume 12 months of data in the directory for simple average
+dynamic_burn_rate = DemandModeler.calculate_burn_rate_from_dos(dos_df, months=12)
+
 # Details
 with st.expander("See Inventory Details"):
     st.write(f"**Mountain (Pre-Apr 2023):** {inv_stats['mountain']:,}")
     st.write(f"**Valley (Apr-Dec 2023):** {inv_stats['valley']:,}")
-    st.write(f"**I-140 Backlog (Primary):** {pipe_count:,}")
+    st.write(f"**I-140 Backlog (Incl. Dependents):** {pipe_total:,}")
 
 # Burn Rate Projection
-burn_rate = st.slider("Monthly Visa Burn Rate", 500, 5000, 2000)
+burn_rate = st.slider("Monthly Visa Burn Rate", 500, 5000, dynamic_burn_rate)
 modeler = DemandModeler(total_queue, burn_rate=burn_rate)
 
 # Create a projection dataframe

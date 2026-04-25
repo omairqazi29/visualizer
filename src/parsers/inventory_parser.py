@@ -8,8 +8,6 @@ class InventoryParser(BaseParser):
     Handles the pivoted format (years as columns).
     """
     
-    DEPENDENT_MULTIPLIER = 2.2
-
     def load_india_eb1(self) -> pd.DataFrame:
         """Loads specifically the India EB1 sheet."""
         self.load_data(sheet_name='India (EB1 EW3 EB4 CRW EB5)', header=3)
