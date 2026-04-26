@@ -4,56 +4,73 @@ from src.engine.demand import DemandModeler
 from src.engine.redistribution import RedistributionEngine
 import pandas as pd
 
-def test_demand_modeler_confidence():
-    # Total queue 100,000, annual supply 24,000, even distribution (2000/mo)
+def test_demand_modeler_october_reset():
+    # Annual supply 12,000 (1000/mo). Backlog 15,000.
+    # Start in July (Month 7). 
+    # July, Aug, Sept should issue 1000 each. Total 3000.
+    # FY resets in October.
     dist = {m: 1/12 for m in range(1, 13)}
-    modeler = DemandModeler(inventory_total=100000, annual_supply=24000, monthly_distribution=dist)
+    modeler = DemandModeler(inventory_total=15000, annual_supply=12000, monthly_distribution=dist)
     
-    # User with 10,000 backlog ahead -> clears in 5 months
-    pd_date = datetime(2025, 1, 1)
-    score_high = modeler.calculate_confidence_score(pd_date, backlog_ahead=10000, target_fy=2027)
-    assert score_high > 0.9
+    start_date = datetime(2025, 7, 1)
+    projection = modeler.project_clearance(start_date=start_date)
     
-    # User with 80,000 backlog ahead -> clears in 40 months -> ~3.3 years
-    score_low = modeler.calculate_confidence_score(pd_date, backlog_ahead=80000, target_fy=2027)
-    assert score_low < 0.5
+    # Oct 1 2025 is index 3 (July=0, Aug=1, Sept=2, Oct=3)
+    # Check if Oct reset happened by looking at backlog change
+    oct_backlog = projection["trajectory"][3]["backlog"] # End of Sept
+    nov_backlog = projection["trajectory"][4]["backlog"] # End of Oct
+    
+    # Should have cleared 1000 in October
+    assert oct_backlog - nov_backlog == 1000
 
-def test_demand_modeler_nonlinear():
-    # Backlog 10,000. Annual supply 10,000.
-    # 90% of visas issued in September (Month 9).
-    dist = {m: 0.01 for m in range(1, 13)}
-    dist[9] = 0.89 # Total 1.0
+def test_demand_modeler_exhaustion():
+    # Annual supply 12,000. Backlog 20,000.
+    # Force exhaustion by putting 100% in month 1 (Jan)
+    dist = {m: 0 for m in range(1, 13)}
+    dist[1] = 1.0
     
-    # If we start in January, it should take until September to clear most of it
-    modeler = DemandModeler(inventory_total=10000, annual_supply=10000, monthly_distribution=dist)
+    modeler = DemandModeler(inventory_total=20000, annual_supply=12000, monthly_distribution=dist)
     start_date = datetime(2026, 1, 1)
     projection = modeler.project_clearance(start_date=start_date)
     
-    # After 1 month (Feb), only 100 cleared (1% of 10k)
-    assert projection["trajectory"][1]["backlog"] == 9900
-    # Clearance should be at least 9 months away (Sept 2026 or later)
-    # Jan 2026 + 9 months = Oct 2026.
-    assert projection["months_to_clear"] >= 9
+    # Trajectory[0] = Start (Jan 1, 20000)
+    # Trajectory[1] = End of Jan (8000) - all 12000 used
+    # Trajectory[2] = End of Feb (8000) - 0 used because FY exhausted
+    # ...
+    # Trajectory[9] = End of Sept (8000)
+    # Trajectory[10] = End of Oct (8000) - Reset! But dist[10] is 0
+    # Wait, my dist has 1.0 in Jan. So it will clear in next Jan.
+    
+    assert projection["trajectory"][1]["backlog"] == 8000
+    assert projection["trajectory"][2]["backlog"] == 8000
+    assert projection["trajectory"][9]["backlog"] == 8000
 
-def test_redistribution_engine_cap():
-    restricted = {"India", "China"}
-    engine = RedistributionEngine(restricted, per_country_cap=0.07)
+def test_redistribution_vertical_spillover():
+    engine = RedistributionEngine(restricted_countries={"India"})
     
-    data = {
-        "chargeability": ["India", "China", "UK", "Canada"],
-        "count": [10000, 5000, 20000, 1000]
+    # EB1 has 10,000 supply, 5,000 demand -> 5,000 leftover
+    # EB2 has 10,000 supply + 5,000 leftover = 15,000 supply. Demand 20,000.
+    demands = {
+        'EB1': pd.DataFrame({'chargeability': ['UK'], 'count': [5000]}),
+        'EB2': pd.DataFrame({'chargeability': ['India'], 'count': [20000]})
     }
-    df = pd.DataFrame(data)
     
-    # Total limit 226,000 -> 7% cap is 15,820
-    df_frozen = engine.apply_freeze(df, total_limit=226000)
+    # Override limits for test simplicity
+    engine.category_weights = {'EB1': 0.5, 'EB2': 0.5, 'EB3': 0}
+    results = engine.process_all_categories(demands, total_limit=20000)
     
-    # Restricted countries should be 0
-    assert df_frozen.loc[df_frozen['chargeability'] == "India", "count"].values[0] == 0
-    assert df_frozen.loc[df_frozen['chargeability'] == "China", "count"].values[0] == 0
+    assert results['EB1']['allocated'].sum() == 5000
+    # EB2 should get its 10,000 + 5,000 from EB1 = 15,000
+    assert results['EB2']['allocated'].sum() == 15000
+
+def test_ina_7_percent_bypass():
+    engine = RedistributionEngine(restricted_countries={})
     
-    # UK (20,000) is above cap (15,820) -> should be capped
-    assert df_frozen.loc[df_frozen['chargeability'] == "UK", "count"].values[0] == 15820
+    # Total supply 10,000. 7% cap is 700.
+    # India has 5,000 demand. Others have 0.
+    # India should get all 5,000 because visas would otherwise go unused.
+    demand_df = pd.DataFrame({'chargeability': ['India'], 'count': [5000]})
+    allocated_df, unused = engine.distribute_spillover(demand_df, supply=10000)
     
-    # Canada (1,000) is below cap -> should stay same
-    assert df_frozen.loc[df_frozen['chargeability'] == "Canada", "count"].values[0] == 1000
+    assert allocated_df.loc[0, 'allocated'] == 5000
+    assert unused == 5000

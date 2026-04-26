@@ -32,12 +32,26 @@ class DemandModeler:
         max_months = 600 # 50 years
         months_passed = 0
         
+        # Track annual supply usage per Fiscal Year (Oct 1 - Sep 30)
+        fy_issued = 0
+        
         while current_backlog > 0 and months_passed < max_months:
+            # Check for Fiscal Year Reset (October 1st)
+            if current_date.month == 10 and (months_passed > 0):
+                fy_issued = 0
+
             # Get issuance for this specific month based on historical distribution
             month_percentage = self.monthly_distribution.get(current_date.month, 1/12)
-            monthly_issuance = self.annual_supply * month_percentage
+            potential_monthly_issuance = self.annual_supply * month_percentage
             
-            current_backlog -= monthly_issuance
+            # Limit issuance to remaining FY supply
+            remaining_fy_supply = max(0, self.annual_supply - fy_issued)
+            actual_monthly_issuance = min(potential_monthly_issuance, remaining_fy_supply)
+            
+            if actual_monthly_issuance > 0:
+                current_backlog -= actual_monthly_issuance
+                fy_issued += actual_monthly_issuance
+            
             if current_backlog <= 0.001:
                 current_backlog = 0
             
