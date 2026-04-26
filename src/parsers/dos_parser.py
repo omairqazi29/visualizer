@@ -13,7 +13,7 @@ class DOSParser(BaseParser):
     def load_data(self, prevent_recursion: bool = False, **kwargs) -> pd.DataFrame:
         """Overridden to find header automatically for DOS format."""
         if not prevent_recursion:
-            self.find_header_row(["Visa Class", "Issuances"])
+            self.find_header_row(["Visa Class", "Total"])
         else:
             super().load_data(**kwargs)
         return self.df
@@ -49,7 +49,7 @@ class DOSParser(BaseParser):
         self.df.columns = [category_mapper(c) for c in self.df.columns]
         
         # Normalize the count column
-        count_cols = [c for c in self.df.columns if 'count' in c or 'number' in c or 'issuances' in c]
+        count_cols = [c for c in self.df.columns if 'count' in c or 'number' in c or 'issuances' in c or 'total' in c]
         if count_cols:
             self.normalize_disclosure_values(count_cols)
             # Rename primary count col to 'count'
