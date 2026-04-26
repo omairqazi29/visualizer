@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { getWaterfallData, getSupplyDemandData } from '@/lib/api';
 import { Users, BarChart, TrendingUp, Calendar, Zap } from 'lucide-react';
 

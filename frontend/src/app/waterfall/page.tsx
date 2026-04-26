@@ -18,25 +18,27 @@ export default function WaterfallPage() {
   if (!data) return <div>Loading visualization...</div>;
 
   const chartData = [
-    { name: 'EB Base', value: data.eb_base_limit, fill: '#002868' },
-    { name: 'FB Spillover', value: data.fb_spillover, fill: '#BF0A30' },
-    { name: 'Savings', value: data.redistribution_savings, fill: '#BF0A30' },
-    { name: 'Total EB', value: data.total_eb_supply, fill: '#002868', isTotal: true },
-    { name: 'EB-1 (28.6%)', value: data.eb1_supply, fill: '#003a94', isTotal: true },
+    { name: 'EB Base', value: data.eb_base_limit || 140000, fill: '#002868' },
+    { name: 'FB Spillover', value: data.fb_spillover_std || 0, fill: '#BF0A30' },
+    { name: 'FB Savings', value: data.fb_savings_freeze || 0, fill: '#BF0A30' },
+    { name: 'EB 4/5 Spill', value: (data.eb45_spillover_std || 0) + (data.eb45_savings_freeze || 0), fill: '#BF0A30' },
+    { name: 'Total EB', value: data.total_eb_supply || 0, fill: '#002868', isTotal: true },
+    { name: 'India EB-1', value: data.eb1_supply || 0, fill: '#003a94', isTotal: true },
   ];
 
   // For a waterfall, we need to calculate the 'start' and 'end' for each bar
   let current = 0;
   const processedData = chartData.map((item, index) => {
     const isTotal = item.isTotal;
+    const val = item.value || 0;
     const start = isTotal ? 0 : current;
-    const end = isTotal ? item.value : current + item.value;
-    if (!isTotal) current += item.value;
+    const end = isTotal ? val : current + val;
+    if (!isTotal) current += val;
     
     return {
       ...item,
       displayValue: [start, end],
-      label: item.value.toLocaleString()
+      label: val.toLocaleString()
     };
   });
 
@@ -52,10 +54,10 @@ export default function WaterfallPage() {
             variant={applyFreeze ? "destructive" : "outline"} 
             onClick={() => setApplyFreeze(!applyFreeze)}
           >
-            {applyFreeze ? "Disable 75-Country Freeze" : "Apply 75-Country Freeze"}
+            {applyFreeze ? "Disable Trump Effect" : "Apply Trump Effect"}
           </Button>
           <Badge variant={applyFreeze ? "default" : "secondary"}>
-            {applyFreeze ? "Freeze Active" : "Standard INA Flow"}
+            {applyFreeze ? "Restriction Mode" : "Standard INA Flow"}
           </Badge>
         </div>
       </div>
@@ -63,23 +65,23 @@ export default function WaterfallPage() {
       <Card className="p-6">
         <CardHeader>
           <CardTitle>FY 2026/2027 Spillover Path</CardTitle>
-          <CardDescription>Visualizing how unused Family-Based visas and country-cap savings flow into Employment-Based categories.</CardDescription>
+          <CardDescription>Visualizing how unused Family-Based and EB-4/5 visas flow into the India EB-1 pool.</CardDescription>
         </CardHeader>
         <CardContent className="h-[500px] mt-4">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={processedData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="name" />
-              <YAxis tickFormatter={(val) => `${(val / 1000).toFixed(0)}k`} />
+              <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis tickFormatter={(val) => `${(val / 1000).toFixed(0)}k`} fontSize={12} tickLine={false} axisLine={false} />
               <Tooltip 
-                formatter={(value: any) => value[1] - value[0]}
+                formatter={(value: any) => (value[1] - value[0]).toLocaleString()}
                 labelStyle={{ fontWeight: 'bold' }}
               />
               <Bar dataKey="displayValue">
                 {processedData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
                 ))}
-                <LabelList dataKey="label" position="top" />
+                <LabelList dataKey="label" position="top" style={{ fontSize: '12px', fontWeight: 'bold', fill: '#475569' }} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -89,20 +91,24 @@ export default function WaterfallPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">Redistribution Savings</CardTitle>
+            <CardTitle className="text-sm font-semibold">Restriction Savings (FB + EB4/5)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-navy-900">{data.redistribution_savings?.toLocaleString()}</div>
-            <p className="text-sm text-slate-500 mt-1">Visas reclaimed from restricted countries under the 75-country freeze logic.</p>
+            <div className="text-2xl font-bold text-navy-900">
+              {((data.fb_savings_freeze || 0) + (data.eb45_savings_freeze || 0)).toLocaleString()}
+            </div>
+            <p className="text-sm text-slate-500 mt-1">Visas reclaimed for EB-1 due to current administrative restrictions.</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">FB Spillover</CardTitle>
+            <CardTitle className="text-sm font-semibold">Standard Spillover</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-navy-900">{data.fb_spillover?.toLocaleString()}</div>
-            <p className="text-sm text-slate-500 mt-1">Unused Family-Based visas from the 226,000 statutory floor.</p>
+            <div className="text-2xl font-bold text-navy-900">
+              {((data.fb_spillover_std || 0) + (data.eb45_spillover_std || 0)).toLocaleString()}
+            </div>
+            <p className="text-sm text-slate-500 mt-1">Normal unused visas flowing from statutory limits.</p>
           </CardContent>
         </Card>
       </div>
