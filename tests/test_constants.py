@@ -1,0 +1,43 @@
+"""Tests to ensure statutory constants match INA expectations."""
+
+from src.constants import (
+    FB_STATUTORY_LIMIT,
+    EB_BASE_LIMIT,
+    EB1_STATUTORY_SHARE,
+    EB45_STATUTORY_SHARE,
+    PER_COUNTRY_CAP,
+    DEPENDENT_MULTIPLIER,
+    DEFAULT_INDIA_EB1_SUPPLY,
+)
+
+
+def test_fb_statutory_limit():
+    # INA 201(c) floor for family-based preference
+    assert FB_STATUTORY_LIMIT == 226000
+
+
+def test_eb_base_limit():
+    # INA 203(b) worldwide employment-based limit
+    assert EB_BASE_LIMIT == 140000
+
+
+def test_eb1_share():
+    assert EB1_STATUTORY_SHARE == 0.286
+
+
+def test_eb45_share():
+    assert EB45_STATUTORY_SHARE == 0.142
+
+
+def test_per_country_cap():
+    assert PER_COUNTRY_CAP == 0.07
+
+
+def test_dependent_multiplier():
+    assert DEPENDENT_MULTIPLIER == 2.2
+
+
+def test_default_india_eb1_supply():
+    # Empirical baseline used for standard-flow projections
+    assert DEFAULT_INDIA_EB1_SUPPLY == 9000
+    assert DEFAULT_INDIA_EB1_SUPPLY > 0

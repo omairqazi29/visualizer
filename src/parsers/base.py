@@ -1,14 +1,20 @@
+import os
+
 import pandas as pd
 import numpy as np
-from typing import List, Optional
+from typing import Any, List, Optional
+
+from ..constants import DEPENDENT_MULTIPLIER
+
 
 class BaseParser:
     """
     Base class for parsing government CSV and Excel data.
     Handles common issues like 'D' disclosure strings and header normalization.
     """
-    
-    DEPENDENT_MULTIPLIER = 2.2
+
+    # Dependent multiplier (primary + 2.2x dependents) per project mandate
+    DEPENDENT_MULTIPLIER = DEPENDENT_MULTIPLIER
 
     # Common variations of the chargeability header
     CHARGEABILITY_HEADERS = [
@@ -24,6 +30,9 @@ class BaseParser:
 
     def load_data(self, sheet_name: Optional[str] = None, prevent_recursion: bool = False, **kwargs) -> pd.DataFrame:
         """Loads the data based on file extension."""
+        if not os.path.exists(self.file_path):
+            raise FileNotFoundError(f"Data file not found: {self.file_path}")
+
         if self.file_path.endswith('.csv'):
             self.df = pd.read_csv(self.file_path, **kwargs)
         elif self.file_path.endswith(('.xlsx', '.xls')):
@@ -35,7 +44,7 @@ class BaseParser:
             raise ValueError(f"Unsupported file format: {self.file_path}")
         return self.df
 
-    def find_header_row(self, keywords: List[str], max_rows: int = 15, sheet_name: Optional[any] = 0) -> int:
+    def find_header_row(self, keywords: List[str], max_rows: int = 15, sheet_name: Optional[Any] = 0) -> int:
         """
         Scans the first few rows to find the one containing most keywords.
         Updates self.df if found.

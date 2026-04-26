@@ -40,8 +40,9 @@ class DemandModeler:
             if current_date.month == 10 and (months_passed > 0):
                 fy_issued = 0
 
-            # Get issuance for this specific month based on historical distribution
-            month_percentage = self.monthly_distribution.get(current_date.month, 1/12)
+            # Get issuance for this specific month based on historical distribution.
+            # Missing months default to 0 (caller must explicitly provide all relevant months).
+            month_percentage = self.monthly_distribution.get(current_date.month, 0.0)
             potential_monthly_issuance = self.annual_supply * month_percentage
             
             # Limit issuance to remaining FY supply

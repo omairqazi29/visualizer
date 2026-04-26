@@ -2,19 +2,26 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { getWaterfallData } from '@/lib/api';
+import { getWaterfallData, WaterfallData } from '@/lib/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 export default function WaterfallPage() {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<WaterfallData | null>(null);
   const [applyFreeze, setApplyFreeze] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getWaterfallData(applyFreeze).then(setData);
+    getWaterfallData(applyFreeze)
+      .then(setData)
+      .catch((e: unknown) => {
+        const err = e as { message?: string };
+        setError(err?.message || 'Failed to load waterfall data');
+      });
   }, [applyFreeze]);
 
+  if (error) return <div className="text-crimson-600">Error: {error}</div>;
   if (!data) return <div>Loading visualization...</div>;
 
   const chartData = [
@@ -28,7 +35,7 @@ export default function WaterfallPage() {
 
   // For a waterfall, we need to calculate the 'start' and 'end' for each bar
   let current = 0;
-  const processedData = chartData.map((item, index) => {
+  const processedData = chartData.map((item /* , index */) => {
     const isTotal = item.isTotal;
     const val = item.value || 0;
     const start = isTotal ? 0 : current;
@@ -74,12 +81,16 @@ export default function WaterfallPage() {
               <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
               <YAxis tickFormatter={(val) => `${(val / 1000).toFixed(0)}k`} fontSize={12} tickLine={false} axisLine={false} />
               <Tooltip 
-                formatter={(value: any) => (value[1] - value[0]).toLocaleString()}
+                formatter={(value: unknown) => {
+                  const v = value as [number, number];
+                  return (v[1] - v[0]).toLocaleString();
+                }}
                 labelStyle={{ fontWeight: 'bold' }}
               />
               <Bar dataKey="displayValue">
-                {processedData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}
+                {processedData.map((entry, _i) => (
+                  <Cell key={entry.name} fill={entry.fill} />
                 ))}
                 <LabelList dataKey="label" position="top" style={{ fontSize: '12px', fontWeight: 'bold', fill: '#475569' }} />
               </Bar>

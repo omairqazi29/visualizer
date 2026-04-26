@@ -3,14 +3,15 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getWaterfallData, getSupplyDemandData } from '@/lib/api';
-import { Users, BarChart, TrendingUp, Calendar, Zap } from 'lucide-react';
+import { getWaterfallData, getSupplyDemandData, WaterfallData, SupplyDemandData } from '@/lib/api';
+import { Users, TrendingUp, Calendar, Zap } from 'lucide-react';
 
 export default function Overview() {
-  const [data, setData] = useState<any>(null);
-  const [sdData, setSdData] = useState<any>(null);
-  const [freezeWaterfall, setFreezeWaterfall] = useState<any>(null);
-  const [freezeSD, setFreezeSD] = useState<any>(null);
+  const [data, setData] = useState<WaterfallData | null>(null);
+  const [sdData, setSdData] = useState<SupplyDemandData | null>(null);
+  const [freezeWaterfall, setFreezeWaterfall] = useState<WaterfallData | null>(null);
+  const [freezeSD, setFreezeSD] = useState<SupplyDemandData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -24,9 +25,11 @@ export default function Overview() {
         setSdData(sd);
         setFreezeWaterfall(fw);
         setFreezeSD(fsd);
-      });
+      })
+      .catch((e) => setError(e?.message || 'Failed to load dashboard data'));
   }, []);
 
+  if (error) return <div className="text-crimson-600">Error: {error}</div>;
   if (!data || !sdData || !freezeWaterfall || !freezeSD) return <div>Loading dashboard...</div>;
 
   const windfall = (freezeWaterfall.fb_savings_freeze || 0) + (freezeWaterfall.eb45_savings_freeze || 0);
@@ -42,7 +45,7 @@ export default function Overview() {
         <div className="flex gap-2">
           <div className="px-3 py-1 bg-crimson-600 text-white text-xs font-bold rounded-full flex items-center gap-1 animate-pulse">
             <Zap className="w-3 h-3 fill-white" />
-            REstriction MODE ACTIVE
+            Restriction Mode Active
           </div>
         </div>
       </div>
@@ -98,12 +101,12 @@ export default function Overview() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4">
           <CardHeader>
-            <CardTitle className="text-navy-900">The "Restriction Delta" Analysis</CardTitle>
+            <CardTitle className="text-navy-900">The Restriction Delta Analysis</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-slate-600">
             <p>
-              Under the current administrative stance, travel bans and 75-country freezes effectively redirect thousands of unused visas 
-              from restricted regions back into the general employment-based pool. 
+              Under the current administrative stance, travel bans and 75-country freezes effectively redirect thousands of unused visas
+              from restricted regions back into the general employment-based pool.
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 border rounded-lg bg-slate-50">

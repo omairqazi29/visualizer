@@ -2,27 +2,34 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { getSupplyDemandData } from '@/lib/api';
+import { getSupplyDemandData, SupplyDemandData } from '@/lib/api';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export default function SupplyDemandPage() {
-  const [standardData, setStandardData] = useState<any>(null);
-  const [freezeData, setFreezeData] = useState<any>(null);
+  const [standardData, setStandardData] = useState<SupplyDemandData | null>(null);
+  const [freezeData, setFreezeData] = useState<SupplyDemandData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       getSupplyDemandData(false),
       getSupplyDemandData(true)
-    ]).then(([std, frz]) => {
-      setStandardData(std);
-      setFreezeData(frz);
-    });
+    ])
+      .then(([std, frz]) => {
+        setStandardData(std);
+        setFreezeData(frz);
+      })
+      .catch((e: unknown) => {
+        const err = e as { message?: string };
+        setError(err?.message || 'Failed to load supply/demand data');
+      });
   }, []);
 
+  if (error) return <div className="text-crimson-600">Error: {error}</div>;
   if (!standardData || !freezeData) return <div>Loading comparison...</div>;
 
   // Combine trajectories for the chart
-  const projection = standardData.trajectory.map((t: any, idx: number) => ({
+  const projection = standardData.trajectory.map((t, idx: number) => ({
     date: t.date,
     dateLabel: new Date(t.date).toLocaleDateString(undefined, { month: 'short', year: '2-digit' }),
     standardBacklog: t.backlog,
@@ -71,7 +78,7 @@ export default function SupplyDemandPage() {
 
       <Card className="p-6">
         <CardHeader>
-          <CardTitle>The "Restriction Delta"</CardTitle>
+          <CardTitle>The Restriction Delta</CardTitle>
           <CardDescription>How travel bans and 75-country freezes accelerate India EB-1 backlog clearance.</CardDescription>
         </CardHeader>
         <CardContent>

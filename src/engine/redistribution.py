@@ -1,22 +1,34 @@
 import pandas as pd
 from typing import Set
 
+from ..constants import (
+    EB_BASE_LIMIT,
+    EB1_STATUTORY_SHARE,
+    EB2_STATUTORY_SHARE,
+    EB3_STATUTORY_SHARE,
+    EB4_STATUTORY_SHARE,
+    EB5_STATUTORY_SHARE,
+    PER_COUNTRY_CAP,
+    DEFAULT_RESTRICTED_COUNTRIES,
+)
+
+
 class RedistributionEngine:
     """
     Implements the '75-Country Freeze' redistribution logic and INA spillover.
     Identifies visa savings from restricted countries and converts them into spillover.
     """
 
-    def __init__(self, restricted_countries: Set[str], per_country_cap: float = 0.07):
+    def __init__(self, restricted_countries: Set[str], per_country_cap: float = PER_COUNTRY_CAP):
         self.restricted_countries = {c.lower() for c in restricted_countries}
         self.per_country_cap = per_country_cap
-        self.base_eb_limit = 140000
+        self.base_eb_limit = EB_BASE_LIMIT
         self.category_weights = {
-            'EB1': 0.286,
-            'EB2': 0.286,
-            'EB3': 0.286,
-            'EB4': 0.071,
-            'EB5': 0.071
+            'EB1': EB1_STATUTORY_SHARE,
+            'EB2': EB2_STATUTORY_SHARE,
+            'EB3': EB3_STATUTORY_SHARE,
+            'EB4': EB4_STATUTORY_SHARE,
+            'EB5': EB5_STATUTORY_SHARE,
         }
 
     def calculate_category_limits(self, total_limit: int = None) -> dict:
@@ -45,35 +57,50 @@ class RedistributionEngine:
 
     def distribute_spillover(self, demand_df: pd.DataFrame, supply: int, chargeability_col: str = 'chargeability', count_col: str = 'count') -> tuple:
         """
-        Distributes supply to demand according to INA rules (7% cap first, then surplus to backlogged).
-        Returns (allocated_df, unused_supply)
+        Distributes supply to demand according to INA 202(a)(2) 7% per-country cap,
+        followed by INA 202(a)(5) surplus distribution to backlogged countries (no cap).
+
+        The per-country cap is computed against the passed supply (typically the category
+        statutory limit for the current EB category). Each country may receive at most
+        7% under the cap in the first pass. Any leftover supply after satisfying the cap
+        for all countries is then distributed to countries that still have unmet demand,
+        bypassing the cap (this favors the most backlogged countries such as India/China).
+
+        Returns (allocated_df, unused_supply).
         """
+        if demand_df.empty or supply <= 0:
+            allocated = demand_df.copy()
+            if not allocated.empty:
+                allocated['allocated'] = 0
+            return allocated, supply
+
         allocated = demand_df.copy()
         allocated['allocated'] = 0
         remaining_supply = supply
-        
-        # 1. Apply 7% cap strictly first for everyone
+
+        # INA 202(a)(2): per-country cap = 7% of the supply being allocated
         cap_value = int(supply * self.per_country_cap)
-        
+
+        # First pass: enforce 7% cap per country
         for idx, row in allocated.iterrows():
-            demand = row[count_col]
-            # Use 7% cap
+            if remaining_supply <= 0:
+                break
+            demand = int(row[count_col])
             can_take = min(demand, cap_value, remaining_supply)
             allocated.at[idx, 'allocated'] = can_take
             remaining_supply -= can_take
-            
-        # 2. If there is remaining supply, distribute to backlogged countries (India/China) 
-        # bypassing the 7% cap as per INA 202(a)(5).
+
+        # Second pass: surplus to backlogged countries (INA 202(a)(5) bypass)
         if remaining_supply > 0:
             for idx, row in allocated.iterrows():
-                if remaining_supply <= 0: break
-                
-                still_needed = row[count_col] - row['allocated']
+                if remaining_supply <= 0:
+                    break
+                still_needed = int(row[count_col]) - int(row['allocated'])
                 if still_needed > 0:
                     take_extra = min(still_needed, remaining_supply)
                     allocated.at[idx, 'allocated'] += take_extra
                     remaining_supply -= take_extra
-                    
+
         return allocated, remaining_supply
 
     def process_all_categories(self, category_demands: dict, total_limit: int = 140000) -> dict:
@@ -119,7 +146,4 @@ class RedistributionEngine:
         """
         Returns the default list of restricted countries for the 75-Country Freeze.
         """
-        return {
-            "Dominican Republic", "Philippines", "Bangladesh", "Vietnam", 
-            "Mexico", "China - mainland born", "India"
-        }
+        return DEFAULT_RESTRICTED_COUNTRIES.copy()

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BarChart3, TrendingUp, Calculator, Home } from 'lucide-react';
+import { LayoutDashboard, BarChart3, TrendingUp, Calculator } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [

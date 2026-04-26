@@ -5,18 +5,20 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { predictPD } from '@/lib/api';
-import { Calculator, Calendar, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+import { predictPD, PredictData } from '@/lib/api';
+import { Calendar, ArrowRight } from 'lucide-react';
 
 export default function PredictorPage() {
   const [pd, setPd] = useState('2025-01-16');
-  const [standardResult, setStandardResult] = useState<any>(null);
-  const [freezeResult, setFreezeResult] = useState<any>(null);
+  const [standardResult, setStandardResult] = useState<PredictData | null>(null);
+  const [freezeResult, setFreezeResult] = useState<PredictData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [, setError] = useState<string | null>(null);  // error captured for future UI display
 
   const handlePredict = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       const [std, frz] = await Promise.all([
         predictPD(pd, false),
@@ -24,17 +26,13 @@ export default function PredictorPage() {
       ]);
       setStandardResult(std);
       setFreezeResult(frz);
-    } catch (err) {
-      console.error(err);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      const message = e?.response?.data?.detail || 'Prediction request failed';
+      setError(message);
     } finally {
       setLoading(false);
     }
-  };
-
-  const getConfidenceColor = (score: number) => {
-    if (score > 0.8) return 'text-emerald-600 bg-emerald-50';
-    if (score > 0.5) return 'text-amber-600 bg-amber-50';
-    return 'text-crimson-600 bg-crimson-50';
   };
 
   return (
