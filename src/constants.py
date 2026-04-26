@@ -31,7 +31,11 @@ DEPENDENT_MULTIPLIER: float = 2.2
 # This is an empirical assumption used when not applying the 75-country freeze.
 DEFAULT_INDIA_EB1_SUPPLY: int = 9000
 
-# Default restricted countries for the 75-Country Freeze ("Trump Effect")
+# Default restricted countries for the 75-Country Freeze (hypothetical "Restriction Scenario").
+# NOTE: Research (INA 201/203, 2026 Visa Bulletins) shows no enacted broad 75-country IV freeze.
+# This models "what-if" demand reduction on high-FB/EB4-5 users to generate spillovers to EB-1.
+# India deliberately excluded: it is the primary beneficiary of modeled surplus redistribution.
+# Sources: travel.state.gov Visa Bulletins (India EB-1 FA 01APR23 as of May 2026), INA 202(a)(5) surplus rules.
 DEFAULT_RESTRICTED_COUNTRIES: set[str] = {
     "Dominican Republic",
     "Philippines",
@@ -39,7 +43,6 @@ DEFAULT_RESTRICTED_COUNTRIES: set[str] = {
     "Vietnam",
     "Mexico",
     "China - mainland born",
-    "India",
 }
 
 __all__ = [

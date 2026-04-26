@@ -36,6 +36,7 @@ class WaterfallResponse(BaseModel):
     eb45_savings_freeze: int
     total_eb_supply: int
     eb1_supply: int
+    india_eb1_supply: int  # effective for India after non-India EB-1 usage (or full under freeze)
 
 
 class SupplyDemandResponse(BaseModel):
@@ -70,6 +71,7 @@ async def get_waterfall_data(apply_freeze: bool = Query(False, description="Appl
             eb45_savings_freeze=breakdown.eb45_savings_freeze,
             total_eb_supply=breakdown.total_eb_supply,
             eb1_supply=breakdown.eb1_supply,
+            india_eb1_supply=breakdown.india_eb1_supply,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

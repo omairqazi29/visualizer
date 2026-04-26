@@ -105,8 +105,7 @@ export default function Overview() {
           </CardHeader>
           <CardContent className="space-y-4 text-slate-600">
             <p>
-              Under the current administrative stance, travel bans and 75-country freezes effectively redirect thousands of unused visas
-              from restricted regions back into the general employment-based pool.
+              <strong>Hypothetical Scenario:</strong> Models potential demand reductions (per INA 201/203 spillover). As of May 2026 Visa Bulletin, India EB-1 Final Action is 01APR23 (no enacted broad 75-country freeze). See research notes in docs/.
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 border rounded-lg bg-slate-50">

@@ -6,15 +6,26 @@ class DemandModeler:
     Models visa demand using non-linear historical distribution.
     """
     
-    def __init__(self, inventory_total: int, annual_supply: int, monthly_distribution: dict):
+    def __init__(self, inventory_total: int, annual_supply: int, monthly_distribution: dict, use_uniform_if_high_supply: bool = True):
         """
-        inventory_total: Current backlog count
+        inventory_total: Current backlog count (with 2.2x dependents)
         annual_supply: Total visas available per FY (base + spillover + savings)
         monthly_distribution: Dict of {month_num: percentage} e.g. {10: 0.05, 9: 0.40}
+          NOTE: Historical % from DOS may under-estimate under restriction scenarios (supply-constrained history).
+          When use_uniform_if_high_supply and annual_supply high, blends toward flat monthly.
         """
         self.inventory_total = inventory_total
         self.annual_supply = annual_supply
         self.monthly_distribution = monthly_distribution
+        if use_uniform_if_high_supply and annual_supply > 15000:
+            # Blend historical with uniform for optimistic high-supply freeze scenarios (INA research: DOS can issue faster when numbers available)
+            uniform = {m: 1.0/12 for m in range(1, 13)}
+            blended = {}
+            for m in range(1, 13):
+                hist = monthly_distribution.get(m, 0)
+                blended[m] = 0.6 * hist + 0.4 * uniform[m]
+            total = sum(blended.values()) or 1
+            self.monthly_distribution = {m: v/total for m, v in blended.items()}
 
     def project_clearance(self, start_date: datetime = None, backlog: int = None) -> dict:
         """

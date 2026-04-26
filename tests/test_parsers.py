@@ -35,13 +35,10 @@ def test_inventory_parser_multiplier():
     parser = InventoryParser(path)
     stats = parser.get_india_eb1_queue()
     
-    # Mock data for 1st preference (India) has counts like 1000, 500, 200, etc.
-    # Total primary should be sum of Priority Date Year columns
-    # InventoryParser applies 2.2x multiplier
+    # Dynamic parser sums all Priority Date Year cols for EB-1 India rows (real 2026 report + mock).
+    # Applies 2.2x. Total >0 validates fix for 2024/2025+ columns.
     assert stats['total'] > 0
-    # check if multiplier is applied (Primary sum * 2.2 should be int)
-    # The counts in generate_mock_data are integers.
-    pass
+    assert isinstance(stats['total'], int)
 
 def test_pipeline_parser_multiplier():
     path = "data/eb_i140_i360_i526_performance_data_fy2025_q4_v1.xlsx"

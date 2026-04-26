@@ -24,13 +24,17 @@ export default function WaterfallPage() {
   if (error) return <div className="text-crimson-600">Error: {error}</div>;
   if (!data) return <div>Loading visualization...</div>;
 
+  const fbSavings = data.fb_savings_freeze || 0;
+  const eb45Savings = data.eb45_savings_freeze || 0;
+  const indiaSupply = data.india_eb1_supply || data.eb1_supply || 0;
+
   const chartData = [
     { name: 'EB Base', value: data.eb_base_limit || 140000, fill: '#002868' },
     { name: 'FB Spillover', value: data.fb_spillover_std || 0, fill: '#BF0A30' },
-    { name: 'FB Savings', value: data.fb_savings_freeze || 0, fill: '#BF0A30' },
-    { name: 'EB 4/5 Spill', value: (data.eb45_spillover_std || 0) + (data.eb45_savings_freeze || 0), fill: '#BF0A30' },
-    { name: 'Total EB', value: data.total_eb_supply || 0, fill: '#002868', isTotal: true },
-    { name: 'India EB-1', value: data.eb1_supply || 0, fill: '#003a94', isTotal: true },
+    { name: 'FB Savings (Freeze)', value: fbSavings, fill: '#BF0A30' },
+    { name: 'EB 4/5 Spill+ Savings', value: (data.eb45_spillover_std || 0) + eb45Savings, fill: '#BF0A30' },
+    { name: 'Total EB Supply', value: data.total_eb_supply || 0, fill: '#002868', isTotal: true },
+    { name: 'India EB-1 Supply', value: indiaSupply, fill: '#003a94', isTotal: true },
   ];
 
   // For a waterfall, we need to calculate the 'start' and 'end' for each bar
@@ -61,10 +65,10 @@ export default function WaterfallPage() {
             variant={applyFreeze ? "destructive" : "outline"} 
             onClick={() => setApplyFreeze(!applyFreeze)}
           >
-            {applyFreeze ? "Disable Trump Effect" : "Apply Trump Effect"}
+            {applyFreeze ? "Disable Restriction Scenario" : "Apply Restriction Scenario (75-Country)"}
           </Button>
           <Badge variant={applyFreeze ? "default" : "secondary"}>
-            {applyFreeze ? "Restriction Mode" : "Standard INA Flow"}
+            {applyFreeze ? "Hypothetical Restriction" : "Standard INA Flow"}
           </Badge>
         </div>
       </div>
@@ -106,7 +110,7 @@ export default function WaterfallPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-navy-900">
-              {((data.fb_savings_freeze || 0) + (data.eb45_savings_freeze || 0)).toLocaleString()}
+              {(fbSavings + eb45Savings).toLocaleString()}
             </div>
             <p className="text-sm text-slate-500 mt-1">Visas reclaimed for EB-1 due to current administrative restrictions.</p>
           </CardContent>

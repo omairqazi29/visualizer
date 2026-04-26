@@ -23,6 +23,7 @@ export interface WaterfallData {
   eb45_savings_freeze: number;
   total_eb_supply: number;
   eb1_supply: number;
+  india_eb1_supply: number;  // effective India EB-1 supply (key for freeze delta)
 }
 
 export interface TrajectoryPoint {

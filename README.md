@@ -1,6 +1,6 @@
 # The Spillover Engine 🇺🇸 📈
 
-A modern web application to visualize and predict the impact of the 2026/2027 U.S. Immigrant Visa restrictions on the India EB-1 backlog.
+A modern web application to visualize and predict the impact of hypothetical U.S. Immigrant Visa restrictions on the India EB-1 backlog (INA 201/203 spillover modeling, revamped 2026 with current Visa Bulletin data).
 
 ## Stack
 - **Backend**: FastAPI (Python)
@@ -8,10 +8,10 @@ A modern web application to visualize and predict the impact of the 2026/2027 U.
 - **Data**: Pandas, Recharts
 
 ## Features
-- **Waterfall Visualization**: Path from FB Statutory Limit to Final EB-1 Supply.
-- **75-Country Freeze**: Logic to redistribute savings from restricted countries.
-- **Mountain vs Valley Analysis**: India EB-1 inventory breakdown.
-- **PD Predictor**: Confidence scoring for Priority Date approvals in FY 2027.
+- **Waterfall Visualization**: INA-compliant path from FB/EB limits to India EB-1 supply (with/without Restriction Scenario).
+- **Hypothetical Restriction Scenario**: Configurable 75-country demand freeze savings + EB4/5 roll-up to EB-1 (research: not enacted as of 2026; India excluded from restricted).
+- **Inventory + Pipeline**: Dynamic 2026 USCIS EB I-485 + I-140 pending, 2.2x dependents.
+- **PD Predictor**: FY2027 confidence with high-supply blend + backlog_ahead by PD year.
 
 ## INA 201/203 Spillover Flow (Freeze Mode)
 

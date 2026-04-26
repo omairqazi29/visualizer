@@ -39,7 +39,7 @@ export default function PredictorPage() {
     <div className="space-y-6 max-w-5xl">
       <div>
         <h2 className="text-3xl font-bold tracking-tight text-navy-900">Personal PD Predictor</h2>
-        <p className="text-slate-500">Estimate how travel bans and restrictions accelerate your specific Priority Date.</p>
+        <p className="text-slate-500">Compare Standard INA vs. hypothetical Restriction Scenario (research-backed INA 201/203 model; current India EB-1 cutoff ~Apr 2023).</p>
       </div>
 
       <Card className="max-w-md">
