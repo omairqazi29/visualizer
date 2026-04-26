@@ -10,7 +10,7 @@ import { Calculator, Calendar, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function PredictorPage() {
   const [pd, setPd] = useState('2025-01-16');
-  const [burnRate, setBurnRate] = useState(2000);
+  const [applyFreeze, setApplyFreeze] = useState<boolean>(false);
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -18,7 +18,7 @@ export default function PredictorPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const data = await predictPD(pd, burnRate);
+      const data = await predictPD(pd, applyFreeze);
       setResult(data);
     } catch (err) {
       console.error(err);
@@ -44,10 +44,10 @@ export default function PredictorPage() {
         <Card>
           <CardHeader>
             <CardTitle>Enter Your Details</CardTitle>
-            <CardDescription>We use the current inventory and pipeline estimates to calculate your place in line.</CardDescription>
+            <CardDescription>We use historical seasonality and dynamic spillover simulations to calculate your place in line.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handlePredict} className="space-y-4">
+            <form onSubmit={handlePredict} className="space-y-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Priority Date</label>
                 <Input 
@@ -57,15 +57,23 @@ export default function PredictorPage() {
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Projected Monthly Burn Rate</label>
-                <Input 
-                  type="number" 
-                  value={burnRate} 
-                  onChange={(e) => setBurnRate(parseInt(e.target.value))}
-                  required
-                />
+
+              <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-navy-900">75-Country Freeze</h4>
+                  <Button 
+                    type="button"
+                    size="sm"
+                    variant={applyFreeze ? "default" : "outline"}
+                    onClick={() => setApplyFreeze(!applyFreeze)}
+                    className={applyFreeze ? "bg-crimson-600 hover:bg-crimson-700" : ""}
+                  >
+                    {applyFreeze ? "ON" : "OFF"}
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-500">Simulation: Redistribute visas from restricted countries.</p>
               </div>
+
               <Button type="submit" className="w-full bg-navy-900 hover:bg-navy-800" disabled={loading}>
                 {loading ? 'Calculating...' : 'Calculate Prediction'}
               </Button>
@@ -111,12 +119,12 @@ export default function PredictorPage() {
                 {result.confidence_score > 0.7 ? (
                   <p className="text-sm text-slate-600 flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                    Your priority date is well-positioned for FY 2027 based on current spillover projections and historical burn rates.
+                    Your priority date is well-positioned for FY 2027 based on current spillover projections and historical seasonality.
                   </p>
                 ) : (
                   <p className="text-sm text-slate-600 flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                    Given the current backlog and burn rate, your approval may fall into late FY 2027 or early FY 2028.
+                    Given the current backlog and non-linear demand curve, your approval may fall into late FY 2027 or early FY 2028.
                   </p>
                 )}
               </div>

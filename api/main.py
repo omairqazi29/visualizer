@@ -59,7 +59,7 @@ async def get_waterfall_data():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/supply-demand")
-async def get_supply_demand_data():
+async def get_supply_demand_data(apply_freeze: bool = False):
     try:
         # Load Inventory Data
         inv_parser = InventoryParser("data/eb_inventory_january_2026.xlsx")
@@ -69,27 +69,51 @@ async def get_supply_demand_data():
         pipe_parser = PipelineParser("data/eb_i140_i360_i526_performance_data_fy2025_q4_v1.xlsx")
         pipe_parser.load_data()
         pipe_total = pipe_parser.get_india_eb1_backlog()
+        
+        total_queue = int(inv_stats['total'] + pipe_total)
 
-        # Load DOS for dynamic burn rate (specifically India EB-1 categories: E11, E12, E13)
+        # Load DOS for historical distribution and supply calculations
         dos_df = DOSParser.load_from_directory("data/DOS")
-        dynamic_burn_rate = DemandModeler.calculate_burn_rate_from_dos(
-            dos_df, 
-            months=12, 
+        dos_parser = DOSParser("data/DOS")
+        dos_parser.df = dos_df
+        
+        # 1. Calculate Monthly Distribution (Seasonality)
+        monthly_dist = dos_parser.get_monthly_distribution(
             country="India", 
             categories=["E11", "E12", "E13"]
         )
 
+        # 2. Calculate Dynamic Annual Supply (Volume)
+        total_fb_usage = dos_parser.get_total_fb_usage()
+        fb_spillover = max(0, FB_STATUTORY_LIMIT - total_fb_usage)
+
+        savings = 0
+        if apply_freeze:
+            restricted = RedistributionEngine.get_default_restricted_list()
+            engine = RedistributionEngine(restricted)
+            df_frozen = engine.apply_freeze(dos_parser.df)
+            savings = engine.calculate_savings(dos_parser.df, df_frozen)
+
+        total_eb_supply = EB_BASE_LIMIT + fb_spillover + savings
+        eb1_supply = int(total_eb_supply * EB1_STATUTORY_SHARE)
+
+        # 3. Project Trajectory
+        modeler = DemandModeler(total_queue, eb1_supply, monthly_dist)
+        projection = modeler.project_clearance()
+
         return {
             "inventory": {k: int(v) for k, v in inv_stats.items()},
             "pipeline_total": int(pipe_total),
-            "total_queue": int(inv_stats['total'] + pipe_total),
-            "dynamic_burn_rate": int(dynamic_burn_rate)
+            "total_queue": total_queue,
+            "annual_eb1_supply": eb1_supply,
+            "clearance_date": projection["clearance_date"].strftime("%Y-%m-%d"),
+            "trajectory": projection["trajectory"]
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/predict")
-async def predict_pd(priority_date: str, burn_rate: int = 2000):
+async def predict_pd(priority_date: str, apply_freeze: bool = False):
     try:
         pd_dt = datetime.strptime(priority_date, "%Y-%m-%d")
         
@@ -111,15 +135,42 @@ async def predict_pd(priority_date: str, burn_rate: int = 2000):
         else:
             backlog_ahead = inv_ahead['total']
 
-        modeler = DemandModeler(total_queue, burn_rate=burn_rate)
+        # Load DOS for historical distribution and supply calculations
+        dos_df = DOSParser.load_from_directory("data/DOS")
+        dos_parser = DOSParser("data/DOS")
+        dos_parser.df = dos_df
+        
+        # 1. Calculate Monthly Distribution (Seasonality)
+        monthly_dist = dos_parser.get_monthly_distribution(
+            country="India", 
+            categories=["E11", "E12", "E13"]
+        )
+
+        # 2. Calculate Dynamic Annual Supply (Volume)
+        total_fb_usage = dos_parser.get_total_fb_usage()
+        fb_spillover = max(0, FB_STATUTORY_LIMIT - total_fb_usage)
+
+        savings = 0
+        if apply_freeze:
+            restricted = RedistributionEngine.get_default_restricted_list()
+            engine = RedistributionEngine(restricted)
+            df_frozen = engine.apply_freeze(dos_parser.df)
+            savings = engine.calculate_savings(dos_parser.df, df_frozen)
+
+        total_eb_supply = EB_BASE_LIMIT + fb_spillover + savings
+        eb1_supply = int(total_eb_supply * EB1_STATUTORY_SHARE)
+
+        modeler = DemandModeler(total_queue, eb1_supply, monthly_dist)
         score = modeler.calculate_confidence_score(pd_dt, backlog_ahead=backlog_ahead, target_fy=2027)
-        projected_clearance = modeler.project_clearance_date()
+        projection = modeler.project_clearance(backlog=backlog_ahead)
 
         return {
             "confidence_score": float(score),
             "backlog_ahead": int(backlog_ahead),
             "total_queue": int(total_queue),
-            "projected_clearance_date": projected_clearance.strftime("%Y-%m-%d")
+            "annual_eb1_supply": eb1_supply,
+            "projected_clearance_date": projection["clearance_date"].strftime("%Y-%m-%d"),
+            "trajectory": projection["trajectory"]
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

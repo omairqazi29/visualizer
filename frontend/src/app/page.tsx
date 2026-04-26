@@ -49,12 +49,14 @@ export default function Overview() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Monthly Burn Rate</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-500">Projected Clearance</CardTitle>
             <TrendingUp className="h-4 w-4 text-emerald-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-navy-900">{sdData.dynamic_burn_rate?.toLocaleString()}</div>
-            <p className="text-xs text-slate-400">Based on 12-mo historical</p>
+            <div className="text-xl font-bold text-navy-900">
+              {sdData.clearance_date ? new Date(sdData.clearance_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : 'N/A'}
+            </div>
+            <p className="text-xs text-slate-400">Non-linear projection</p>
           </CardContent>
         </Card>
         <Card>

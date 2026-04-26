@@ -2,41 +2,27 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Slider } from "@/components/ui/slider";
+import { Button } from "@/components/ui/button";
 import { getSupplyDemandData } from '@/lib/api';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function SupplyDemandPage() {
   const [data, setData] = useState<any>(null);
-  const [burnRate, setBurnRate] = useState<number>(2000);
-  const [projection, setProjection] = useState<any[]>([]);
+  const [applyFreeze, setApplyFreeze] = useState<boolean>(false);
 
   useEffect(() => {
-    getSupplyDemandData().then(d => {
+    getSupplyDemandData(applyFreeze).then(d => {
       setData(d);
-      setBurnRate(d.dynamic_burn_rate);
     });
-  }, []);
-
-  useEffect(() => {
-    if (data) {
-      const proj = [];
-      let current = data.total_queue;
-      for (let i = 0; i <= 36; i++) {
-        proj.push({
-          month: i,
-          queue: Math.max(0, current)
-        });
-        current -= burnRate;
-      }
-      setProjection(proj);
-    }
-  }, [data, burnRate]);
+  }, [applyFreeze]);
 
   if (!data) return <div>Loading...</div>;
 
-  const clearanceDate = new Date();
-  clearanceDate.setMonth(clearanceDate.getMonth() + Math.ceil(data.total_queue / burnRate));
+  const projection = data.trajectory.map((t: any, idx: number) => ({
+    ...t,
+    month: idx,
+    dateLabel: new Date(t.date).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
+  }));
 
   return (
     <div className="space-y-6">
@@ -46,6 +32,7 @@ export default function SupplyDemandPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
+        {/* ... stats cards ... */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-slate-500">I-485 Inventory</CardTitle>
@@ -75,21 +62,21 @@ export default function SupplyDemandPage() {
       <Card className="p-6">
         <CardHeader>
           <CardTitle>Queue Clearance Projection</CardTitle>
-          <CardDescription>Estimated clearance based on monthly visa burn rate.</CardDescription>
+          <CardDescription>Estimated clearance based on non-linear historical seasonality.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-8 space-y-4">
-            <div className="flex justify-between items-center">
-              <label className="text-sm font-medium">Monthly Burn Rate: <span className="text-navy-900 font-bold">{burnRate?.toLocaleString()}</span></label>
-              <span className="text-xs text-slate-400">Default: {data.dynamic_burn_rate?.toLocaleString()}</span>
+          <div className="mb-8 p-4 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-navy-900">Simulation: 75-Country Freeze</h4>
+              <p className="text-xs text-slate-500">Reallocate unused visas from restricted countries to the surplus pool.</p>
             </div>
-            <Slider 
-              value={[burnRate]} 
-              min={500} 
-              max={5000} 
-              step={100} 
-              onValueChange={(val) => setBurnRate(val[0])}
-            />
+            <Button 
+              variant={applyFreeze ? "default" : "outline"}
+              onClick={() => setApplyFreeze(!applyFreeze)}
+              className={applyFreeze ? "bg-crimson-600 hover:bg-crimson-700" : ""}
+            >
+              {applyFreeze ? "Disable Simulation" : "Enable Simulation"}
+            </Button>
           </div>
 
           <div className="h-[400px]">
@@ -102,12 +89,13 @@ export default function SupplyDemandPage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month" label={{ value: 'Months from Jan 2026', position: 'insideBottom', offset: -5 }} />
+                <XAxis dataKey="dateLabel" />
                 <YAxis />
-                <Tooltip />
+                <Tooltip labelFormatter={(val, items) => items[0]?.payload?.date} />
                 <Area 
                   type="monotone" 
-                  dataKey="queue" 
+                  dataKey="backlog" 
+                  name="Backlog"
                   stroke="#002868" 
                   strokeWidth={2}
                   fillOpacity={1} 
@@ -120,11 +108,11 @@ export default function SupplyDemandPage() {
           <div className="mt-6 p-4 bg-navy-900 rounded-lg text-white flex justify-between items-center">
             <div>
               <p className="text-navy-200 text-xs uppercase tracking-wider font-bold">Projected Clearance</p>
-              <p className="text-2xl font-bold">{clearanceDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</p>
+              <p className="text-2xl font-bold">{new Date(data.clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</p>
             </div>
             <div className="text-right">
-              <p className="text-navy-200 text-xs uppercase tracking-wider font-bold">Total Months</p>
-              <p className="text-2xl font-bold">{Math.ceil(data.total_queue / burnRate)}</p>
+              <p className="text-navy-200 text-xs uppercase tracking-wider font-bold">Total Supply (Annual)</p>
+              <p className="text-2xl font-bold">{data.annual_eb1_supply?.toLocaleString()}</p>
             </div>
           </div>
         </CardContent>

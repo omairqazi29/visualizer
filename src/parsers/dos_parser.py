@@ -10,22 +10,42 @@ class DOSParser(BaseParser):
     
     FB_CATEGORIES = ['F1', 'F2A', 'F2B', 'F3', 'F4', 'FX']
 
-    def load_data(self, prevent_recursion: bool = False, **kwargs) -> pd.DataFrame:
-        """Overridden to find header automatically for DOS format."""
+    def load_data(self, prevent_recursion: bool = False, month: int = None, year: int = None, **kwargs) -> pd.DataFrame:
+        """Overridden to find header automatically for DOS format and inject date."""
         if not prevent_recursion:
             self.find_header_row(["Visa Class", "Total"])
         else:
             super().load_data(**kwargs)
+        
+        if self.df is not None and month is not None:
+            self.df['report_month'] = month
+            self.df['report_year'] = year
+            
         return self.df
 
     @classmethod
     def load_from_directory(cls, dir_path: str) -> pd.DataFrame:
         """Loads all Excel files in a directory and concatenates them."""
+        import re
         all_dfs = []
+        months_map = {
+            'JANUARY': 1, 'FEBRUARY': 2, 'MARCH': 3, 'APRIL': 4, 'MAY': 5, 'JUNE': 6,
+            'JULY': 7, 'AUGUST': 8, 'SEPTEMBER': 9, 'OCTOBER': 10, 'NOVEMBER': 11, 'DECEMBER': 12
+        }
+        
         for file in os.listdir(dir_path):
             if file.endswith('.xlsx'):
+                # Extract Month and Year from filename
+                match = re.match(r'^([A-Z]+)\s+(\d{4})', file.upper())
+                month_num = None
+                year_num = None
+                if match:
+                    month_str = match.group(1)
+                    month_num = months_map.get(month_str)
+                    year_num = int(match.group(2))
+
                 parser = cls(os.path.join(dir_path, file))
-                parser.load_data()
+                parser.load_data(month=month_num, year=year_num)
                 parser.clean()
                 if parser.df is not None:
                     all_dfs.append(parser.df)
@@ -35,6 +55,28 @@ class DOSParser(BaseParser):
         
         combined_df = pd.concat(all_dfs, ignore_index=True)
         return combined_df
+
+    def get_monthly_distribution(self, country: str = None, categories: list = None) -> dict:
+        """Calculates the historical distribution of issuances by month."""
+        if self.df is None or 'count' not in self.df.columns or 'report_month' not in self.df.columns:
+            # Fallback to even distribution if no data
+            return {m: 1/12 for m in range(1, 13)}
+        
+        df = self.df.copy()
+        if country and 'chargeability' in df.columns:
+            df = df[df['chargeability'].str.contains(country, case=False, na=False)]
+        if categories and 'visa_category' in df.columns:
+            df = df[df['visa_category'].isin(categories)]
+            
+        monthly_totals = df.groupby('report_month')['count'].sum()
+        total_issuances = monthly_totals.sum()
+        
+        if total_issuances == 0:
+            return {m: 1/12 for m in range(1, 13)}
+            
+        dist = (monthly_totals / total_issuances).to_dict()
+        # Fill missing months with 0
+        return {m: dist.get(m, 0) for m in range(1, 13)}
 
     def clean(self):
         """Clean and normalize DOS specific data."""

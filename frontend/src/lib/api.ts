@@ -5,6 +5,7 @@ const api = axios.create({
 });
 
 export const getWaterfallData = () => api.get('/waterfall').then(res => res.data);
-export const getSupplyDemandData = () => api.get('/supply-demand').then(res => res.data);
-export const predictPD = (priorityDate: string, burnRate: number) => 
-  api.get('/predict', { params: { priority_date: priorityDate, burn_rate: burnRate } }).then(res => res.data);
+export const getSupplyDemandData = (applyFreeze: boolean = false) => 
+  api.get('/supply-demand', { params: { apply_freeze: applyFreeze } }).then(res => res.data);
+export const predictPD = (priorityDate: string, applyFreeze: boolean = false) => 
+  api.get('/predict', { params: { priority_date: priorityDate, apply_freeze: applyFreeze } }).then(res => res.data);

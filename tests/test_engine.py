@@ -5,8 +5,9 @@ from src.engine.redistribution import RedistributionEngine
 import pandas as pd
 
 def test_demand_modeler_confidence():
-    # Total queue 100,000, burn rate 2000/mo -> 50 months (~4.2 years)
-    modeler = DemandModeler(inventory_total=100000, burn_rate=2000)
+    # Total queue 100,000, annual supply 24,000, even distribution (2000/mo)
+    dist = {m: 1/12 for m in range(1, 13)}
+    modeler = DemandModeler(inventory_total=100000, annual_supply=24000, monthly_distribution=dist)
     
     # User with 10,000 backlog ahead -> clears in 5 months
     pd_date = datetime(2025, 1, 1)
@@ -14,9 +15,25 @@ def test_demand_modeler_confidence():
     assert score_high > 0.9
     
     # User with 80,000 backlog ahead -> clears in 40 months -> ~3.3 years
-    # 2026-04-25 + 3.3 years = ~2029 (Beyond FY 2027)
     score_low = modeler.calculate_confidence_score(pd_date, backlog_ahead=80000, target_fy=2027)
     assert score_low < 0.5
+
+def test_demand_modeler_nonlinear():
+    # Backlog 10,000. Annual supply 10,000.
+    # 90% of visas issued in September (Month 9).
+    dist = {m: 0.01 for m in range(1, 13)}
+    dist[9] = 0.89 # Total 1.0
+    
+    # If we start in January, it should take until September to clear most of it
+    modeler = DemandModeler(inventory_total=10000, annual_supply=10000, monthly_distribution=dist)
+    start_date = datetime(2026, 1, 1)
+    projection = modeler.project_clearance(start_date=start_date)
+    
+    # After 1 month (Feb), only 100 cleared (1% of 10k)
+    assert projection["trajectory"][1]["backlog"] == 9900
+    # Clearance should be at least 9 months away (Sept 2026 or later)
+    # Jan 2026 + 9 months = Oct 2026.
+    assert projection["months_to_clear"] >= 9
 
 def test_redistribution_engine_cap():
     restricted = {"India", "China"}
@@ -40,37 +57,3 @@ def test_redistribution_engine_cap():
     
     # Canada (1,000) is below cap -> should stay same
     assert df_frozen.loc[df_frozen['chargeability'] == "Canada", "count"].values[0] == 1000
-
-def test_burn_rate_calculation():
-    data = {"count": [1000, 2000, 3000]} # Total 6000
-    df = pd.DataFrame(data)
-
-    # 12 months average of 6000 -> 500
-    burn_rate = DemandModeler.calculate_burn_rate_from_dos(df, months=12)
-    assert burn_rate == 500
-
-def test_burn_rate_filtering():
-    data = {
-        "chargeability": ["India", "India", "China", "India"],
-        "visa_category": ["E11", "F4", "E11", "E12"],
-        "count": [100, 500, 200, 300]
-    }
-    df = pd.DataFrame(data)
-
-    # India EB-1 only (E11 + E12 = 100 + 300 = 400)
-    # 12 months average of 400 -> 33
-    burn_rate = DemandModeler.calculate_burn_rate_from_dos(
-        df, 
-        months=12, 
-        country="India", 
-        categories=["E11", "E12"]
-    )
-    assert burn_rate == 33
-
-    # Unknown country should return default
-    burn_rate_default = DemandModeler.calculate_burn_rate_from_dos(
-        df, 
-        months=12, 
-        country="UK"
-    )
-    assert burn_rate_default == DemandModeler.DEFAULT_BURN_RATE
