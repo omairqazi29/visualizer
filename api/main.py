@@ -70,9 +70,14 @@ async def get_supply_demand_data():
         pipe_parser.load_data()
         pipe_total = pipe_parser.get_india_eb1_backlog()
 
-        # Load DOS for dynamic burn rate
+        # Load DOS for dynamic burn rate (specifically India EB-1 categories: E11, E12, E13)
         dos_df = DOSParser.load_from_directory("data/DOS")
-        dynamic_burn_rate = DemandModeler.calculate_burn_rate_from_dos(dos_df, months=12)
+        dynamic_burn_rate = DemandModeler.calculate_burn_rate_from_dos(
+            dos_df, 
+            months=12, 
+            country="India", 
+            categories=["E11", "E12", "E13"]
+        )
 
         return {
             "inventory": {k: int(v) for k, v in inv_stats.items()},

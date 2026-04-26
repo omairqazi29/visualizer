@@ -44,7 +44,33 @@ def test_redistribution_engine_cap():
 def test_burn_rate_calculation():
     data = {"count": [1000, 2000, 3000]} # Total 6000
     df = pd.DataFrame(data)
-    
+
     # 12 months average of 6000 -> 500
     burn_rate = DemandModeler.calculate_burn_rate_from_dos(df, months=12)
     assert burn_rate == 500
+
+def test_burn_rate_filtering():
+    data = {
+        "chargeability": ["India", "India", "China", "India"],
+        "visa_category": ["E11", "F4", "E11", "E12"],
+        "count": [100, 500, 200, 300]
+    }
+    df = pd.DataFrame(data)
+
+    # India EB-1 only (E11 + E12 = 100 + 300 = 400)
+    # 12 months average of 400 -> 33
+    burn_rate = DemandModeler.calculate_burn_rate_from_dos(
+        df, 
+        months=12, 
+        country="India", 
+        categories=["E11", "E12"]
+    )
+    assert burn_rate == 33
+
+    # Unknown country should return default
+    burn_rate_default = DemandModeler.calculate_burn_rate_from_dos(
+        df, 
+        months=12, 
+        country="UK"
+    )
+    assert burn_rate_default == DemandModeler.DEFAULT_BURN_RATE

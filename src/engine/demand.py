@@ -50,14 +50,30 @@ class DemandModeler:
             return 0.10
 
     @staticmethod
-    def calculate_burn_rate_from_dos(dos_df: pd.DataFrame, months: int = 12) -> int:
+    def calculate_burn_rate_from_dos(dos_df: pd.DataFrame, months: int = 12, country: str = None, categories: list = None) -> int:
         """
         Derives an average monthly burn rate from historical DOS issuance data.
+        Allows filtering by country and visa categories.
         """
         if dos_df is None or dos_df.empty or 'count' not in dos_df.columns:
             return DemandModeler.DEFAULT_BURN_RATE
-            
-        total_issuances = dos_df['count'].sum()
+
+        df = dos_df.copy()
+
+        # Filter by country if chargeability column exists
+        if country and 'chargeability' in df.columns:
+            # Handle DOS naming vs canonical naming
+            df = df[df['chargeability'].str.contains(country, case=False, na=False)]
+
+        # Filter by categories if visa_category column exists
+        if categories and 'visa_category' in df.columns:
+            df = df[df['visa_category'].isin(categories)]
+
+        total_issuances = df['count'].sum()
+        
+        # If filtered result is 0, fall back to default to prevent division by zero or unrealistic projections
+        if total_issuances == 0:
+            return DemandModeler.DEFAULT_BURN_RATE
+
         # DOS data is usually monthly, but if we have multiple files/months:
-        # Assuming the df provided is the aggregation of the requested months
         return int(total_issuances / months) if months > 0 else DemandModeler.DEFAULT_BURN_RATE
