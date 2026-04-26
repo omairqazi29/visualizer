@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getWaterfallData, WaterfallData } from '@/lib/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+
 
 export default function WaterfallPage() {
   const [data, setData] = useState<WaterfallData | null>(null);
@@ -21,8 +20,21 @@ export default function WaterfallPage() {
       });
   }, [applyFreeze]);
 
-  if (error) return <div className="text-crimson-600">Error: {error}</div>;
-  if (!data) return <div>Loading visualization...</div>;
+  if (error) {
+    return (
+      <div className="rounded-lg border border-crimson-200 bg-crimson-50 p-4 text-crimson-700">
+        {error}
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div className="space-y-6">
+        <div className="h-10 w-72 animate-pulse rounded bg-slate-200" />
+        <div className="h-[520px] animate-pulse rounded-xl border bg-slate-100" />
+      </div>
+    );
+  }
 
   const fbSavings = data.fb_savings_freeze || 0;
   const eb45Savings = data.eb45_savings_freeze || 0;
@@ -60,16 +72,19 @@ export default function WaterfallPage() {
           <h2 className="text-3xl font-bold tracking-tight text-navy-900">Visa Flow Waterfall</h2>
           <p className="text-slate-500">From statutory FB limits to final EB-1 supply (INA 201/203 compliant).</p>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <Button 
-            variant={applyFreeze ? "destructive" : "outline"} 
-            onClick={() => setApplyFreeze(!applyFreeze)}
+        <div className="flex items-center gap-2 rounded-lg border bg-slate-50 p-1">
+          <button
+            onClick={() => setApplyFreeze(false)}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${!applyFreeze ? 'bg-white text-navy-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
           >
-            {applyFreeze ? "Disable Restriction Scenario" : "Apply Restriction Scenario (75-Country)"}
-          </Button>
-          <Badge variant={applyFreeze ? "default" : "secondary"}>
-            {applyFreeze ? "Hypothetical Restriction" : "Standard INA Flow"}
-          </Badge>
+            Standard
+          </button>
+          <button
+            onClick={() => setApplyFreeze(true)}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${applyFreeze ? 'bg-crimson-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          >
+            Restriction Scenario
+          </button>
         </div>
       </div>
 
@@ -87,9 +102,10 @@ export default function WaterfallPage() {
               <Tooltip 
                 formatter={(value: unknown) => {
                   const v = value as [number, number];
-                  return (v[1] - v[0]).toLocaleString();
+                  return [(v[1] - v[0]).toLocaleString(), 'Visas'];
                 }}
                 labelStyle={{ fontWeight: 'bold' }}
+                contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
               />
               <Bar dataKey="displayValue">
                 {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}

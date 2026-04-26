@@ -25,8 +25,26 @@ export default function SupplyDemandPage() {
       });
   }, []);
 
-  if (error) return <div className="text-crimson-600">Error: {error}</div>;
-  if (!standardData || !freezeData) return <div>Loading comparison...</div>;
+  if (error) {
+    return (
+      <div className="rounded-lg border border-crimson-200 bg-crimson-50 p-4 text-crimson-700">
+        {error}
+      </div>
+    );
+  }
+  if (!standardData || !freezeData) {
+    return (
+      <div className="space-y-6">
+        <div className="h-10 w-64 animate-pulse rounded bg-slate-200" />
+        <div className="grid gap-4 md:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-20 animate-pulse rounded-xl border bg-slate-100" />
+          ))}
+        </div>
+        <div className="h-[500px] animate-pulse rounded-xl border bg-slate-100" />
+      </div>
+    );
+  }
 
   // Combine trajectories for the chart
   const projection = standardData.trajectory.map((t, idx: number) => ({
@@ -101,6 +119,7 @@ export default function SupplyDemandPage() {
                 <Tooltip 
                   labelFormatter={(label, items) => items[0]?.payload?.date}
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                  formatter={(value) => [(value ?? 0).toLocaleString(), 'Backlog']}
                 />
                 <Legend verticalAlign="top" height={36}/>
                 <Area 

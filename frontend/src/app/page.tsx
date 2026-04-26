@@ -29,8 +29,25 @@ export default function Overview() {
       .catch((e) => setError(e?.message || 'Failed to load dashboard data'));
   }, []);
 
-  if (error) return <div className="text-crimson-600">Error: {error}</div>;
-  if (!data || !sdData || !freezeWaterfall || !freezeSD) return <div>Loading dashboard...</div>;
+  if (error) {
+    return (
+      <div className="rounded-lg border border-crimson-200 bg-crimson-50 p-4 text-crimson-700">
+        {error}
+      </div>
+    );
+  }
+  if (!data || !sdData || !freezeWaterfall || !freezeSD) {
+    return (
+      <div className="space-y-8">
+        <div className="h-10 w-64 animate-pulse rounded bg-slate-200" />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-28 animate-pulse rounded-xl border bg-slate-100" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   const windfall = (freezeWaterfall.fb_savings_freeze || 0) + (freezeWaterfall.eb45_savings_freeze || 0);
   const acceleration = (sdData.months_to_clear || 0) - (freezeSD.months_to_clear || 0);
@@ -53,7 +70,7 @@ export default function Overview() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-crimson-100 bg-crimson-50/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-bold text-crimson-800 uppercase tracking-wider">Trump Windfall</CardTitle>
+            <CardTitle className="text-sm font-bold text-crimson-800 uppercase tracking-wider">Restriction Windfall</CardTitle>
             <Zap className="h-4 w-4 text-crimson-600" />
           </CardHeader>
           <CardContent>

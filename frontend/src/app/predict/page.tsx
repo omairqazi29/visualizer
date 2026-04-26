@@ -13,16 +13,15 @@ export default function PredictorPage() {
   const [standardResult, setStandardResult] = useState<PredictData | null>(null);
   const [freezeResult, setFreezeResult] = useState<PredictData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [, setError] = useState<string | null>(null);  // error captured for future UI display
+  const [error, setError] = useState<string | null>(null);
 
-  const handlePredict = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const runPrediction = async (dateStr: string) => {
     setLoading(true);
     setError(null);
     try {
       const [std, frz] = await Promise.all([
-        predictPD(pd, false),
-        predictPD(pd, true)
+        predictPD(dateStr, false),
+        predictPD(dateStr, true)
       ]);
       setStandardResult(std);
       setFreezeResult(frz);
@@ -33,6 +32,11 @@ export default function PredictorPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePredict = (e: React.FormEvent) => {
+    e.preventDefault();
+    runPrediction(pd);
   };
 
   return (
@@ -60,79 +64,125 @@ export default function PredictorPage() {
               {loading ? '...' : 'Compare Results'}
             </Button>
           </form>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {[
+              { label: 'Jan 2024', value: '2024-01-15' },
+              { label: 'Jul 2024', value: '2024-07-01' },
+              { label: 'Jan 2025', value: '2025-01-01' },
+              { label: 'Current (Apr 2023)', value: '2023-04-01' },
+            ].map((p) => (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => {
+                  setPd(p.value);
+                  runPrediction(p.value);
+                }}
+                className="rounded-md border px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
+      {error && (
+        <div className="rounded-lg border border-crimson-200 bg-crimson-50 p-4 text-crimson-700 max-w-md">
+          {error}
+        </div>
+      )}
+
       {standardResult && freezeResult && (
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Standard Result */}
-          <Card className="opacity-80">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                Standard INA Flow
-                <Badge variant="outline">Normal Flow</Badge>
-              </CardTitle>
-              <CardDescription>Based on historical 9k/year supply baseline.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-slate-100 rounded-full text-slate-600">
-                  <Calendar className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm text-slate-500 font-medium">Projected Date</p>
-                  <p className="text-2xl font-bold text-slate-700">
-                    {new Date(standardResult.projected_clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="p-4 rounded-lg bg-slate-50 border space-y-2">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Confidence</p>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 flex-1 bg-slate-200 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-slate-400" 
-                      style={{ width: `${standardResult.confidence_score * 100}%` }}
-                    />
+        <div className="space-y-4">
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Standard Result */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  Standard INA Flow
+                  <Badge variant="outline">Baseline</Badge>
+                </CardTitle>
+                <CardDescription>Historical ~9k/yr EB-1 supply with normal spillovers.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-slate-100 rounded-full text-slate-600">
+                    <Calendar className="w-6 h-6" />
                   </div>
-                  <span className="text-sm font-bold text-slate-600">{(standardResult.confidence_score * 100).toFixed(0)}%</span>
+                  <div>
+                    <p className="text-sm text-slate-500 font-medium">Projected Clearance</p>
+                    <p className="text-2xl font-bold text-slate-700">
+                      {new Date(standardResult.projected_clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+                
+                <div className="p-4 rounded-lg bg-slate-50 border space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Confidence</p>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 flex-1 bg-slate-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-slate-400" 
+                        style={{ width: `${standardResult.confidence_score * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-bold text-slate-600">{(standardResult.confidence_score * 100).toFixed(0)}%</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Freeze Result */}
-          <Card className="border-2 border-crimson-600 shadow-lg shadow-crimson-600/5">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between text-crimson-700">
-                Restriction Mode
-                <Badge className="bg-crimson-600">Trump Effect</Badge>
-              </CardTitle>
-              <CardDescription>Includes windfalls from travel bans and country freezes.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-crimson-50 rounded-full text-crimson-600">
-                  <Calendar className="w-6 h-6" />
+            {/* Restriction Result */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  Restriction Scenario
+                  <Badge className="bg-crimson-600">Restriction Impact</Badge>
+                </CardTitle>
+                <CardDescription>EB-4/5 roll-up + 75-country freeze savings applied.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-crimson-50 rounded-full text-crimson-600">
+                    <Calendar className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-slate-500 font-medium">Accelerated Clearance</p>
+                    <p className="text-2xl font-bold text-navy-900">
+                      {new Date(freezeResult.projected_clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-slate-500 font-medium">Accelerated Date</p>
-                  <p className="text-2xl font-bold text-navy-900">
-                    {new Date(freezeResult.projected_clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-                  </p>
-                </div>
-              </div>
 
-              <div className="p-4 rounded-lg bg-crimson-50/50 border border-crimson-100 space-y-2">
-                <p className="text-xs font-bold uppercase tracking-wider text-crimson-600">Impact Analysis</p>
-                <div className="flex items-center gap-2 text-navy-900 font-bold">
-                  <ArrowRight className="w-4 h-4 text-crimson-600" />
-                  {Math.round((standardResult.months_to_clear - freezeResult.months_to_clear))} Months Earlier
+                <div className="p-4 rounded-lg bg-crimson-50/50 border border-crimson-100 space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-crimson-600">Confidence</p>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 flex-1 bg-crimson-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-crimson-600" 
+                        style={{ width: `${freezeResult.confidence_score * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-bold text-crimson-700">{(freezeResult.confidence_score * 100).toFixed(0)}%</span>
+                  </div>
                 </div>
-                <p className="text-xs text-slate-500">
-                  Higher supply confidence due to redistribution of unused visas.
-                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Delta Summary */}
+          <Card className="border-emerald-200 bg-emerald-50/40">
+            <CardContent className="pt-6">
+              <div className="flex flex-col items-center justify-center gap-1 text-center">
+                <div className="flex items-center gap-2 text-emerald-700">
+                  <ArrowRight className="w-5 h-5" />
+                  <span className="text-2xl font-bold">
+                    {Math.round((standardResult.months_to_clear - freezeResult.months_to_clear))} Months Earlier
+                  </span>
+                </div>
+                <p className="text-sm text-emerald-600">Due to increased EB-1 supply from restriction-driven spillovers</p>
               </div>
             </CardContent>
           </Card>
