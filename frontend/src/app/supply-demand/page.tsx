@@ -51,7 +51,7 @@ export default function SupplyDemandPage() {
             <CardTitle className="text-sm font-medium text-slate-500">I-485 Inventory</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-navy-900">{data.inventory.total.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-navy-900">{data.inventory?.total?.toLocaleString()}</div>
           </CardContent>
         </Card>
         <Card>
@@ -59,7 +59,7 @@ export default function SupplyDemandPage() {
             <CardTitle className="text-sm font-medium text-slate-500">I-140 Pipeline (est.)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-navy-900">{data.pipeline_total.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-navy-900">{data.pipeline_total?.toLocaleString()}</div>
           </CardContent>
         </Card>
         <Card>
@@ -67,7 +67,7 @@ export default function SupplyDemandPage() {
             <CardTitle className="text-sm font-medium text-slate-500">Total Queue</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-crimson-600">{data.total_queue.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-crimson-600">{data.total_queue?.toLocaleString()}</div>
           </CardContent>
         </Card>
       </div>
@@ -80,8 +80,8 @@ export default function SupplyDemandPage() {
         <CardContent>
           <div className="mb-8 space-y-4">
             <div className="flex justify-between items-center">
-              <label className="text-sm font-medium">Monthly Burn Rate: <span className="text-navy-900 font-bold">{burnRate.toLocaleString()}</span></label>
-              <span className="text-xs text-slate-400">Default: {data.dynamic_burn_rate.toLocaleString()}</span>
+              <label className="text-sm font-medium">Monthly Burn Rate: <span className="text-navy-900 font-bold">{burnRate?.toLocaleString()}</span></label>
+              <span className="text-xs text-slate-400">Default: {data.dynamic_burn_rate?.toLocaleString()}</span>
             </div>
             <Slider 
               value={[burnRate]} 

@@ -90,7 +90,7 @@ export default function PredictorPage() {
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 font-medium">Estimated Backlog Ahead</p>
-                  <p className="text-2xl font-bold text-navy-900">{result.backlog_ahead.toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-navy-900">{result.backlog_ahead?.toLocaleString()}</p>
                 </div>
               </div>
 

@@ -76,7 +76,7 @@ export default function WaterfallPage() {
             <CardTitle className="text-sm font-semibold">Redistribution Savings</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-navy-900">{data.redistribution_savings.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-navy-900">{data.redistribution_savings?.toLocaleString()}</div>
             <p className="text-sm text-slate-500 mt-1">Visas reclaimed from restricted countries under the 75-country freeze logic.</p>
           </CardContent>
         </Card>
@@ -85,7 +85,7 @@ export default function WaterfallPage() {
             <CardTitle className="text-sm font-semibold">FB Spillover</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-navy-900">{data.fb_spillover.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-navy-900">{data.fb_spillover?.toLocaleString()}</div>
             <p className="text-sm text-slate-500 mt-1">Unused Family-Based visas from the 226,000 statutory floor.</p>
           </CardContent>
         </Card>
