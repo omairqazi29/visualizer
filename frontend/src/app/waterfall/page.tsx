@@ -4,13 +4,16 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getWaterfallData } from '@/lib/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 export default function WaterfallPage() {
   const [data, setData] = useState<any>(null);
+  const [applyFreeze, setApplyFreeze] = useState(false);
 
   useEffect(() => {
-    getWaterfallData().then(setData);
-  }, []);
+    getWaterfallData(applyFreeze).then(setData);
+  }, [applyFreeze]);
 
   if (!data) return <div>Loading visualization...</div>;
 
@@ -39,9 +42,22 @@ export default function WaterfallPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight text-navy-900">Visa Flow Waterfall</h2>
-        <p className="text-slate-500">From statutory FB limits to final EB-1 supply (INA 201/203 compliant).</p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight text-navy-900">Visa Flow Waterfall</h2>
+          <p className="text-slate-500">From statutory FB limits to final EB-1 supply (INA 201/203 compliant).</p>
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <Button 
+            variant={applyFreeze ? "destructive" : "outline"} 
+            onClick={() => setApplyFreeze(!applyFreeze)}
+          >
+            {applyFreeze ? "Disable 75-Country Freeze" : "Apply 75-Country Freeze"}
+          </Button>
+          <Badge variant={applyFreeze ? "default" : "secondary"}>
+            {applyFreeze ? "Freeze Active" : "Standard INA Flow"}
+          </Badge>
+        </div>
       </div>
 
       <Card className="p-6">

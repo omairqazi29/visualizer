@@ -31,7 +31,7 @@ EB_BASE_LIMIT = 140000
 EB1_STATUTORY_SHARE = 0.286
 
 @app.get("/api/waterfall")
-async def get_waterfall_data():
+async def get_waterfall_data(apply_freeze: bool = False):
     try:
         dos_df = DOSParser.load_from_directory("data/DOS")
         dos_parser = DOSParser("data/DOS")
@@ -40,11 +40,16 @@ async def get_waterfall_data():
         total_fb_usage = dos_parser.get_total_fb_usage()
         fb_spillover = max(0, FB_STATUTORY_LIMIT - total_fb_usage)
 
-        restricted = RedistributionEngine.get_default_restricted_list()
-        engine = RedistributionEngine(restricted)
-        df_frozen = engine.apply_freeze(dos_parser.df)
-        savings = engine.calculate_savings(dos_parser.df, df_frozen)
-
+        savings = 0
+        if apply_freeze:
+            restricted = RedistributionEngine.get_default_restricted_list()
+            engine = RedistributionEngine(restricted)
+            
+            # For waterfall savings, we only care about FB visas that are saved to become spillover
+            fb_df = dos_parser.df[dos_parser.df['visa_category'].isin(DOSParser.FB_CATEGORIES)]
+            df_frozen = engine.apply_freeze(fb_df)
+            savings = engine.calculate_savings(fb_df, df_frozen)
+        
         total_eb_supply = EB_BASE_LIMIT + fb_spillover + savings
         eb1_supply = int(total_eb_supply * EB1_STATUTORY_SHARE)
 
@@ -53,7 +58,8 @@ async def get_waterfall_data():
             "fb_spillover": int(fb_spillover),
             "redistribution_savings": int(savings),
             "total_eb_supply": int(total_eb_supply),
-            "eb1_supply": int(eb1_supply)
+            "eb1_supply": int(eb1_supply),
+            "fb_usage_detected": int(total_fb_usage)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -91,9 +97,12 @@ async def get_supply_demand_data(apply_freeze: bool = False):
         if apply_freeze:
             restricted = RedistributionEngine.get_default_restricted_list()
             engine = RedistributionEngine(restricted)
-            df_frozen = engine.apply_freeze(dos_parser.df)
-            savings = engine.calculate_savings(dos_parser.df, df_frozen)
-
+            
+            # For waterfall savings, we only care about FB visas that are saved to become spillover
+            fb_df = dos_parser.df[dos_parser.df['visa_category'].isin(DOSParser.FB_CATEGORIES)]
+            df_frozen = engine.apply_freeze(fb_df)
+            savings = engine.calculate_savings(fb_df, df_frozen)
+        
         total_eb_supply = EB_BASE_LIMIT + fb_spillover + savings
         eb1_supply = int(total_eb_supply * EB1_STATUTORY_SHARE)
 
@@ -154,9 +163,12 @@ async def predict_pd(priority_date: str, apply_freeze: bool = False):
         if apply_freeze:
             restricted = RedistributionEngine.get_default_restricted_list()
             engine = RedistributionEngine(restricted)
-            df_frozen = engine.apply_freeze(dos_parser.df)
-            savings = engine.calculate_savings(dos_parser.df, df_frozen)
-
+            
+            # For waterfall savings, we only care about FB visas that are saved to become spillover
+            fb_df = dos_parser.df[dos_parser.df['visa_category'].isin(DOSParser.FB_CATEGORIES)]
+            df_frozen = engine.apply_freeze(fb_df)
+            savings = engine.calculate_savings(fb_df, df_frozen)
+        
         total_eb_supply = EB_BASE_LIMIT + fb_spillover + savings
         eb1_supply = int(total_eb_supply * EB1_STATUTORY_SHARE)
 

@@ -13,7 +13,9 @@ class DOSParser(BaseParser):
     def load_data(self, prevent_recursion: bool = False, month: int = None, year: int = None, **kwargs) -> pd.DataFrame:
         """Overridden to find header automatically for DOS format and inject date."""
         if not prevent_recursion:
-            self.find_header_row(["Visa Class", "Total"])
+            # Actual DOS files use 'Issuances' as the count column and 
+            # 'Foreign State of Chargeability' (or subset) for country
+            self.find_header_row(["Foreign State", "Visa Class", "Issuances"])
         else:
             super().load_data(**kwargs)
         
