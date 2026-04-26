@@ -6,20 +6,24 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { predictPD } from '@/lib/api';
-import { Calculator, Calendar, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Calculator, Calendar, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 
 export default function PredictorPage() {
   const [pd, setPd] = useState('2025-01-16');
-  const [applyFreeze, setApplyFreeze] = useState<boolean>(false);
-  const [result, setResult] = useState<any>(null);
+  const [standardResult, setStandardResult] = useState<any>(null);
+  const [freezeResult, setFreezeResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const handlePredict = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const data = await predictPD(pd, applyFreeze);
-      setResult(data);
+      const [std, frz] = await Promise.all([
+        predictPD(pd, false),
+        predictPD(pd, true)
+      ]);
+      setStandardResult(std);
+      setFreezeResult(frz);
     } catch (err) {
       console.error(err);
     } finally {
@@ -34,104 +38,108 @@ export default function PredictorPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-5xl">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight text-navy-900">Priority Date Predictor</h2>
-        <p className="text-slate-500">Estimate your approval confidence for Fiscal Year 2027.</p>
+        <h2 className="text-3xl font-bold tracking-tight text-navy-900">Personal PD Predictor</h2>
+        <p className="text-slate-500">Estimate how travel bans and restrictions accelerate your specific Priority Date.</p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Enter Your Details</CardTitle>
-            <CardDescription>We use historical seasonality and dynamic spillover simulations to calculate your place in line.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handlePredict} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Priority Date</label>
-                <Input 
-                  type="date" 
-                  value={pd} 
-                  onChange={(e) => setPd(e.target.value)}
-                  required
-                />
-              </div>
+      <Card className="max-w-md">
+        <CardHeader>
+          <CardTitle>Priority Date</CardTitle>
+          <CardDescription>Enter your I-140 Priority Date to see the impact.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handlePredict} className="flex gap-4">
+            <Input 
+              type="date" 
+              value={pd} 
+              onChange={(e) => setPd(e.target.value)}
+              required
+              className="flex-1"
+            />
+            <Button type="submit" className="bg-navy-900 hover:bg-navy-800" disabled={loading}>
+              {loading ? '...' : 'Compare Results'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
-              <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-navy-900">75-Country Freeze</h4>
-                  <Button 
-                    type="button"
-                    size="sm"
-                    variant={applyFreeze ? "default" : "outline"}
-                    onClick={() => setApplyFreeze(!applyFreeze)}
-                    className={applyFreeze ? "bg-crimson-600 hover:bg-crimson-700" : ""}
-                  >
-                    {applyFreeze ? "ON" : "OFF"}
-                  </Button>
-                </div>
-                <p className="text-xs text-slate-500">Simulation: Redistribute visas from restricted countries.</p>
-              </div>
-
-              <Button type="submit" className="w-full bg-navy-900 hover:bg-navy-800" disabled={loading}>
-                {loading ? 'Calculating...' : 'Calculate Prediction'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        {result && (
-          <Card className="border-2 border-navy-900/10">
+      {standardResult && freezeResult && (
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Standard Result */}
+          <Card className="opacity-80">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                Prediction Results
-                <Badge variant="outline" className={getConfidenceColor(result.confidence_score)}>
-                  {(result.confidence_score * 100).toFixed(0)}% Confidence
-                </Badge>
+              <CardTitle className="flex items-center justify-between">
+                Standard INA Flow
+                <Badge variant="outline">Normal Flow</Badge>
               </CardTitle>
+              <CardDescription>Based on historical 9k/year supply baseline.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-navy-50 rounded-full text-navy-900">
-                  <Calculator className="w-6 h-6" />
+                <div className="p-3 bg-slate-100 rounded-full text-slate-600">
+                  <Calendar className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500 font-medium">Estimated Backlog Ahead</p>
-                  <p className="text-2xl font-bold text-navy-900">{result.backlog_ahead?.toLocaleString()}</p>
+                  <p className="text-sm text-slate-500 font-medium">Projected Date</p>
+                  <p className="text-2xl font-bold text-slate-700">
+                    {new Date(standardResult.projected_clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                  </p>
                 </div>
               </div>
+              
+              <div className="p-4 rounded-lg bg-slate-50 border space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Confidence</p>
+                <div className="flex items-center gap-2">
+                  <div className="h-2 flex-1 bg-slate-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-slate-400" 
+                      style={{ width: `${standardResult.confidence_score * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-bold text-slate-600">{(standardResult.confidence_score * 100).toFixed(0)}%</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
+          {/* Freeze Result */}
+          <Card className="border-2 border-crimson-600 shadow-lg shadow-crimson-600/5">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between text-crimson-700">
+                Restriction Mode
+                <Badge className="bg-crimson-600">Trump Effect</Badge>
+              </CardTitle>
+              <CardDescription>Includes windfalls from travel bans and country freezes.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-crimson-50 rounded-full text-crimson-600">
                   <Calendar className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500 font-medium">Projected GC Availability</p>
+                  <p className="text-sm text-slate-500 font-medium">Accelerated Date</p>
                   <p className="text-2xl font-bold text-navy-900">
-                    {new Date(result.projected_clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                    {new Date(freezeResult.projected_clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
                   </p>
                 </div>
               </div>
 
-              <div className="p-4 rounded-lg bg-slate-50 border space-y-2">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Analysis</p>
-                {result.confidence_score > 0.7 ? (
-                  <p className="text-sm text-slate-600 flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                    Your priority date is well-positioned for FY 2027 based on current spillover projections and historical seasonality.
-                  </p>
-                ) : (
-                  <p className="text-sm text-slate-600 flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                    Given the current backlog and non-linear demand curve, your approval may fall into late FY 2027 or early FY 2028.
-                  </p>
-                )}
+              <div className="p-4 rounded-lg bg-crimson-50/50 border border-crimson-100 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-crimson-600">Impact Analysis</p>
+                <div className="flex items-center gap-2 text-navy-900 font-bold">
+                  <ArrowRight className="w-4 h-4 text-crimson-600" />
+                  {Math.round((standardResult.months_to_clear - freezeResult.months_to_clear))} Months Earlier
+                </div>
+                <p className="text-xs text-slate-500">
+                  Higher supply confidence due to redistribution of unused visas.
+                </p>
               </div>
             </CardContent>
           </Card>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
