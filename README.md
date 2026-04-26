@@ -1,6 +1,11 @@
-# The Spillover Engine 📈
+# The Spillover Engine 🇺🇸 📈
 
-A production-ready Streamlit application to visualize and predict the impact of the 2026/2027 U.S. Immigrant Visa restrictions on the India EB-1 backlog.
+A modern web application to visualize and predict the impact of the 2026/2027 U.S. Immigrant Visa restrictions on the India EB-1 backlog.
+
+## Stack
+- **Backend**: FastAPI (Python)
+- **Frontend**: Next.js (React), Tailwind CSS, shadcn/ui
+- **Data**: Pandas, Recharts
 
 ## Features
 - **Waterfall Visualization**: Path from FB Statutory Limit to Final EB-1 Supply.
@@ -25,25 +30,31 @@ graph TD
 ## Setup & Installation
 
 ### Local Development
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. Generate mock data:
-   ```bash
-   python generate_mock_data.py
-   ```
-3. Run the app:
-   ```bash
-   streamlit run app/Home.py
-   ```
+
+#### 1. Backend (FastAPI)
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run API
+uvicorn api.main:app --reload
+```
+Access API docs at `http://localhost:8000/docs`.
+
+#### 2. Frontend (Next.js)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Access the app at `http://localhost:3000`.
 
 ### Docker
 1. Build and run:
    ```bash
    docker-compose up --build
    ```
-2. Access the app at `http://localhost:8501`.
+2. Access the app at `http://localhost:3000`.
 
 ## Documentation
 - [Architecture & Design](docs/ARCHITECTURE.md)
