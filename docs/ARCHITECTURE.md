@@ -11,7 +11,8 @@
 - EB shares (203(b)): EB-1 28.6% + EB4/5 unused (roll-up); EB-2/3 fall-down.
 - Per-country (202): 7% cap, surplus bypass for India/China backlogs.
 - "75-Country Freeze": Hypothetical demand-curtailment scenario (not enacted policy as of May 2026 bulletins). India excluded from default restricted list.
-- Current reality: India EB-1 Final Action ~01APR23 (3yr backlog); FY26 forward movement observed.
+- **Real 2025-2026 policy (distinct):** Presidential Proclamations 10949 (Jun 2025) + 10998 (Dec 2025, eff Jan 2026) suspend IVs for specific countries (full: Afghanistan, Haiti, Iran, etc.; partial incl. Nigeria, Venezuela, Cuba; **India/China explicitly excluded** per DOS). "allowed some reallocation of visa numbers to other countries under INA limits." (travel.state.gov). ACTUAL_RESTRICTED_COUNTRIES models this for accurate spillover.
+- Current reality (May 2026 VB): "India EB-1 Final Action Date (FAD): 01APR23" (https://travel.state.gov/.../visa-bulletin-for-may-2026.html). "High demand and number use by aliens chargeable to India in the EB-1 ... have made it necessary to retrogress the final action dates..." FY2024 Visa Office: "~6,952 were issued to applicants chargeable to India" (out of 47,462 EB-1 total). USCIS Jan 2026 inv: 48,162 (2.2x) India EB-1 pending. No INA 201/203 amendments.
 
 ## Core Components
 
@@ -28,7 +29,7 @@
 
 ## Data Flow (Revamped)
 1. DOS dir + Inventory xlsx -> Parsers (robust load + normalize)
-2. SupplyCalculator.get_supply_breakdown(apply_freeze) -> Breakdown (with india_eb1_supply)
+2. SupplyCalculator.get_supply_breakdown(apply_freeze, apply_real_restrictions=False) -> Breakdown (with india_eb1_supply; real_restrictions adds actual policy spillover)
 3. DemandModeler (supply, inventory+pipe total) -> projection + confidence
 4. FastAPI endpoints (/waterfall, /supply-demand, /predict) -> Typed Next.js UI
 

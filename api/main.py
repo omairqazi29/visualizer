@@ -59,10 +59,13 @@ class PredictResponse(BaseModel):
     trajectory: List[dict]
 
 @app.get("/api/waterfall", response_model=WaterfallResponse)
-async def get_waterfall_data(apply_freeze: bool = Query(False, description="Apply 75-country freeze / Trump Effect")):
+async def get_waterfall_data(
+    apply_freeze: bool = Query(False, description="Apply 75-country freeze / Trump Effect (hypothetical full scenario)"),
+    apply_real_restrictions: bool = Query(False, description="Apply actual 2025-2026 Presidential Proclamation country restrictions (real policy, India excluded; ignored if apply_freeze=true for precedence)"),
+):
     try:
         calc = SupplyCalculator()
-        breakdown = calc.get_supply_breakdown(apply_freeze=apply_freeze)
+        breakdown = calc.get_supply_breakdown(apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions)
         return WaterfallResponse(
             eb_base_limit=breakdown.eb_base_limit,
             fb_spillover_std=breakdown.fb_spillover_std,
@@ -73,11 +76,16 @@ async def get_waterfall_data(apply_freeze: bool = Query(False, description="Appl
             eb1_supply=breakdown.eb1_supply,
             india_eb1_supply=breakdown.india_eb1_supply,
         )
+        # NOTE: when apply_real_restrictions, india_eb1_supply is preferentially boosted
+        # (see SupplyBreakdown docstring); other aggregates report base for compat.
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/supply-demand", response_model=SupplyDemandResponse)
-async def get_supply_demand_data(apply_freeze: bool = Query(False, description="Apply 75-country freeze / Trump Effect")):
+async def get_supply_demand_data(
+    apply_freeze: bool = Query(False, description="Apply 75-country freeze / Trump Effect (hypothetical full scenario)"),
+    apply_real_restrictions: bool = Query(False, description="Apply actual 2025-2026 Presidential Proclamation country restrictions (real policy, India excluded; ignored if apply_freeze=true)"),
+):
     try:
         # Load inventory + pipeline (demand side)
         inv_parser = InventoryParser("data/eb_inventory_january_2026.xlsx")
@@ -91,7 +99,7 @@ async def get_supply_demand_data(apply_freeze: bool = Query(False, description="
 
         # Supply side via centralized calculator
         calc = SupplyCalculator()
-        breakdown = calc.get_supply_breakdown(apply_freeze=apply_freeze)
+        breakdown = calc.get_supply_breakdown(apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions)
         india_eb1_supply = breakdown.india_eb1_supply
 
         # Monthly distribution for demand projection
@@ -118,7 +126,8 @@ async def get_supply_demand_data(apply_freeze: bool = Query(False, description="
 @app.get("/api/predict", response_model=PredictResponse)
 async def predict_pd(
     priority_date: str = Query(..., description="Priority Date in YYYY-MM-DD format"),
-    apply_freeze: bool = Query(False, description="Apply 75-country freeze / Trump Effect"),
+    apply_freeze: bool = Query(False, description="Apply 75-country freeze / Trump Effect (hypothetical full scenario)"),
+    apply_real_restrictions: bool = Query(False, description="Apply actual 2025-2026 Presidential Proclamation country restrictions (real policy, India excluded; ignored if apply_freeze=true per precedence)"),
 ):
     try:
         try:
@@ -143,11 +152,14 @@ async def predict_pd(
             pipeline_fraction = min(1.0, months_into_pipeline / 24.0)
             backlog_ahead = inv_stats_total['total'] + int(pipe_total * pipeline_fraction)
         else:
-            backlog_ahead = inv_ahead['total']
+            # Use 'mountain' (PDs strictly before cutoff_year per parser design) for
+            # backlog ahead of this PD. Fixes prior use of full 'total' which
+            # overstated queue for pre-2024 PDs and reduced prediction accuracy.
+            backlog_ahead = inv_ahead.get('mountain', inv_ahead['total'])
 
         # Supply side via centralized calculator
         calc = SupplyCalculator()
-        breakdown = calc.get_supply_breakdown(apply_freeze=apply_freeze)
+        breakdown = calc.get_supply_breakdown(apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions)
         india_eb1_supply = breakdown.india_eb1_supply
 
         monthly_dist = calc.dos_parser.get_monthly_distribution(

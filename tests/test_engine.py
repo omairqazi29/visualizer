@@ -74,3 +74,61 @@ def test_ina_7_percent_bypass():
     
     assert allocated_df.loc[0, 'allocated'] == 5000
     assert unused == 5000
+
+
+def test_supply_real_restrictions_increases_india_supply():
+    """Real restrictions (actual policy) must increase India EB-1 supply over baseline for accuracy."""
+    from src.engine.supply import SupplyCalculator
+    from src.constants import DEFAULT_INDIA_EB1_SUPPLY, ACTUAL_RESTRICTED_COUNTRIES
+    calc = SupplyCalculator()
+    std = calc.get_supply_breakdown(apply_freeze=False, apply_real_restrictions=False)
+    real = calc.get_supply_breakdown(apply_freeze=False, apply_real_restrictions=True)
+    assert real.india_eb1_supply > std.india_eb1_supply
+    assert real.india_eb1_supply >= DEFAULT_INDIA_EB1_SUPPLY
+    assert len(ACTUAL_RESTRICTED_COUNTRIES) > 0
+
+
+def test_predict_accuracy_for_2023_pd_uses_mountain_backlog():
+    """For PD 2023-04-01 (near current May 2026 FAD 01APR23), backlog_ahead must use mountain (cutoff filter) not full total.
+    This + researched supply makes projections data-driven vs real Visa Bulletin observations."""
+    from src.parsers.inventory_parser import InventoryParser
+    from src.parsers.pipeline_parser import PipelineParser
+    from datetime import datetime
+    inv = InventoryParser("data/eb_inventory_january_2026.xlsx")
+    pd_dt = datetime(2023, 4, 1)
+    inv_ahead = inv.get_india_eb1_queue(cutoff_month=pd_dt.month, cutoff_year=pd_dt.year)
+    # The fix ensures mountain (<2023) is used; in data this is 39127 vs total 48162
+    assert inv_ahead['mountain'] < inv_ahead['total']
+    assert inv_ahead['mountain'] == 39127  # verifiable from Jan 2026 data
+
+
+@pytest.mark.parametrize("pd_str, apply_real, expected_max_months", [
+    ("2023-04-01", False, 80),  # std with researched supply + mountain fix
+    ("2023-04-01", True, 25),   # real restrictions boost shortens dramatically
+    ("2022-01-01", True, 15),
+])
+def test_predict_various_pds_and_flags(pd_str, apply_real, expected_max_months):
+    """Parametrized coverage for new real flag + mountain logic across PDs (Issue 8)."""
+    from src.parsers.inventory_parser import InventoryParser
+    from src.parsers.pipeline_parser import PipelineParser
+    from src.engine.demand import DemandModeler
+    from src.engine.supply import SupplyCalculator
+    from datetime import datetime
+    pd_dt = datetime.strptime(pd_str, "%Y-%m-%d")
+    inv = InventoryParser("data/eb_inventory_january_2026.xlsx")
+    inv_stats = inv.get_india_eb1_queue()
+    pipe = PipelineParser("data/eb_i140_i360_i526_performance_data_fy2025_q4_v1.xlsx")
+    pipe.load_data()
+    pipe_total = pipe.get_india_eb1_backlog()
+    total_q = inv_stats['total'] + pipe_total
+    if pd_dt.year > 2023:
+        frac = min(1.0, ((pd_dt.year - 2024) * 12 + pd_dt.month) / 24.0)
+        ba = inv_stats['total'] + int(pipe_total * frac)
+    else:
+        ba = inv.get_india_eb1_queue(cutoff_month=pd_dt.month, cutoff_year=pd_dt.year)['mountain']
+    calc = SupplyCalculator()
+    bd = calc.get_supply_breakdown(apply_freeze=False, apply_real_restrictions=apply_real)
+    dist = calc.dos_parser.get_monthly_distribution("India", ["E11", "E12", "E13"])
+    model = DemandModeler(total_q, bd.india_eb1_supply, dist)
+    proj = model.project_clearance(backlog=ba)
+    assert proj["months_to_clear"] <= expected_max_months

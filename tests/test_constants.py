@@ -8,6 +8,7 @@ from src.constants import (
     PER_COUNTRY_CAP,
     DEPENDENT_MULTIPLIER,
     DEFAULT_INDIA_EB1_SUPPLY,
+    ACTUAL_RESTRICTED_COUNTRIES,
 )
 
 
@@ -38,6 +39,16 @@ def test_dependent_multiplier():
 
 
 def test_default_india_eb1_supply():
-    # Empirical baseline used for standard-flow projections
-    assert DEFAULT_INDIA_EB1_SUPPLY == 9000
+    # Researched value from FY2024 Report of the Visa Office (actual India EB-1 issuances: 6952)
+    assert DEFAULT_INDIA_EB1_SUPPLY == 6952
     assert DEFAULT_INDIA_EB1_SUPPLY > 0
+
+
+def test_actual_restricted_countries():
+    # Real (not hypo) countries from 2025-2026 Proclamations; India/China excluded; used for accurate current-policy spillover
+    assert isinstance(ACTUAL_RESTRICTED_COUNTRIES, set)
+    assert len(ACTUAL_RESTRICTED_COUNTRIES) >= 10
+    assert "Haiti" in ACTUAL_RESTRICTED_COUNTRIES
+    assert "Nigeria" in ACTUAL_RESTRICTED_COUNTRIES
+    assert "India" not in ACTUAL_RESTRICTED_COUNTRIES
+    assert "China - mainland born" not in ACTUAL_RESTRICTED_COUNTRIES

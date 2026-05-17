@@ -16,13 +16,26 @@ from ..constants import (
     EB1_STATUTORY_SHARE,
     EB45_STATUTORY_SHARE,
     DEFAULT_INDIA_EB1_SUPPLY,
+    ACTUAL_RESTRICTED_COUNTRIES,
+    EB45_CATEGORIES,
 )
 from .redistribution import RedistributionEngine
 
 
 @dataclass
 class SupplyBreakdown:
-    """Complete breakdown of EB-1 supply components for a given scenario."""
+    """Complete breakdown of EB-1 supply components for a given scenario.
+
+    NOTE on real_restrictions: When apply_real_restrictions=True (actual 2025-26
+    policy, not the hypo freeze), real savings from ACTUAL_RESTRICTED_COUNTRIES
+    are added *preferentially* only to india_eb1_supply (reflecting India's
+    position as primary backlog beneficiary under INA 202(a)(5) surplus rules +
+    real demand reduction from restricted countries). The freeze_* savings fields,
+    total_eb_supply, and eb1_supply remain at standard/hypo values for backward
+    compat and minimal shape change. Consumers should rely primarily on
+    india_eb1_supply for India EB-1 predictions. This is intentional per research
+    mandate for smallest diff / no return-shape changes.
+    """
 
     eb_base_limit: int
     fb_spillover_std: int
@@ -31,7 +44,7 @@ class SupplyBreakdown:
     eb45_savings_freeze: int
     total_eb_supply: int
     eb1_supply: int
-    india_eb1_supply: int  # effective supply available to India EB-1
+    india_eb1_supply: int  # effective supply available to India EB-1 (augmented by real_restrictions for current policy accuracy; see class docstring)
 
 
 class SupplyCalculator:
@@ -58,8 +71,11 @@ class SupplyCalculator:
         assert self._dos_parser is not None
         return self._dos_parser
 
-    def get_supply_breakdown(self, apply_freeze: bool = False) -> SupplyBreakdown:
-        """Compute the full waterfall-style supply breakdown."""
+    def get_supply_breakdown(self, apply_freeze: bool = False, apply_real_restrictions: bool = False) -> SupplyBreakdown:
+        """Compute the full waterfall-style supply breakdown.
+        apply_real_restrictions: Use ACTUAL_RESTRICTED_COUNTRIES from real 2025-2026
+        Presidential Proclamations (distinct from hypothetical freeze).
+        """
         self._ensure_dos_loaded()
         dos_parser = self.dos_parser
 
@@ -82,20 +98,28 @@ class SupplyCalculator:
             fb_savings = engine.calculate_savings(fb_df, fb_frozen)
 
             # EB4/5 savings (spill only to EB-1)
-            eb45_cats = [
-                'SD', 'SE', 'SI1', 'SI2', 'SI3', 'SK', 'SQ1', 'SQ2', 'SQ3', 'SR',
-                'SU', 'SW', 'C5', 'I5', 'R5', 'T5'
-            ]
-            eb45_df = dos_parser.df[dos_parser.df['visa_category'].isin(eb45_cats)]
+            eb45_df = dos_parser.df[dos_parser.df['visa_category'].isin(EB45_CATEGORIES)]
             eb45_frozen = engine.apply_freeze(eb45_df)
             eb45_savings = engine.calculate_savings(eb45_df, eb45_frozen)
 
+        # Real restrictions (actual policy, adds limited spillover on top of standard)
+        real_fb_savings = 0
+        real_eb45_savings = 0
+        # Guard: real_restrictions only when not applying the (larger) hypothetical freeze.
+        # Precedence: freeze takes priority as the "what-if" full scenario; real is additive
+        # only to standard for current-world accuracy. Documented in Query params + here.
+        if apply_real_restrictions and not apply_freeze:
+            real_restricted = ACTUAL_RESTRICTED_COUNTRIES
+            engine = RedistributionEngine(real_restricted)
+            fb_df = dos_parser.df[dos_parser.df['visa_category'].isin(DOSParser.FB_CATEGORIES)]
+            fb_frozen = engine.apply_freeze(fb_df)
+            real_fb_savings = engine.calculate_savings(fb_df, fb_frozen)
+            eb45_df = dos_parser.df[dos_parser.df['visa_category'].isin(EB45_CATEGORIES)]
+            eb45_frozen = engine.apply_freeze(eb45_df)
+            real_eb45_savings = engine.calculate_savings(eb45_df, eb45_frozen)
+
         # Standard EB4/5 spillover
-        eb45_cats = [
-            'SD', 'SE', 'SI1', 'SI2', 'SI3', 'SK', 'SQ1', 'SQ2', 'SQ3', 'SR',
-            'SU', 'SW', 'C5', 'I5', 'R5', 'T5'
-        ]
-        eb45_usage = dos_parser.df[dos_parser.df['visa_category'].isin(eb45_cats)]['count'].sum()
+        eb45_usage = dos_parser.df[dos_parser.df['visa_category'].isin(EB45_CATEGORIES)]['count'].sum()
         standard_eb45_spillover = max(0, int(EB_BASE_LIMIT * EB45_STATUTORY_SHARE) - eb45_usage)
 
         total_shared_supply = eb_base + standard_fb_spillover + fb_savings
@@ -105,6 +129,12 @@ class SupplyCalculator:
         # Effective India EB-1 supply
         if not apply_freeze:
             india_eb1_supply = DEFAULT_INDIA_EB1_SUPPLY
+            if apply_real_restrictions:
+                # Real policy restrictions on listed countries reduce their FB/EB45 usage,
+                # generating extra spillover to EB-1 (EB45 savings roll directly to EB-1;
+                # FB savings contribute via shared pool). Add EB45 savings + conservative
+                # share of FB savings to reflect India as primary backlog beneficiary.
+                india_eb1_supply += real_eb45_savings + int(real_fb_savings * EB1_STATUTORY_SHARE)
         else:
             eb1_cats = ['E11', 'E12', 'E13', 'E1', 'IB1', 'IB2']
             row_eb1_usage = dos_parser.df[

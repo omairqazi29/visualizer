@@ -69,7 +69,9 @@ class InventoryParser(BaseParser):
                 if year < cutoff_year:
                     mountain += col_sum
                 else:
-                    # For same year, full inclusion for simplicity (month-level split only if needed for very old cutoffs)
+                    # Same-year (and later) lumped to valley (not counted as "ahead" for the cutoff PD).
+                    # cutoff_month accepted for signature but currently unused (year-granular only;
+                    # month-level split possible in future if data requires intra-year precision).
                     valley += col_sum
             else:
                 # Legacy default behavior: pre-2024 mountain-ish, rest valley (updated threshold)
