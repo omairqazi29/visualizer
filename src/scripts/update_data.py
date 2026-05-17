@@ -2,24 +2,26 @@
 """
 Data Update Utility for The Spillover Engine.
 
-Fetches or prepares latest DOS IV issuance reports and USCIS EB Inventory files.
+Fetches or prepares latest DOS IV issuance reports and USCIS EB Inventory / pipeline files.
 Since official sites require manual download (no stable public API for Excel),
 this script:
-- Prints instructions with latest known URLs (research-verified as of 2026)
-- Validates any user-placed new files in data/DOS/ or data/
-- Re-runs parsers on new files for sanity
+- Prints instructions with latest known URLs (research-verified)
+- Validates any user-placed new files in data/DOS/ or data/ using auto-discovery
+- Re-runs parsers on the discovered latest files for sanity
+
+The engine (api + SupplyCalculator + parsers) now auto-discovers the newest matching
+eb_inventory*.xlsx and *performance*.xlsx / eb_i140*.xlsx via filename date or mtime.
+DOS loads *every* file in data/DOS/ whose name matches the month-year prefix (new bulletins
+just work if naming convention followed).
 
 Usage: python -m src.scripts.update_data
 
 Research note (INA/news): Always cross-check travel.state.gov for newest monthly
 "IV Issuances by FSC..." and uscis.gov for "Employment-Based Adjustment of Status Inventory".
-Current as of mid-2026: DOS through Sep 2025 (FY2025, no FY2026 Excel published yet),
-USCIS Jan 2026 inventory (latest). No INA 201/203 statutory changes. Real (non-hypo)
-travel/visa restrictions via 2025-26 Proclamations on specific countries (India excluded)
-provide additional spillover not in FY2025 DOS data; see ACTUAL_RESTRICTED_COUNTRIES.
+Research baselines (e.g. DEFAULT_INDIA_EB1_SUPPLY) are from the 2026 snapshot; runtime
+demand numbers always come from the latest discovered files in data/.
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -28,6 +30,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.parsers.dos_parser import DOSParser
 from src.parsers.inventory_parser import InventoryParser
+from src.parsers.pipeline_parser import PipelineParser
+from src.data_discovery import (
+    get_latest_inventory_path,
+    get_latest_pipeline_path,
+    get_dos_dir,
+)
 
 
 def main():
@@ -36,34 +44,57 @@ def main():
     print("=" * 60)
     print()
     print("1. Download latest files manually:")
-    print("   - DOS Monthly (FY2025 latest, no FY2026 Excel as of May 2026):")
-    print("     https://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics/immigrant-visa-statistics/monthly-immigrant-visa-issuances.html")
-    print("     Direct e.g. Sep 2025: https://travel.state.gov/content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/SEPTEMBER%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx")
-    print("   - USCIS EB I-485 Inventory (latest Jan 2026):")
-    print("     https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data")
-    print("     Direct: https://www.uscis.gov/sites/default/files/document/data/eb_inventory_january_2026.xlsx")
-    print("   - Visa Bulletins (India EB-1 FAD 01APR23 in May 2026): https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin/2026/visa-bulletin-for-may-2026.html")
-    print("   - Report of the Visa Office 2024 (key: India EB-1 6952 visas issued): https://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics/annual-reports/report-of-the-visa-office-2024.html")
+    print("   - DOS Monthly:")
+    print(
+        "     https://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics/immigrant-visa-statistics/monthly-immigrant-visa-issuances.html"
+    )
+    print(
+        "     (New files named e.g. 'OCTOBER 2025 - ...xlsx' in data/DOS/ are auto-loaded)"
+    )
+    print("   - USCIS EB I-485 Inventory:")
+    print(
+        "     https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data"
+    )
+    print(
+        "     (Any eb_inventory_*.xlsx dropped in data/ becomes current via discovery)"
+    )
+    print(
+        "   - I-140 Performance / Pipeline (eb_i140* or performance data): same USCIS page"
+    )
+    print(
+        "   - Visa Bulletins and annual reports: travel.state.gov (research aids only)"
+    )
     print()
-    print("2. Place new DOS xlsx into data/DOS/ (filename format: 'MONTH YYYY - ... .xlsx')")
-    print("3. Replace or add eb_inventory_january_2026.xlsx (or newer) in data/")
+    print(
+        "2. Place new DOS xlsx into data/DOS/ (filename format: 'MONTH YYYY - ... .xlsx')"
+    )
+    print(
+        "3. Add/replace eb_inventory_*.xlsx or pipeline *.xlsx in data/ (latest by name date wins)"
+    )
     print()
-    print("Key researched numbers (Jan 2026 inventory, 2.2x): India EB-1 I-485 pending total 48162 (primary ~27962); I-140 pipeline 45302 (primary ~20592).")
-    print("Real policy: Presidential Proclamations 10949/10998 restrict specific countries (not 75, India excluded) -> extra real spillover modeled via apply_real_restrictions.")
+    print(
+        "The runtime uses auto-discovered latest files (see data_discovery.py). Researched constants are snapshot-based."
+    )
+    print(
+        "Real policy: Presidential Proclamations restrict specific countries (India excluded) -> extra spillover via apply_real_restrictions flag."
+    )
     print()
-    print("Validating current data files...")
+    print("Validating current (discovered) data files...")
 
-    dos_dir = Path("data/DOS")
+    # DOS (directory load — already supported drop-in new bulletins)
+    dos_dir = Path(get_dos_dir())
     if dos_dir.exists():
         dos_files = list(dos_dir.glob("*.xlsx"))
-        print(f"  Found {len(dos_files)} DOS files.")
+        print(f"  Found {len(dos_files)} DOS files (all loaded by DOSParser).")
         try:
             df = DOSParser.load_from_directory(str(dos_dir))
             print(f"  DOSParser combined rows: {len(df)}")
         except Exception as e:
             print(f"  DOS parse warning: {e}")
 
-    inv_path = Path("data/eb_inventory_january_2026.xlsx")
+    # Inventory + pipeline now via discovery (new files "just work")
+    inv_path = Path(get_latest_inventory_path())
+    print(f"  Using inventory: {inv_path.name} (discovered or fallback)")
     if inv_path.exists():
         try:
             p = InventoryParser(str(inv_path))
@@ -74,8 +105,23 @@ def main():
     else:
         print("  Warning: Inventory file missing.")
 
+    pipe_path = Path(get_latest_pipeline_path())
+    print(f"  Using pipeline: {pipe_path.name} (discovered or fallback)")
+    if pipe_path.exists():
+        try:
+            pp = PipelineParser(str(pipe_path))
+            pp.load_data()
+            pback = pp.get_india_eb1_backlog()
+            print(f"  Pipeline India EB-1 backlog (2.2x): {pback}")
+        except Exception as e:
+            print(f"  Pipeline parse warning: {e}")
+    else:
+        print("  Warning: Pipeline file missing.")
+
     print("\nData refresh complete. Re-run API tests or `docker-compose up --build`.")
-    print("For full revamp, consider adding a simple HTTP fetcher for known report pages + pandas read.")
+    print(
+        "For full revamp, consider adding a simple HTTP fetcher for known report pages + pandas read."
+    )
 
 
 if __name__ == "__main__":

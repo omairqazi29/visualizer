@@ -1,7 +1,7 @@
 import sys
 import os
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 
 # Add the project root to sys.path to import from src
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -36,7 +36,9 @@ class WaterfallResponse(BaseModel):
     eb45_savings_freeze: int
     total_eb_supply: int
     eb1_supply: int
-    india_eb1_supply: int  # effective for India after non-India EB-1 usage (or full under freeze)
+    india_eb1_supply: (
+        int  # effective for India after non-India EB-1 usage (or full under freeze)
+    )
 
 
 class SupplyDemandResponse(BaseModel):
@@ -58,14 +60,23 @@ class PredictResponse(BaseModel):
     months_to_clear: int
     trajectory: List[dict]
 
+
 @app.get("/api/waterfall", response_model=WaterfallResponse)
 async def get_waterfall_data(
-    apply_freeze: bool = Query(False, description="Apply 75-country freeze / Trump Effect (hypothetical full scenario)"),
-    apply_real_restrictions: bool = Query(False, description="Apply actual 2025-2026 Presidential Proclamation country restrictions (real policy, India excluded; ignored if apply_freeze=true for precedence)"),
+    apply_freeze: bool = Query(
+        False,
+        description="Apply 75-country freeze / Trump Effect (hypothetical full scenario)",
+    ),
+    apply_real_restrictions: bool = Query(
+        False,
+        description="Apply actual 2025-2026 Presidential Proclamation country restrictions (real policy, India excluded; ignored if apply_freeze=true for precedence)",
+    ),
 ):
     try:
         calc = SupplyCalculator()
-        breakdown = calc.get_supply_breakdown(apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions)
+        breakdown = calc.get_supply_breakdown(
+            apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions
+        )
         return WaterfallResponse(
             eb_base_limit=breakdown.eb_base_limit,
             fb_spillover_std=breakdown.fb_spillover_std,
@@ -81,31 +92,39 @@ async def get_waterfall_data(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/supply-demand", response_model=SupplyDemandResponse)
 async def get_supply_demand_data(
-    apply_freeze: bool = Query(False, description="Apply 75-country freeze / Trump Effect (hypothetical full scenario)"),
-    apply_real_restrictions: bool = Query(False, description="Apply actual 2025-2026 Presidential Proclamation country restrictions (real policy, India excluded; ignored if apply_freeze=true)"),
+    apply_freeze: bool = Query(
+        False,
+        description="Apply 75-country freeze / Trump Effect (hypothetical full scenario)",
+    ),
+    apply_real_restrictions: bool = Query(
+        False,
+        description="Apply actual 2025-2026 Presidential Proclamation country restrictions (real policy, India excluded; ignored if apply_freeze=true)",
+    ),
 ):
     try:
-        # Load inventory + pipeline (demand side)
-        inv_parser = InventoryParser("data/eb_inventory_january_2026.xlsx")
+        # Load inventory + pipeline (demand side) via auto-discovery for drop-in new data
+        inv_parser = InventoryParser.latest()
         inv_stats = inv_parser.get_india_eb1_queue()
 
-        pipe_parser = PipelineParser("data/eb_i140_i360_i526_performance_data_fy2025_q4_v1.xlsx")
+        pipe_parser = PipelineParser.latest()
         pipe_parser.load_data()
         pipe_total = pipe_parser.get_india_eb1_backlog()
 
-        total_queue = int(inv_stats['total'] + pipe_total)
+        total_queue = int(inv_stats["total"] + pipe_total)
 
         # Supply side via centralized calculator
         calc = SupplyCalculator()
-        breakdown = calc.get_supply_breakdown(apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions)
+        breakdown = calc.get_supply_breakdown(
+            apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions
+        )
         india_eb1_supply = breakdown.india_eb1_supply
 
         # Monthly distribution for demand projection
         monthly_dist = calc.dos_parser.get_monthly_distribution(
-            country="India",
-            categories=["E11", "E12", "E13"]
+            country="India", categories=["E11", "E12", "E13"]
         )
 
         modeler = DemandModeler(total_queue, int(india_eb1_supply), monthly_dist)
@@ -123,52 +142,68 @@ async def get_supply_demand_data(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/predict", response_model=PredictResponse)
 async def predict_pd(
     priority_date: str = Query(..., description="Priority Date in YYYY-MM-DD format"),
-    apply_freeze: bool = Query(False, description="Apply 75-country freeze / Trump Effect (hypothetical full scenario)"),
-    apply_real_restrictions: bool = Query(False, description="Apply actual 2025-2026 Presidential Proclamation country restrictions (real policy, India excluded; ignored if apply_freeze=true per precedence)"),
+    apply_freeze: bool = Query(
+        False,
+        description="Apply 75-country freeze / Trump Effect (hypothetical full scenario)",
+    ),
+    apply_real_restrictions: bool = Query(
+        False,
+        description="Apply actual 2025-2026 Presidential Proclamation country restrictions (real policy, India excluded; ignored if apply_freeze=true per precedence)",
+    ),
 ):
     try:
         try:
             pd_dt = datetime.strptime(priority_date, "%Y-%m-%d")
         except ValueError:
-            raise HTTPException(status_code=422, detail="priority_date must be in YYYY-MM-DD format")
+            raise HTTPException(
+                status_code=422, detail="priority_date must be in YYYY-MM-DD format"
+            )
 
-        # Demand side
-        inv_parser = InventoryParser("data/eb_inventory_january_2026.xlsx")
+        # Demand side via auto-discovery (supports new USCIS files without code change)
+        inv_parser = InventoryParser.latest()
         inv_stats_total = inv_parser.get_india_eb1_queue()
 
-        pipe_parser = PipelineParser("data/eb_i140_i360_i526_performance_data_fy2025_q4_v1.xlsx")
+        pipe_parser = PipelineParser.latest()
         pipe_parser.load_data()
         pipe_total = pipe_parser.get_india_eb1_backlog()
 
-        total_queue = inv_stats_total['total'] + pipe_total
+        total_queue = inv_stats_total["total"] + pipe_total
 
-        inv_ahead = inv_parser.get_india_eb1_queue(cutoff_month=pd_dt.month, cutoff_year=pd_dt.year)
+        inv_ahead = inv_parser.get_india_eb1_queue(
+            cutoff_month=pd_dt.month, cutoff_year=pd_dt.year
+        )
 
         if pd_dt.year > 2023:
             months_into_pipeline = (pd_dt.year - 2024) * 12 + pd_dt.month
             pipeline_fraction = min(1.0, months_into_pipeline / 24.0)
-            backlog_ahead = inv_stats_total['total'] + int(pipe_total * pipeline_fraction)
+            backlog_ahead = inv_stats_total["total"] + int(
+                pipe_total * pipeline_fraction
+            )
         else:
             # Use 'mountain' (PDs strictly before cutoff_year per parser design) for
             # backlog ahead of this PD. Fixes prior use of full 'total' which
             # overstated queue for pre-2024 PDs and reduced prediction accuracy.
-            backlog_ahead = inv_ahead.get('mountain', inv_ahead['total'])
+            backlog_ahead = inv_ahead.get("mountain", inv_ahead["total"])
 
         # Supply side via centralized calculator
         calc = SupplyCalculator()
-        breakdown = calc.get_supply_breakdown(apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions)
+        breakdown = calc.get_supply_breakdown(
+            apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions
+        )
         india_eb1_supply = breakdown.india_eb1_supply
 
         monthly_dist = calc.dos_parser.get_monthly_distribution(
-            country="India",
-            categories=["E11", "E12", "E13"]
+            country="India", categories=["E11", "E12", "E13"]
         )
 
         modeler = DemandModeler(total_queue, int(india_eb1_supply), monthly_dist)
-        score = modeler.calculate_confidence_score(pd_dt, backlog_ahead=backlog_ahead, target_fy=2027)
+        score = modeler.calculate_confidence_score(
+            pd_dt, backlog_ahead=backlog_ahead, target_fy=2027
+        )
         projection = modeler.project_clearance(backlog=backlog_ahead)
 
         return PredictResponse(
@@ -185,6 +220,8 @@ async def predict_pd(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,19 +1,33 @@
 from .base import BaseParser
 import pandas as pd
-import numpy as np
+
+from ..data_discovery import get_latest_inventory_path
+
 
 class InventoryParser(BaseParser):
     """
     Parser for USCIS EB Inventory Excel files.
     Handles the pivoted format (years as columns).
+
+    Use InventoryParser("explicit/path.xlsx") for tests / pinned data.
+    Use InventoryParser.latest(data_dir=...) for runtime / drop-in new data files
+    (auto-selects newest by parsed date or mtime under the supplied data_dir).
     """
-    
+
+    @classmethod
+    def latest(cls, data_dir: str = "data") -> "InventoryParser":
+        """Thin wrapper: return parser for the latest discovered (or fallback) inventory file under data_dir."""
+        path = get_latest_inventory_path(data_dir)
+        return cls(path)
+
     def load_india_eb1(self) -> pd.DataFrame:
         """Loads specifically the India EB1 sheet."""
-        self.load_data(sheet_name='India (EB1 EW3 EB4 CRW EB5)', header=3)
+        self.load_data(sheet_name="India (EB1 EW3 EB4 CRW EB5)", header=3)
         return self.df
 
-    def get_india_eb1_queue(self, cutoff_month: int = None, cutoff_year: int = None) -> dict:
+    def get_india_eb1_queue(
+        self, cutoff_month: int = None, cutoff_year: int = None
+    ) -> dict:
         """
         Calculates India EB-1 queue by summing all Priority Date Year columns for EB-1 rows.
         Dynamically handles 2016-2025+ reports. cutoff filters PDs strictly before cutoff for 'backlog_ahead'.
@@ -25,26 +39,33 @@ class InventoryParser(BaseParser):
         # Robust EB-1 filter: matches "1st" or "EB1" in Preference Category (handles full "Employment-Based 1st Preference Category (EB1)")
         pref_col = None
         for c in self.df.columns:
-            if 'preference' in str(c).lower() or 'category' in str(c).lower():
+            if "preference" in str(c).lower() or "category" in str(c).lower():
                 pref_col = c
                 break
         if pref_col is None:
             pref_col = self.df.columns[1]  # fallback
 
-        eb1_mask = self.df[pref_col].astype(str).str.contains('1st', case=False, na=False) | \
-                   self.df[pref_col].astype(str).str.contains('EB1', case=False, na=False)
+        eb1_mask = self.df[pref_col].astype(str).str.contains(
+            "1st", case=False, na=False
+        ) | self.df[pref_col].astype(str).str.contains("EB1", case=False, na=False)
         eb1_df = self.df[eb1_mask].copy()
 
         def parse_val(v):
-            if pd.isna(v) or str(v).strip() in ['-', '']: return 0
+            if pd.isna(v) or str(v).strip() in ["-", ""]:
+                return 0
             s = str(v).strip().upper()
-            if s == 'D': return 1
+            if s == "D":
+                return 1
             try:
-                return int(str(v).replace(',', ''))
+                return int(str(v).replace(",", ""))
             except:
                 return 0
 
-        year_cols = [c for c in self.df.columns if 'Priority Date Year' in str(c) or 'Prior Years' in str(c)]
+        year_cols = [
+            c
+            for c in self.df.columns
+            if "Priority Date Year" in str(c) or "Prior Years" in str(c)
+        ]
 
         total_primary = 0
         mountain = 0
@@ -54,12 +75,12 @@ class InventoryParser(BaseParser):
             col_sum = int(eb1_df[col].apply(parse_val).sum())
             total_primary += col_sum
 
-            if 'Prior Years' in str(col):
+            if "Prior Years" in str(col):
                 mountain += col_sum
                 continue
 
             try:
-                year_str = str(col).split('-')[-1].strip()
+                year_str = str(col).split("-")[-1].strip()
                 year = int(year_str)
             except:
                 valley += col_sum
@@ -84,5 +105,5 @@ class InventoryParser(BaseParser):
         return {
             "mountain": int(mountain * mult),
             "valley": int(valley * mult),
-            "total": int(total_primary * mult)
+            "total": int(total_primary * mult),
         }

@@ -4,7 +4,7 @@
 - **Backend**: FastAPI + Python 3.11 + Pandas (data cleaning for DOS/USCIS Excel)
 - **Frontend**: Next.js 14 (App Router) + TypeScript + Tailwind + Recharts + shadcn/ui
 - **Key Modeling**: INA 201/203 limits, vertical spillovers (EB4/5 -> EB-1), 7% caps + 202(a)(5) surplus, 2.2x dependents (per project mandate)
-- **Data**: Monthly DOS IV issuances (FY25), USCIS EB I-485 Inventory (Jan 2026), I-140 pipeline (FY25 Q4)
+- **Data**: Monthly DOS IV issuances (any in data/DOS/ via directory load), USCIS EB I-485 Inventory + I-140 pipeline via src/data_discovery (auto latest eb_inventory*.xlsx and *performance*.xlsx / eb_i140*.xlsx by filename date or mtime). Drop-in support for new bulletins and quarterly releases.
 
 ## Research-Backed INA Fidelity Notes
 - FB spillover (201(c)): Prior FY unused family (226k floor) added to EB pool.
@@ -28,12 +28,12 @@
 - **DemandModeler** (enhanced): Blends historical % with uniform for high-supply (freeze) scenarios; FY Oct reset.
 
 ## Data Flow (Revamped)
-1. DOS dir + Inventory xlsx -> Parsers (robust load + normalize)
-2. SupplyCalculator.get_supply_breakdown(apply_freeze, apply_real_restrictions=False) -> Breakdown (with india_eb1_supply; real_restrictions adds actual policy spillover)
-3. DemandModeler (supply, inventory+pipe total) -> projection + confidence
-4. FastAPI endpoints (/waterfall, /supply-demand, /predict) -> Typed Next.js UI
+1. DOS dir (all files) + Inventory/Pipeline via `InventoryParser.latest()` / `PipelineParser.latest()` (backed by `src/data_discovery.find_latest` + date/mtime sort) -> Parsers (robust load + normalize)
+2. SupplyCalculator.get_supply_breakdown(...) -> Breakdown
+3. DemandModeler (...) -> projection + confidence
+4. FastAPI endpoints (/waterfall, /supply-demand, /predict) using Parser.latest() -> Typed Next.js UI
 
-See INA_MODEL.md (to be added) for equations. New data via src/scripts/update_data.py.
+See INA_MODEL.md (to be added) for equations. New data: drop files in data/ ; validated via `python -m src.scripts.update_data`.
 
 ## Files of Interest
 - api/main.py (endpoints + Pydantic)

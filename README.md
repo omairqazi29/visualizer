@@ -10,7 +10,7 @@ A modern web application to visualize and predict the impact of hypothetical U.S
 ## Features
 - **Waterfall Visualization**: INA-compliant path from FB/EB limits to India EB-1 supply (with/without Restriction Scenario).
 - **Hypothetical Restriction Scenario**: Configurable 75-country demand freeze savings + EB4/5 roll-up to EB-1 (research: not enacted as of 2026; India excluded from restricted).
-- **Inventory + Pipeline**: Dynamic 2026 USCIS EB I-485 + I-140 pending, 2.2x dependents.
+- **Inventory + Pipeline**: Auto-discovered latest USCIS EB I-485 + I-140 files (drop new eb_inventory_*.xlsx or performance data into data/ — no code change), 2.2x dependents.
 - **PD Predictor**: FY2027 confidence with high-supply blend + backlog_ahead by PD year.
 
 ## INA 201/203 Spillover Flow (Freeze Mode)

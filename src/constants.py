@@ -29,6 +29,8 @@ DEPENDENT_MULTIPLIER: float = 2.2
 # Researched baseline for India EB-1 annual supply under standard INA flow.
 # Value derived from official FY2024 data: India received 6,952 EB-1 visas
 # (out of 47,462 total worldwide EB-1 issuances). Updated from prior empirical 9000.
+# NOTE: These researched baselines (6952 + restricted sets) are from the May 2026 snapshot;
+# runtime inventory/pipeline numbers now come from auto-discovered files via data_discovery.
 # Sources: Report of the Visa Office 2024, Table V (travel.state.gov),
 # DOS Visa Bulletins FY2025-2026, and USCIS/DOS notes on full category utilization.
 # NOTE: Real 2025-2026 Presidential Proclamations (see ACTUAL_RESTRICTED_COUNTRIES)
@@ -85,8 +87,22 @@ ACTUAL_RESTRICTED_COUNTRIES: set[str] = {
 # EB-4/EB-5 visa categories that spill over to EB-1 (per INA 203(b)).
 # Centralized to avoid duplication across supply calc paths (standard, freeze, real_restrictions).
 EB45_CATEGORIES: list[str] = [
-    'SD', 'SE', 'SI1', 'SI2', 'SI3', 'SK', 'SQ1', 'SQ2', 'SQ3', 'SR',
-    'SU', 'SW', 'C5', 'I5', 'R5', 'T5'
+    "SD",
+    "SE",
+    "SI1",
+    "SI2",
+    "SI3",
+    "SK",
+    "SQ1",
+    "SQ2",
+    "SQ3",
+    "SR",
+    "SU",
+    "SW",
+    "C5",
+    "I5",
+    "R5",
+    "T5",
 ]
 
 __all__ = [
