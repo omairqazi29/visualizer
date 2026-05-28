@@ -41,3 +41,16 @@ See INA_MODEL.md (to be added) for equations. New data: drop files in data/ ; va
 - frontend/src/app/{waterfall,supply-demand,predict}/page.tsx
 
 (Previously documented Streamlit/Plotly version superseded by Next.js revamp.)
+
+---
+
+## Refactoring Effort (2026)
+
+An 8-PR refactoring effort is in progress to introduce a Clean-inspired layered
+architecture.  Target sizing: **+820 LOC net / +9 files**.
+
+- **Domain Layer** (`src/domain/`): pure value objects, protocols, exceptions, policies — no pandas, no I/O.
+- **Adapters** (`src/adapters/`): thin wrappers around parsers/loaders.
+- **Application Services** (`src/application/`): orchestration.
+- Golden regression harness (`tests/golden/`) captures reference outputs (6952 / 78837 / 31053 / 93464) for safe refactoring.
+- Existing `src/parsers/`, `src/engine/`, `src/constants.py` remain in place; behavior changes are zero until reconciliation PRs land.

@@ -41,7 +41,7 @@ MONTHS_MAP = {
 }
 
 
-def _parse_date_from_filename(path: Path) -> Optional[Tuple[int, int]]:
+def parse_date_from_filename(path: Path | None) -> Optional[Tuple[int, int]]:
     """Return (year, month) tuple parsed from common government filename patterns.
 
     Supported patterns (case-insensitive):
@@ -100,17 +100,6 @@ def _parse_date_from_filename(path: Path) -> Optional[Tuple[int, int]]:
         except (IndexError, ValueError, KeyError):
             pass
 
-    # Also catch 2025_Q4 without FY prefix
-    m = re.search(r"(\d{4})[_-]?Q([1-4])", name)
-    if m:
-        try:
-            year = int(m.group(1))
-            q = int(m.group(2))
-            qmonth = {1: 1, 2: 4, 3: 7, 4: 10}[q]
-            return (year, qmonth)
-        except (IndexError, ValueError, KeyError):
-            pass
-
     return None
 
 
@@ -121,7 +110,7 @@ def _file_sort_key(p: Path) -> tuple[int, int, float, str]:
     Secondary: mtime (newer wins).
     Tertiary: name for determinism.
     """
-    date = _parse_date_from_filename(p)
+    date = parse_date_from_filename(p)
     try:
         mtime = p.stat().st_mtime
     except (OSError, FileNotFoundError):
@@ -209,6 +198,7 @@ def get_dos_dir(data_dir: str = "data") -> str:
 
 __all__ = [
     "MONTHS_MAP",
+    "parse_date_from_filename",
     "find_latest",
     "get_latest_inventory_path",
     "get_latest_pipeline_path",

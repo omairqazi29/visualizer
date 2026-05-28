@@ -9,6 +9,7 @@ from src.constants import (
     DEPENDENT_MULTIPLIER,
     DEFAULT_INDIA_EB1_SUPPLY,
     ACTUAL_RESTRICTED_COUNTRIES,
+    DEFAULT_MONTHLY_INFLOW,
 )
 
 
@@ -42,6 +43,12 @@ def test_default_india_eb1_supply():
     # Researched value from FY2024 Report of the Visa Office (actual India EB-1 issuances: 6952)
     assert DEFAULT_INDIA_EB1_SUPPLY == 6952
     assert DEFAULT_INDIA_EB1_SUPPLY > 0
+
+
+def test_default_monthly_inflow():
+    # Based on FY2025 USCIS quarterly data (~500-600 primary I-140 approvals/month)
+    assert DEFAULT_MONTHLY_INFLOW == 550
+    assert DEFAULT_MONTHLY_INFLOW > 0
 
 
 def test_actual_restricted_countries():

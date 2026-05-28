@@ -26,6 +26,11 @@ PER_COUNTRY_CAP: float = 0.07
 # Dependent multiplier per project mandate (I-140/I-485 primary + 2.2x dependents)
 DEPENDENT_MULTIPLIER: float = 2.2
 
+# Default monthly inflow of new India EB-1 I-140 approvals (primary petitions only).
+# Based on FY2025 USCIS quarterly performance data (~500-600/month).
+# Multiply by DEPENDENT_MULTIPLIER (2.2x) to get total persons added to backlog per month.
+DEFAULT_MONTHLY_INFLOW: int = 550
+
 # Researched baseline for India EB-1 annual supply under standard INA flow.
 # Value derived from official FY2024 data: India received 6,952 EB-1 visas
 # (out of 47,462 total worldwide EB-1 issuances). Updated from prior empirical 9000.
@@ -120,4 +125,5 @@ __all__ = [
     "DEFAULT_RESTRICTED_COUNTRIES",
     "ACTUAL_RESTRICTED_COUNTRIES",
     "EB45_CATEGORIES",
+    "DEFAULT_MONTHLY_INFLOW",
 ]

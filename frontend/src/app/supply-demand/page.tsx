@@ -7,21 +7,24 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 export default function SupplyDemandPage() {
   const [standardData, setStandardData] = useState<SupplyDemandData | null>(null);
+  const [realData, setRealData] = useState<SupplyDemandData | null>(null);
   const [freezeData, setFreezeData] = useState<SupplyDemandData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      getSupplyDemandData(false),
-      getSupplyDemandData(true)
+    Promise.allSettled([
+      getSupplyDemandData(false, false),
+      getSupplyDemandData(false, true),
+      getSupplyDemandData(true, false)
     ])
-      .then(([std, frz]) => {
-        setStandardData(std);
-        setFreezeData(frz);
-      })
-      .catch((e: unknown) => {
-        const err = e as { message?: string };
-        setError(err?.message || 'Failed to load supply/demand data');
+      .then(([stdRes, realRes, frzRes]) => {
+        if (stdRes.status === 'fulfilled') setStandardData(stdRes.value);
+        if (realRes.status === 'fulfilled') setRealData(realRes.value);
+        if (frzRes.status === 'fulfilled') setFreezeData(frzRes.value);
+        // Show error if any call failed (error banner takes priority over partial data)
+        if (stdRes.status === 'rejected' || realRes.status === 'rejected' || frzRes.status === 'rejected') {
+          setError('One or more supply/demand scenarios failed to load');
+        }
       });
   }, []);
 
@@ -32,12 +35,12 @@ export default function SupplyDemandPage() {
       </div>
     );
   }
-  if (!standardData || !freezeData) {
+  if (!error && (!standardData || !realData || !freezeData)) {
     return (
       <div className="space-y-6">
         <div className="h-10 w-64 animate-pulse rounded bg-slate-200" />
-        <div className="grid gap-4 md:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-20 animate-pulse rounded-xl border bg-slate-100" />
           ))}
         </div>
@@ -46,12 +49,15 @@ export default function SupplyDemandPage() {
     );
   }
 
-  // Combine trajectories for the chart
-  const projection = standardData.trajectory.map((t, idx: number) => ({
-    date: t.date,
-    dateLabel: new Date(t.date).toLocaleDateString(undefined, { month: 'short', year: '2-digit' }),
-    standardBacklog: t.backlog,
-    freezeBacklog: freezeData.trajectory[idx]?.backlog || 0
+  // Combine trajectories for the chart (standard + real policy + freeze)
+  // Cap at 240 data points (20 years) to avoid rendering lag on long trajectories
+  const maxLen = Math.min(240, Math.max(standardData.trajectory.length, realData.trajectory.length, freezeData.trajectory.length));
+  const projection = Array.from({ length: maxLen }, (_, idx) => ({
+    date: standardData.trajectory[idx]?.date || realData.trajectory[idx]?.date || freezeData.trajectory[idx]?.date || '',
+    dateLabel: new Date(standardData.trajectory[idx]?.date || realData.trajectory[idx]?.date || freezeData.trajectory[idx]?.date || '').toLocaleDateString(undefined, { month: 'short', year: '2-digit' }),
+    standardBacklog: standardData.trajectory[idx]?.backlog ?? 0,
+    realBacklog: realData.trajectory[idx]?.backlog ?? 0,
+    freezeBacklog: freezeData.trajectory[idx]?.backlog ?? 0
   }));
 
   return (
@@ -61,14 +67,28 @@ export default function SupplyDemandPage() {
         <p className="text-slate-500">Comparing Standard INA Flow vs. 75-Country Freeze Impact.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-slate-500">Standard Clearance</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-400">
-              {new Date(standardData.clearance_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+              {standardData.cleared === false
+                ? 'Never Clears'
+                : new Date(standardData.clearance_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-navy-200 bg-navy-50/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-navy-800">Real Policy Clearance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-navy-700">
+              {realData.cleared === false
+                ? 'Never Clears'
+                : new Date(realData.clearance_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
             </div>
           </CardContent>
         </Card>
@@ -78,7 +98,9 @@ export default function SupplyDemandPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-crimson-600">
-              {new Date(freezeData.clearance_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+              {freezeData.cleared === false
+                ? 'Never Clears'
+                : new Date(freezeData.clearance_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
             </div>
           </CardContent>
         </Card>
@@ -88,7 +110,9 @@ export default function SupplyDemandPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-navy-900">
-              {Math.round((standardData.months_to_clear || 0) - (freezeData.months_to_clear || 0))} Months Faster
+              {standardData.cleared === false
+                ? 'Standard: Never Clears'
+                : `${Math.round((standardData.months_to_clear ?? 0) - (freezeData.months_to_clear ?? 0))} Months Faster`}
             </div>
           </CardContent>
         </Card>
@@ -107,6 +131,10 @@ export default function SupplyDemandPage() {
                   <linearGradient id="colorStd" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.1}/>
                     <stop offset="95%" stopColor="#94a3b8" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#002868" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#002868" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="colorFrz" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#BF0A30" stopOpacity={0.1}/>
@@ -130,6 +158,16 @@ export default function SupplyDemandPage() {
                   strokeWidth={2}
                   fillOpacity={1} 
                   fill="url(#colorStd)" 
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="realBacklog" 
+                  name="Real Policy"
+                  stroke="#002868" 
+                  strokeWidth={2}
+                  strokeDasharray="5 3"
+                  fillOpacity={1} 
+                  fill="url(#colorReal)" 
                 />
                 <Area 
                   type="monotone" 
