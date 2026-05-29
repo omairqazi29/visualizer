@@ -7,12 +7,14 @@ const api = axios.create({
   baseURL,
 });
 
-export const getWaterfallData = (applyFreeze: boolean = false) => 
-  api.get('/waterfall', { params: { apply_freeze: applyFreeze } }).then(res => res.data);
-export const getSupplyDemandData = (applyFreeze: boolean = false) => 
-  api.get('/supply-demand', { params: { apply_freeze: applyFreeze } }).then(res => res.data);
-export const predictPD = (priorityDate: string, applyFreeze: boolean = false) => 
-  api.get('/predict', { params: { priority_date: priorityDate, apply_freeze: applyFreeze } }).then(res => res.data);
+export const getWaterfallData = (applyFreeze: boolean = false, applyRealRestrictions: boolean = false) => 
+  api.get('/waterfall', { params: { apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data);
+export const getSupplyDemandData = (applyFreeze: boolean = false, applyRealRestrictions: boolean = false) => 
+  api.get('/supply-demand', { params: { apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data);
+export const predictPD = (priorityDate: string, applyFreeze: boolean = false, applyRealRestrictions: boolean = false) => 
+  api.get('/predict', { params: { priority_date: priorityDate, apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data);
+export const getDataSources = () =>
+  api.get('/data-sources').then(res => res.data);
 
 // Strongly typed API response shapes (mirrors backend Pydantic models)
 export interface WaterfallData {
@@ -36,8 +38,10 @@ export interface SupplyDemandData {
   pipeline_total: number;
   total_queue: number;
   annual_eb1_supply: number;
+  monthly_inflow: number;
   clearance_date: string;
   months_to_clear: number;
+  cleared: boolean;
   trajectory: TrajectoryPoint[];
 }
 
@@ -46,7 +50,23 @@ export interface PredictData {
   backlog_ahead: number;
   total_queue: number;
   annual_eb1_supply: number;
+  monthly_inflow: number;
+  target_fy: number;
   projected_clearance_date: string;
   months_to_clear: number;
+  cleared: boolean;
   trajectory: TrajectoryPoint[];
+}
+
+export interface DataSourceFile {
+  filename: string;
+  parsed_date: string | null;
+  exists: boolean;
+}
+
+export interface DataSourcesData {
+  dos_directory: string;
+  dos_files: DataSourceFile[];
+  inventory_file: DataSourceFile;
+  pipeline_file: DataSourceFile;
 }

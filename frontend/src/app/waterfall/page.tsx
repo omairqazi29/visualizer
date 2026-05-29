@@ -8,17 +8,19 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 export default function WaterfallPage() {
   const [data, setData] = useState<WaterfallData | null>(null);
-  const [applyFreeze, setApplyFreeze] = useState(false);
+  const [mode, setMode] = useState<'standard' | 'real' | 'freeze'>('standard');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getWaterfallData(applyFreeze)
+    const applyFreeze = mode === 'freeze';
+    const applyReal = mode === 'real';
+    getWaterfallData(applyFreeze, applyReal)
       .then(setData)
       .catch((e: unknown) => {
         const err = e as { message?: string };
         setError(err?.message || 'Failed to load waterfall data');
       });
-  }, [applyFreeze]);
+  }, [mode]);
 
   if (error) {
     return (
@@ -40,10 +42,11 @@ export default function WaterfallPage() {
   const eb45Savings = data.eb45_savings_freeze || 0;
   const indiaSupply = data.india_eb1_supply || data.eb1_supply || 0;
 
+  const savingsLabel = mode === 'freeze' ? 'FB Savings (Freeze)' : mode === 'real' ? 'FB Savings (Policy)' : 'FB Savings';
   const chartData = [
     { name: 'EB Base', value: data.eb_base_limit || 140000, fill: '#002868' },
     { name: 'FB Spillover', value: data.fb_spillover_std || 0, fill: '#BF0A30' },
-    { name: 'FB Savings (Freeze)', value: fbSavings, fill: '#BF0A30' },
+    ...(fbSavings > 0 ? [{ name: savingsLabel, value: fbSavings, fill: '#BF0A30' }] : []),
     { name: 'EB 4/5 Spill+ Savings', value: (data.eb45_spillover_std || 0) + eb45Savings, fill: '#BF0A30' },
     { name: 'Total EB Supply', value: data.total_eb_supply || 0, fill: '#002868', isTotal: true },
     { name: 'India EB-1 Supply', value: indiaSupply, fill: '#003a94', isTotal: true },
@@ -74,14 +77,20 @@ export default function WaterfallPage() {
         </div>
         <div className="flex items-center gap-2 rounded-lg border bg-slate-50 p-1">
           <button
-            onClick={() => setApplyFreeze(false)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${!applyFreeze ? 'bg-white text-navy-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+            onClick={() => setMode('standard')}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${mode === 'standard' ? 'bg-white text-navy-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
           >
             Standard
           </button>
           <button
-            onClick={() => setApplyFreeze(true)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${applyFreeze ? 'bg-crimson-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+            onClick={() => setMode('real')}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${mode === 'real' ? 'bg-navy-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          >
+            Real Policy
+          </button>
+          <button
+            onClick={() => setMode('freeze')}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${mode === 'freeze' ? 'bg-crimson-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
           >
             Restriction Scenario
           </button>

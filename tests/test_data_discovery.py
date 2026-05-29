@@ -14,7 +14,7 @@ from src.data_discovery import (
     get_latest_inventory_path,
     get_latest_pipeline_path,
     get_dos_dir,
-    _parse_date_from_filename,
+    parse_date_from_filename,
     MONTHS_MAP,
 )
 
@@ -27,27 +27,27 @@ def test_months_map_complete():
 
 def test_parse_date_various_patterns():
     # Inventory style
-    assert _parse_date_from_filename(Path("eb_inventory_january_2026.xlsx")) == (
+    assert parse_date_from_filename(Path("eb_inventory_january_2026.xlsx")) == (
         2026,
         1,
     )
-    assert _parse_date_from_filename(Path("data/eb_inventory_march_2026.xlsx")) == (
+    assert parse_date_from_filename(Path("data/eb_inventory_march_2026.xlsx")) == (
         2026,
         3,
     )
-    assert _parse_date_from_filename(Path("EB_INVENTORY_2026-04.xlsx")) == (2026, 4)
+    assert parse_date_from_filename(Path("EB_INVENTORY_2026-04.xlsx")) == (2026, 4)
     # DOS style with space
-    assert _parse_date_from_filename(Path("OCTOBER 2025 - IV Issuances....xlsx")) == (
+    assert parse_date_from_filename(Path("OCTOBER 2025 - IV Issuances....xlsx")) == (
         2025,
         10,
     )
     # Pipeline FY Q style
-    assert _parse_date_from_filename(
+    assert parse_date_from_filename(
         Path("eb_i140_i360_i526_performance_data_fy2025_q4_v1.xlsx")
     ) == (2025, 10)
-    assert _parse_date_from_filename(Path("performance_fy2024_q2.xlsx")) == (2024, 4)
+    assert parse_date_from_filename(Path("performance_fy2024_q2.xlsx")) == (2024, 4)
     # No date
-    assert _parse_date_from_filename(Path("some_random_file.xlsx")) is None
+    assert parse_date_from_filename(Path("some_random_file.xlsx")) is None
 
 
 def test_find_latest_empty_dir_returns_none(tmp_path):
@@ -163,7 +163,45 @@ def test_parser_latest_with_custom_data_dir(tmp_path):
 
 
 def test_parse_date_defensive_none_paths():
-    """Light coverage for defensive branches in _parse (Issue 10)."""
-    assert _parse_date_from_filename(Path("no_date_at_all.xlsx")) is None
-    assert _parse_date_from_filename(Path("")) is None  # edge
-    assert _parse_date_from_filename(None) is None  # the if guard
+    """Light coverage for defensive branches in parse_date_from_filename (Issue 10)."""
+    assert parse_date_from_filename(Path("no_date_at_all.xlsx")) is None
+    assert parse_date_from_filename(Path("")) is None  # edge
+    assert parse_date_from_filename(None) is None  # the if guard
+
+
+def test_data_source_exists_false_for_nonexistent(tmp_path):
+    """DataSourceFile.exists should be False when fallback path doesn't exist on disk."""
+    result = get_latest_inventory_path(str(tmp_path))
+    assert not Path(result).exists()
+
+
+def test_data_sources_metadata_from_real_data():
+    """Standalone data-sources metadata test (not dependent on TestClient)."""
+    dos_dir = get_dos_dir()
+    dos_path = Path(dos_dir)
+    if dos_path.is_dir():
+        xlsx_files = [f for f in dos_path.iterdir() if f.suffix == ".xlsx"]
+        assert len(xlsx_files) > 0
+        # At least one should have a parseable date
+        parsed_dates = [parse_date_from_filename(f) for f in xlsx_files]
+        assert any(d is not None for d in parsed_dates)
+
+    inv_path = Path(get_latest_inventory_path())
+    parsed_inv = parse_date_from_filename(inv_path)
+    assert parsed_inv is not None
+    assert parsed_inv == (2026, 1)  # eb_inventory_january_2026
+
+    pipe_path = Path(get_latest_pipeline_path())
+    parsed_pipe = parse_date_from_filename(pipe_path)
+    assert parsed_pipe is not None
+
+
+def test_data_sources_empty_dos_dir(tmp_path):
+    """Data sources with missing/empty DOS dir should not error."""
+    dos = get_dos_dir(str(tmp_path))
+    dos_path = Path(dos)
+    # DOS dir doesn't exist — not an error, just empty
+    assert not dos_path.is_dir()
+    # Fallback works without errors and returns an xlsx path
+    result = get_latest_inventory_path(str(tmp_path))
+    assert result.endswith(".xlsx")

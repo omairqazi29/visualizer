@@ -3,22 +3,26 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getWaterfallData, getSupplyDemandData, WaterfallData, SupplyDemandData } from '@/lib/api';
-import { Users, TrendingUp, Calendar, Zap } from 'lucide-react';
+import { getWaterfallData, getSupplyDemandData, getDataSources, WaterfallData, SupplyDemandData, DataSourcesData } from '@/lib/api';
+import { Users, TrendingUp, Calendar, Zap, Database } from 'lucide-react';
 
 export default function Overview() {
   const [data, setData] = useState<WaterfallData | null>(null);
   const [sdData, setSdData] = useState<SupplyDemandData | null>(null);
   const [freezeWaterfall, setFreezeWaterfall] = useState<WaterfallData | null>(null);
   const [freezeSD, setFreezeSD] = useState<SupplyDemandData | null>(null);
+  const [dataSources, setDataSources] = useState<DataSourcesData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Dashboard shows standard vs. freeze (hypothetical) delta only.
+    // Real-policy scenario is intentionally omitted here — available on the
+    // supply-demand detail page where all three are compared side-by-side.
     Promise.all([
       getWaterfallData(false), 
       getSupplyDemandData(false),
       getWaterfallData(true),
-      getSupplyDemandData(true)
+      getSupplyDemandData(true),
     ])
       .then(([w, sd, fw, fsd]) => {
         setData(w);
@@ -26,7 +30,15 @@ export default function Overview() {
         setFreezeWaterfall(fw);
         setFreezeSD(fsd);
       })
-      .catch((e) => setError(e?.message || 'Failed to load dashboard data'));
+      .catch((e: unknown) => {
+        const err = e as { message?: string };
+        setError(err?.message || 'Failed to load dashboard data');
+      });
+
+    // Fetch data sources independently — failure should not break the dashboard
+    getDataSources()
+      .then(setDataSources)
+      .catch(() => {}); // dataSources stays null; skeleton renders gracefully
   }, []);
 
   if (error) {
@@ -49,8 +61,8 @@ export default function Overview() {
     );
   }
 
-  const windfall = (freezeWaterfall.fb_savings_freeze || 0) + (freezeWaterfall.eb45_savings_freeze || 0);
-  const acceleration = (sdData.months_to_clear || 0) - (freezeSD.months_to_clear || 0);
+  const windfall = (freezeWaterfall.fb_savings_freeze ?? 0) + (freezeWaterfall.eb45_savings_freeze ?? 0);
+  const acceleration = (sdData.months_to_clear ?? 0) - (freezeSD.months_to_clear ?? 0);
 
   return (
     <div className="space-y-8">
@@ -96,8 +108,12 @@ export default function Overview() {
             <TrendingUp className="h-4 w-4 text-emerald-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-700">{acceleration} Months</div>
-            <p className="text-xs text-emerald-600 font-medium">Faster clearance due to bans</p>
+            <div className="text-2xl font-bold text-emerald-700">
+              {sdData.cleared === false ? 'N/A' : `${acceleration} Months`}
+            </div>
+            <p className="text-xs text-emerald-600 font-medium">
+              {sdData.cleared === false ? 'Standard scenario never clears' : 'Faster clearance due to bans'}
+            </p>
           </CardContent>
         </Card>
 
@@ -144,23 +160,39 @@ export default function Overview() {
         </Card>
         <Card className="col-span-3">
           <CardHeader>
-            <CardTitle>Data Sources</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-4 w-4 text-navy-800" />
+              Data Sources
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <ul className="space-y-3 text-sm text-slate-600">
-              <li className="flex items-center gap-2">
-                <Badge variant="outline" className="text-[10px] h-4">DOS</Badge>
-                Monthly Issuances: FY2025 sequence
-              </li>
-              <li className="flex items-center gap-2">
-                <Badge variant="outline" className="text-[10px] h-4">USCIS</Badge>
-                EB Inventory: January 2026
-              </li>
-              <li className="flex items-center gap-2">
-                <Badge variant="outline" className="text-[10px] h-4">USCIS</Badge>
-                Performance Data: FY2025 Q4
-              </li>
-            </ul>
+            {dataSources ? (
+              <ul className="space-y-3 text-sm text-slate-600">
+                <li className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px] h-4">DOS</Badge>
+                  Monthly Issuances: {dataSources.dos_files.length} files
+                  {dataSources.dos_files.length > 0 && (
+                    <span className="text-xs text-slate-400">
+                      ({dataSources.dos_files[0]?.parsed_date} &ndash; {dataSources.dos_files[dataSources.dos_files.length - 1]?.parsed_date})
+                    </span>
+                  )}
+                </li>
+                <li className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px] h-4">USCIS</Badge>
+                  Inventory: {dataSources.inventory_file.filename.replace('.xlsx', '').replace(/_/g, ' ')}{!dataSources.inventory_file.exists && ' (not found)'}
+                </li>
+                <li className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px] h-4">USCIS</Badge>
+                  Pipeline: {dataSources.pipeline_file.parsed_date || dataSources.pipeline_file.filename.replace('.xlsx', '').replace(/_/g, ' ')}{!dataSources.pipeline_file.exists && ' (not found)'}
+                </li>
+              </ul>
+            ) : (
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-5 animate-pulse rounded bg-slate-100" />
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
