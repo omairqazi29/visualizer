@@ -1,4 +1,4 @@
-"""Tests for src/domain/ value objects, exceptions, protocols, and policy stubs."""
+"""Tests for src/domain/ value objects, exceptions, protocols, and policies."""
 
 import pytest
 from datetime import datetime, timezone
@@ -255,11 +255,11 @@ class TestExceptionHierarchy:
 
 
 # ---------------------------------------------------------------------------
-# Protocols & Policy Stubs
+# Protocols & Policies
 # ---------------------------------------------------------------------------
 
 
-class TestPolicyStubs:
+class TestPolicies:
     def test_standard_policy_name(self):
         p = StandardPolicy()
         assert p.name == PolicyName.STANDARD
@@ -282,7 +282,7 @@ class TestPolicyStubs:
         assert p.adjust_india_eb1_supply(100, 0, 0, 0, df) == 100
 
     def test_spillover_policy_protocol_check(self):
-        """Policy stubs should satisfy the SpilloverPolicy protocol at runtime."""
+        """Policies should satisfy the SpilloverPolicy protocol at runtime."""
         assert isinstance(StandardPolicy(), SpilloverPolicy)
         assert isinstance(FreezePolicy(), SpilloverPolicy)
         assert isinstance(RealRestrictionsPolicy(), SpilloverPolicy)
