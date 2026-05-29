@@ -89,6 +89,14 @@ ACTUAL_RESTRICTED_COUNTRIES: set[str] = {
     "Burkina Faso",
 }
 
+# EB-1 visa category codes (used for non-India EB-1 usage subtraction in freeze path).
+# Centralized to avoid duplication between domain policies and SupplyCalculator.
+EB1_CATEGORIES: list[str] = ["E11", "E12", "E13", "E1", "IB1", "IB2"]
+
+# Family-Based visa categories (used for FB spillover calculations).
+# Centralized to avoid duplication between DOSParser and domain policies.
+FB_CATEGORIES: list[str] = ["F1", "F2A", "F2B", "F3", "F4", "FX"]
+
 # EB-4/EB-5 visa categories that spill over to EB-1 (per INA 203(b)).
 # Centralized to avoid duplication across supply calc paths (standard, freeze, real_restrictions).
 EB45_CATEGORIES: list[str] = [
@@ -124,6 +132,8 @@ __all__ = [
     "DEFAULT_INDIA_EB1_SUPPLY",
     "DEFAULT_RESTRICTED_COUNTRIES",
     "ACTUAL_RESTRICTED_COUNTRIES",
+    "EB1_CATEGORIES",
+    "FB_CATEGORIES",
     "EB45_CATEGORIES",
     "DEFAULT_MONTHLY_INFLOW",
 ]

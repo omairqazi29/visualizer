@@ -1,6 +1,6 @@
 """Domain layer for The Spillover Engine.
 
-Pure value objects, exceptions, protocols, and policy stubs.
+Pure value objects, exceptions, protocols, and policy implementations.
 No I/O, no pandas usage in value objects, no imports from engine/parsers/api.
 """
 
@@ -42,7 +42,7 @@ __all__ = [
     "SpilloverPolicy",
     "DOSDataLoader",
     "Parser",
-    # Policy stubs
+    # Policies
     "StandardPolicy",
     "FreezePolicy",
     "RealRestrictionsPolicy",
