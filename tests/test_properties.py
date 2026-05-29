@@ -240,6 +240,21 @@ class TestSupplyInvariants:
         total_eb = total_shared + eb45_spillover
         assert total_eb1 <= total_eb, f"eb1 ({total_eb1}) > total_eb ({total_eb})"
 
+    @given(dos_df=dos_dataframes())
+    def test_fb_floor_respected(self, dos_df):
+        """Invariant 8: fb_spillover_std >= 0 via actual SupplyCalculator.
+
+        Exercises the engine's code path (not a locally-duplicated formula)
+        to verify the FB floor constraint produces non-negative spillover.
+        """
+        mock_loader = MagicMock()
+        mock_loader.load_all_issuances.return_value = dos_df
+        calc = SupplyCalculator(dos_loader=mock_loader)
+        result = calc.get_supply_breakdown(policy_name="standard")
+        assert result.fb_spillover_std >= 0, (
+            f"fb_spillover_std={result.fb_spillover_std} < 0"
+        )
+
 
 class TestDemandInvariants:
     """Property-based tests on DemandModeler projection."""
@@ -277,18 +292,3 @@ class TestDemandInvariants:
         )
         expected = int(inflow_rate * DEPENDENT_MULTIPLIER)
         assert modeler.monthly_inflow == expected
-
-    @given(dos_df=dos_dataframes())
-    def test_fb_floor_respected(self, dos_df):
-        """Invariant 8: fb_spillover_std >= 0 via actual SupplyCalculator.
-
-        Exercises the engine's code path (not a locally-duplicated formula)
-        to verify the FB floor constraint produces non-negative spillover.
-        """
-        mock_loader = MagicMock()
-        mock_loader.load_all_issuances.return_value = dos_df
-        calc = SupplyCalculator(dos_loader=mock_loader)
-        result = calc.get_supply_breakdown(policy_name="standard")
-        assert result.fb_spillover_std >= 0, (
-            f"fb_spillover_std={result.fb_spillover_std} < 0"
-        )
