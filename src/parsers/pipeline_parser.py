@@ -49,13 +49,11 @@ class PipelineParser(BaseParser):
                 return int(val * self.DEPENDENT_MULTIPLIER)
         return 0
 
-    def _parse_val(self, val) -> int:
-        # This method is now redundant as we use normalize_disclosure_values
-        if pd.isna(val) or val == "-":
-            return 0
-        if isinstance(val, str):
-            val = val.replace(",", "")
-        try:
-            return int(float(val))
-        except:
-            return 0
+    def parse(self) -> pd.DataFrame:
+        """Parse pipeline data: load, clean, and return the DataFrame.
+
+        Satisfies the Parser protocol from src.domain.protocols.
+        """
+        self.load_data()
+        self.clean()
+        return self.df

@@ -13,6 +13,7 @@ This is a SKELETON in PR1 — capture works, full verify logic comes in PR7.
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -36,6 +37,48 @@ _KNOWN_INT_PATHS = {
     "fb_statutory_limit": ("constants", "fb_statutory_limit"),
     "eb_base_limit": ("standard", "eb_base_limit"),
 }
+
+
+def _capture_parser_metadata() -> dict:
+    """Capture parser-specific metadata (column names, row counts)."""
+    parser_meta = {}
+
+    try:
+        from src.parsers.dos_parser import DOSParser
+        from src.data_discovery import get_dos_dir
+        dos_dir = get_dos_dir()
+        if os.path.isdir(dos_dir):
+            dos_df = DOSParser.load_from_directory(dos_dir)
+            parser_meta["dos"] = {
+                "columns": sorted(dos_df.columns.tolist()),
+                "row_count": len(dos_df),
+            }
+    except Exception as e:
+        parser_meta["dos"] = {"error": str(e)}
+
+    try:
+        from src.parsers.inventory_parser import InventoryParser
+        inv = InventoryParser.latest()
+        stats = inv.get_india_eb1_queue()
+        parser_meta["inventory"] = {
+            "queue": stats,
+        }
+    except Exception as e:
+        parser_meta["inventory"] = {"error": str(e)}
+
+    try:
+        from src.parsers.pipeline_parser import PipelineParser
+        pip = PipelineParser.latest()
+        pip.load_data()
+        if pip.df is not None:
+            parser_meta["pipeline"] = {
+                "columns": sorted(pip.df.columns.tolist()),
+                "row_count": len(pip.df),
+            }
+    except Exception as e:
+        parser_meta["pipeline"] = {"error": str(e)}
+
+    return parser_meta
 
 
 def _capture() -> dict:
@@ -86,6 +129,7 @@ def _capture() -> dict:
             "eb1_supply": real.eb1_supply,
             "india_eb1_supply": real.india_eb1_supply,
         },
+        "parsers": _capture_parser_metadata(),
     }
     return snapshot
 

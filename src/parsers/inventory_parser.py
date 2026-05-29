@@ -2,6 +2,7 @@ from .base import BaseParser
 import pandas as pd
 
 from ..data_discovery import get_latest_inventory_path
+from ..domain.value_objects import IndiaEB1Queue
 
 
 class InventoryParser(BaseParser):
@@ -58,7 +59,7 @@ class InventoryParser(BaseParser):
                 return 1
             try:
                 return int(str(v).replace(",", ""))
-            except:
+            except (ValueError, TypeError):
                 return 0
 
         year_cols = [
@@ -82,7 +83,7 @@ class InventoryParser(BaseParser):
             try:
                 year_str = str(col).split("-")[-1].strip()
                 year = int(year_str)
-            except:
+            except (ValueError, TypeError):
                 valley += col_sum
                 continue
 
@@ -107,3 +108,31 @@ class InventoryParser(BaseParser):
             "valley": int(valley * mult),
             "total": int(total_primary * mult),
         }
+
+    def get_india_eb1_queue_typed(
+        self, cutoff_month: int = None, cutoff_year: int = None
+    ) -> IndiaEB1Queue:
+        """Returns India EB-1 queue as an IndiaEB1Queue domain value object.
+
+        Wraps get_india_eb1_queue() for type-safe domain layer usage.
+        """
+        raw = self.get_india_eb1_queue(
+            cutoff_month=cutoff_month, cutoff_year=cutoff_year
+        )
+        return IndiaEB1Queue(
+            mountain=raw["mountain"],
+            valley=raw["valley"],
+            total=raw["total"],
+        )
+
+    def parse(self) -> pd.DataFrame:
+        """Parse inventory data: load India EB1 sheet and return the DataFrame.
+
+        Satisfies the Parser protocol from src.domain.protocols.
+
+        NOTE: clean() is intentionally NOT called here. get_india_eb1_queue()
+        relies on original cased column names (e.g. "Priority Date Year - 2024",
+        "Preference Category") which normalize_headers() would lowercase and break.
+        """
+        self.load_india_eb1()
+        return self.df
