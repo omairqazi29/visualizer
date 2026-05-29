@@ -1,32 +1,11 @@
 "use client";
 
-import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { getSupplyDemandData, SupplyDemandData } from '@/lib/api';
+import { useSupplyDemandData } from '@/lib/hooks/useSupplyDemandData';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export default function SupplyDemandPage() {
-  const [standardData, setStandardData] = useState<SupplyDemandData | null>(null);
-  const [realData, setRealData] = useState<SupplyDemandData | null>(null);
-  const [freezeData, setFreezeData] = useState<SupplyDemandData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    Promise.allSettled([
-      getSupplyDemandData(false, false),
-      getSupplyDemandData(false, true),
-      getSupplyDemandData(true, false)
-    ])
-      .then(([stdRes, realRes, frzRes]) => {
-        if (stdRes.status === 'fulfilled') setStandardData(stdRes.value);
-        if (realRes.status === 'fulfilled') setRealData(realRes.value);
-        if (frzRes.status === 'fulfilled') setFreezeData(frzRes.value);
-        // Show error if any call failed (error banner takes priority over partial data)
-        if (stdRes.status === 'rejected' || realRes.status === 'rejected' || frzRes.status === 'rejected') {
-          setError('One or more supply/demand scenarios failed to load');
-        }
-      });
-  }, []);
+  const { standardData, realData, freezeData, error } = useSupplyDemandData();
 
   if (error) {
     return (
@@ -35,7 +14,7 @@ export default function SupplyDemandPage() {
       </div>
     );
   }
-  if (!error && (!standardData || !realData || !freezeData)) {
+  if (!standardData || !realData || !freezeData) {
     return (
       <div className="space-y-6">
         <div className="h-10 w-64 animate-pulse rounded bg-slate-200" />
@@ -110,8 +89,8 @@ export default function SupplyDemandPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-navy-900">
-              {standardData.cleared === false
-                ? 'Standard: Never Clears'
+              {(standardData.cleared === false || freezeData.cleared === false)
+                ? (standardData.cleared === false ? 'Standard: Never Clears' : 'Freeze: Never Clears')
                 : `${Math.round((standardData.months_to_clear ?? 0) - (freezeData.months_to_clear ?? 0))} Months Faster`}
             </div>
           </CardContent>

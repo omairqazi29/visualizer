@@ -3,13 +3,9 @@
 This module eliminates the duplication that previously existed across the three
 FastAPI route handlers. All INA 201/203 spillover math lives here.
 
-Supports dependency injection of loader and policy.
-Includes internal shadow dual-run for fidelity verification during tests and
-when the SPILLOVER_SHADOW_VERIFY=1 env var is set.
+Supports dependency injection of loader and policy via the Strategy pattern.
 """
 
-import os
-import sys
 from dataclasses import dataclass
 from typing import Optional
 
@@ -22,12 +18,8 @@ from ..constants import (
     EB1_STATUTORY_SHARE,
     EB45_STATUTORY_SHARE,
     DEFAULT_INDIA_EB1_SUPPLY,
-    ACTUAL_RESTRICTED_COUNTRIES,
-    EB1_CATEGORIES,
     EB45_CATEGORIES,
-    FB_CATEGORIES,
 )
-from .redistribution import RedistributionEngine
 
 # Deferred imports to avoid circular dependency:
 # domain.policies → engine.redistribution → engine.__init__ → engine.supply
@@ -178,81 +170,6 @@ class SupplyCalculator:
             india_eb1_supply=int(india_eb1_supply),
         )
 
-    def _legacy_compute(self, apply_freeze: bool, apply_real_restrictions: bool) -> SupplyBreakdown:
-        """Original computation logic preserved for shadow verification."""
-        dos_parser = self.dos_parser
-
-        eb_base = EB_BASE_LIMIT
-
-        # Standard FB spillover (INA 201(c))
-        total_fb_usage = dos_parser.get_total_fb_usage()
-        standard_fb_spillover = max(0, FB_STATUTORY_LIMIT - total_fb_usage)
-
-        fb_savings = 0
-        eb45_savings = 0
-
-        if apply_freeze:
-            restricted = RedistributionEngine.get_default_restricted_list()
-            engine = RedistributionEngine(restricted)
-
-            # FB savings (spill to EB 1/2/3)
-            fb_df = dos_parser.df[dos_parser.df['visa_category'].isin(FB_CATEGORIES)]
-            fb_frozen = engine.apply_freeze(fb_df)
-            fb_savings = engine.calculate_savings(fb_df, fb_frozen)
-
-            # EB4/5 savings (spill only to EB-1)
-            eb45_df = dos_parser.df[dos_parser.df['visa_category'].isin(EB45_CATEGORIES)]
-            eb45_frozen = engine.apply_freeze(eb45_df)
-            eb45_savings = engine.calculate_savings(eb45_df, eb45_frozen)
-
-        # Real restrictions (actual policy, adds limited spillover on top of standard)
-        real_fb_savings = 0
-        real_eb45_savings = 0
-        # Guard: real_restrictions only when not applying the (larger) hypothetical freeze.
-        # Precedence: freeze takes priority as the "what-if" full scenario; real is additive
-        # only to standard for current-world accuracy. Documented in Query params + here.
-        if apply_real_restrictions and not apply_freeze:
-            real_restricted = ACTUAL_RESTRICTED_COUNTRIES
-            engine = RedistributionEngine(real_restricted)
-            fb_df = dos_parser.df[dos_parser.df['visa_category'].isin(FB_CATEGORIES)]
-            fb_frozen = engine.apply_freeze(fb_df)
-            real_fb_savings = engine.calculate_savings(fb_df, fb_frozen)
-            eb45_df = dos_parser.df[dos_parser.df['visa_category'].isin(EB45_CATEGORIES)]
-            eb45_frozen = engine.apply_freeze(eb45_df)
-            real_eb45_savings = engine.calculate_savings(eb45_df, eb45_frozen)
-
-        # Standard EB4/5 spillover
-        eb45_usage = dos_parser.df[dos_parser.df['visa_category'].isin(EB45_CATEGORIES)]['count'].sum()
-        standard_eb45_spillover = max(0, int(EB_BASE_LIMIT * EB45_STATUTORY_SHARE) - eb45_usage)
-
-        total_shared_supply = eb_base + standard_fb_spillover + fb_savings
-        eb1_statutory_share = int(total_shared_supply * EB1_STATUTORY_SHARE)
-        total_eb1_supply = eb1_statutory_share + standard_eb45_spillover + eb45_savings
-
-        # Effective India EB-1 supply
-        if not apply_freeze:
-            india_eb1_supply = DEFAULT_INDIA_EB1_SUPPLY
-            if apply_real_restrictions:
-                india_eb1_supply += real_eb45_savings + int(real_fb_savings * EB1_STATUTORY_SHARE)
-            india_eb1_supply = max(0, india_eb1_supply)
-        else:
-            row_eb1_usage = dos_parser.df[
-                (~dos_parser.df['chargeability'].str.contains('India', case=False, na=False)) &
-                (dos_parser.df['visa_category'].isin(EB1_CATEGORIES))
-            ]['count'].sum()
-            india_eb1_supply = max(0, total_eb1_supply - row_eb1_usage)
-
-        return SupplyBreakdown(
-            eb_base_limit=eb_base,
-            fb_spillover_std=standard_fb_spillover,
-            fb_savings_freeze=fb_savings,
-            eb45_spillover_std=standard_eb45_spillover,
-            eb45_savings_freeze=eb45_savings,
-            total_eb_supply=int(total_shared_supply + standard_eb45_spillover + eb45_savings),
-            eb1_supply=int(total_eb1_supply),
-            india_eb1_supply=int(india_eb1_supply),
-        )
-
     def get_supply_breakdown(
         self,
         apply_freeze: bool = False,
@@ -288,20 +205,4 @@ class SupplyCalculator:
         else:
             policy = self._default_policy
 
-        # New path using DI
-        new_result = self._compute_with_policy(policy)
-
-        # Shadow verification (always in tests, opt-in in production via env var).
-        # Only when using boolean flag API (backward compat path) so that
-        # injected-policy / policy_name callers aren't double-checked against
-        # a legacy path that may not apply.
-        # Uses explicit if/raise (not assert) so it survives python -O.
-        if policy_name is None:
-            if os.environ.get("SPILLOVER_SHADOW_VERIFY") == "1" or "pytest" in sys.modules:
-                old_result = self._legacy_compute(apply_freeze, apply_real_restrictions)
-                if new_result != old_result:
-                    raise AssertionError(
-                        f"Fidelity drift: new={new_result}, old={old_result}"
-                    )
-
-        return new_result
+        return self._compute_with_policy(policy)

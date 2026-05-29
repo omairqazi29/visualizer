@@ -3,43 +3,28 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getWaterfallData, getSupplyDemandData, getDataSources, WaterfallData, SupplyDemandData, DataSourcesData } from '@/lib/api';
+import { getDataSources, DataSourcesData } from '@/lib/api';
+import { useWaterfallData } from '@/lib/hooks/useWaterfallData';
+import { useSupplyDemandData } from '@/lib/hooks/useSupplyDemandData';
 import { Users, TrendingUp, Calendar, Zap, Database } from 'lucide-react';
 
 export default function Overview() {
-  const [data, setData] = useState<WaterfallData | null>(null);
-  const [sdData, setSdData] = useState<SupplyDemandData | null>(null);
-  const [freezeWaterfall, setFreezeWaterfall] = useState<WaterfallData | null>(null);
-  const [freezeSD, setFreezeSD] = useState<SupplyDemandData | null>(null);
+  // Dashboard shows standard vs. freeze (hypothetical) delta only.
+  // Real-policy scenario is intentionally omitted here — available on the
+  // supply-demand detail page where all three are compared side-by-side.
+  const { data, error: waterfallError } = useWaterfallData('standard');
+  const { data: freezeWaterfall, error: freezeWaterfallError } = useWaterfallData('freeze');
+  const { standardData: sdData, freezeData: freezeSD, error: sdError } = useSupplyDemandData();
   const [dataSources, setDataSources] = useState<DataSourcesData | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
+  // Fetch data sources independently — failure should not break the dashboard
   useEffect(() => {
-    // Dashboard shows standard vs. freeze (hypothetical) delta only.
-    // Real-policy scenario is intentionally omitted here — available on the
-    // supply-demand detail page where all three are compared side-by-side.
-    Promise.all([
-      getWaterfallData(false), 
-      getSupplyDemandData(false),
-      getWaterfallData(true),
-      getSupplyDemandData(true),
-    ])
-      .then(([w, sd, fw, fsd]) => {
-        setData(w);
-        setSdData(sd);
-        setFreezeWaterfall(fw);
-        setFreezeSD(fsd);
-      })
-      .catch((e: unknown) => {
-        const err = e as { message?: string };
-        setError(err?.message || 'Failed to load dashboard data');
-      });
-
-    // Fetch data sources independently — failure should not break the dashboard
     getDataSources()
       .then(setDataSources)
       .catch(() => {}); // dataSources stays null; skeleton renders gracefully
   }, []);
+
+  const error = waterfallError || freezeWaterfallError || sdError;
 
   if (error) {
     return (
@@ -109,10 +94,10 @@ export default function Overview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-emerald-700">
-              {sdData.cleared === false ? 'N/A' : `${acceleration} Months`}
+              {(sdData.cleared === false || freezeSD.cleared === false) ? 'N/A' : `${acceleration} Months`}
             </div>
             <p className="text-xs text-emerald-600 font-medium">
-              {sdData.cleared === false ? 'Standard scenario never clears' : 'Faster clearance due to bans'}
+              {sdData.cleared === false ? 'Standard scenario never clears' : freezeSD.cleared === false ? 'Freeze scenario never clears' : 'Faster clearance due to bans'}
             </p>
           </CardContent>
         </Card>

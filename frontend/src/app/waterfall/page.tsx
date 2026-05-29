@@ -1,26 +1,12 @@
 "use client";
 
-import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { getWaterfallData, WaterfallData } from '@/lib/api';
+import { useWaterfallData } from '@/lib/hooks/useWaterfallData';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 
 
 export default function WaterfallPage() {
-  const [data, setData] = useState<WaterfallData | null>(null);
-  const [mode, setMode] = useState<'standard' | 'real' | 'freeze'>('standard');
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const applyFreeze = mode === 'freeze';
-    const applyReal = mode === 'real';
-    getWaterfallData(applyFreeze, applyReal)
-      .then(setData)
-      .catch((e: unknown) => {
-        const err = e as { message?: string };
-        setError(err?.message || 'Failed to load waterfall data');
-      });
-  }, [mode]);
+  const { data, mode, setMode, error } = useWaterfallData();
 
   if (error) {
     return (

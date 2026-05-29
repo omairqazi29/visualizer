@@ -9,11 +9,13 @@ export function useSupplyDemandData() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let cancelled = false
     Promise.allSettled([
       getSupplyDemandData(false, false),
       getSupplyDemandData(false, true),
       getSupplyDemandData(true, false),
     ]).then(([stdRes, realRes, frzRes]) => {
+      if (cancelled) return
       if (stdRes.status === 'fulfilled') setStandardData(stdRes.value)
       if (realRes.status === 'fulfilled') setRealData(realRes.value)
       if (frzRes.status === 'fulfilled') setFreezeData(frzRes.value)
@@ -26,6 +28,7 @@ export function useSupplyDemandData() {
       }
       setLoading(false)
     })
+    return () => { cancelled = true }
   }, [])
 
   return { standardData, realData, freezeData, loading, error }

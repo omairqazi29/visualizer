@@ -1,9 +1,8 @@
-"""Tests for SupplyCalculator DI refactoring, shadow verification, and backward compat.
+"""Tests for SupplyCalculator DI refactoring and backward compat.
 
 Covers:
 - DI constructor with mock loader and policy
 - Backward compatibility (old boolean flag interface, dos_parser property)
-- Shadow dual-run fidelity verification
 - New policy_name API
 """
 
@@ -11,7 +10,7 @@ import pytest
 from unittest.mock import MagicMock
 
 from src.engine.supply import SupplyCalculator, SupplyBreakdown
-from src.domain.policies import StandardPolicy, FreezePolicy, RealRestrictionsPolicy
+from src.domain.policies import StandardPolicy, FreezePolicy
 from src.domain.protocols import DOSDataLoader
 from src.adapters.pandas_dos_loader import PandasDOSLoader
 from src.constants import DEFAULT_INDIA_EB1_SUPPLY
@@ -112,73 +111,6 @@ class TestBackwardCompat:
         )
         assert isinstance(dist, dict)
         assert len(dist) == 12
-
-
-# ---------------------------------------------------------------------------
-# Shadow Dual-Run Verification
-# ---------------------------------------------------------------------------
-
-
-class TestShadowVerification:
-    """Test internal shadow dual-run catches drift."""
-
-    def test_shadow_passes_standard(self):
-        """Shadow verification passes for standard (no flags) — paths agree."""
-        calc = SupplyCalculator()
-        result = calc.get_supply_breakdown()
-        assert isinstance(result, SupplyBreakdown)
-
-    def test_shadow_passes_freeze(self):
-        """Shadow verification passes for freeze scenario — paths agree."""
-        calc = SupplyCalculator()
-        result = calc.get_supply_breakdown(apply_freeze=True)
-        assert isinstance(result, SupplyBreakdown)
-
-    def test_shadow_passes_real_restrictions(self):
-        """Shadow verification passes for real restrictions — paths agree."""
-        calc = SupplyCalculator()
-        result = calc.get_supply_breakdown(apply_real_restrictions=True)
-        assert isinstance(result, SupplyBreakdown)
-
-    def test_shadow_catches_drift(self, monkeypatch):
-        """Shadow verification raises AssertionError when new path drifts."""
-        calc = SupplyCalculator()
-        original_compute = calc._compute_with_policy
-
-        def drifted_compute(policy):
-            result = original_compute(policy)
-            # Return a result with intentionally drifted india_eb1_supply
-            return SupplyBreakdown(
-                eb_base_limit=result.eb_base_limit,
-                fb_spillover_std=result.fb_spillover_std,
-                fb_savings_freeze=result.fb_savings_freeze,
-                eb45_spillover_std=result.eb45_spillover_std,
-                eb45_savings_freeze=result.eb45_savings_freeze,
-                total_eb_supply=result.total_eb_supply,
-                eb1_supply=result.eb1_supply,
-                india_eb1_supply=result.india_eb1_supply + 100,
-            )
-
-        monkeypatch.setattr(calc, '_compute_with_policy', drifted_compute)
-
-        with pytest.raises(AssertionError, match="Fidelity drift"):
-            calc.get_supply_breakdown()
-
-    def test_shadow_skipped_for_policy_name(self, monkeypatch):
-        """Shadow verification is skipped when using policy_name API."""
-        calc = SupplyCalculator()
-        original_legacy = calc._legacy_compute
-        called = []
-
-        def spy_legacy(*args, **kwargs):
-            called.append(True)
-            return original_legacy(*args, **kwargs)
-
-        monkeypatch.setattr(calc, '_legacy_compute', spy_legacy)
-
-        # policy_name API should NOT trigger legacy compute
-        calc.get_supply_breakdown(policy_name="standard")
-        assert len(called) == 0
 
 
 # ---------------------------------------------------------------------------

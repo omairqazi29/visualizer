@@ -5,34 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { predictPD, PredictData } from '@/lib/api';
+import { usePredictData } from '@/lib/hooks/usePredictData';
 import { Calendar, ArrowRight } from 'lucide-react';
 
 export default function PredictorPage() {
   const [pd, setPd] = useState('2025-01-16');
-  const [standardResult, setStandardResult] = useState<PredictData | null>(null);
-  const [freezeResult, setFreezeResult] = useState<PredictData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const runPrediction = async (dateStr: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [std, frz] = await Promise.all([
-        predictPD(dateStr, false),
-        predictPD(dateStr, true)
-      ]);
-      setStandardResult(std);
-      setFreezeResult(frz);
-    } catch (err: unknown) {
-      const e = err as { response?: { data?: { detail?: string } } };
-      const message = e?.response?.data?.detail || 'Prediction request failed';
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { standardResult, freezeResult, loading, error, runPrediction } = usePredictData();
 
   const handlePredict = (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,7 +157,9 @@ export default function PredictorPage() {
                 <div className="flex items-center gap-2 text-emerald-700">
                   <ArrowRight className="w-5 h-5" />
                   <span className="text-2xl font-bold">
-                    {Math.round((standardResult.months_to_clear - freezeResult.months_to_clear))} Months Earlier
+                    {(standardResult.cleared === false || freezeResult.cleared === false)
+                      ? (standardResult.cleared === false ? 'Standard: Never Clears' : 'Freeze: Never Clears')
+                      : `${Math.round(standardResult.months_to_clear - freezeResult.months_to_clear)} Months Earlier`}
                   </span>
                 </div>
                 <p className="text-sm text-emerald-600">Due to increased EB-1 supply from restriction-driven spillovers</p>
