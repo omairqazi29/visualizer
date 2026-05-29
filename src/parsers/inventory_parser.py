@@ -59,7 +59,7 @@ class InventoryParser(BaseParser):
                 return 1
             try:
                 return int(str(v).replace(",", ""))
-            except:
+            except (ValueError, TypeError):
                 return 0
 
         year_cols = [
@@ -83,7 +83,7 @@ class InventoryParser(BaseParser):
             try:
                 year_str = str(col).split("-")[-1].strip()
                 year = int(year_str)
-            except:
+            except (ValueError, TypeError):
                 valley += col_sum
                 continue
 
@@ -129,6 +129,10 @@ class InventoryParser(BaseParser):
         """Parse inventory data: load India EB1 sheet and return the DataFrame.
 
         Satisfies the Parser protocol from src.domain.protocols.
+
+        NOTE: clean() is intentionally NOT called here. get_india_eb1_queue()
+        relies on original cased column names (e.g. "Priority Date Year - 2024",
+        "Preference Category") which normalize_headers() would lowercase and break.
         """
         self.load_india_eb1()
         return self.df

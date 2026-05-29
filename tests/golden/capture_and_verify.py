@@ -45,7 +45,8 @@ def _capture_parser_metadata() -> dict:
 
     try:
         from src.parsers.dos_parser import DOSParser
-        dos_dir = "data/dos_iv_data"
+        from src.data_discovery import get_dos_dir
+        dos_dir = get_dos_dir()
         if os.path.isdir(dos_dir):
             dos_df = DOSParser.load_from_directory(dos_dir)
             parser_meta["dos"] = {

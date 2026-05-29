@@ -167,11 +167,13 @@ class TestInventoryParserSynthetic:
         assert stats["total"] > 0
 
     def test_dependent_multiplier_applied(self, sample_inventory_df):
-        """Total should reflect the 2.2x dependent multiplier."""
+        """Total should reflect the 2.2x dependent multiplier (with int truncation tolerance)."""
         parser = InventoryParser("dummy.xlsx")
         parser.df = sample_inventory_df.copy()
         stats = parser.get_india_eb1_queue()
-        assert stats["total"] == stats["mountain"] + stats["valley"]
+        # mountain and valley are independently int()-truncated from float multiplication,
+        # so total may differ from mountain+valley by up to 1 due to truncation drift.
+        assert abs(stats["total"] - stats["mountain"] - stats["valley"]) <= 1
 
 
 class TestPipelineParserSynthetic:

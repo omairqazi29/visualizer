@@ -136,10 +136,15 @@ class DOSParser(BaseParser):
         usage = self.get_total_fb_usage()
         return max(0, statutory_limit - usage)
 
-    def parse(self) -> "pd.DataFrame":
+    def parse(self) -> pd.DataFrame:
         """Parse DOS data: load, clean, and return the DataFrame.
 
         Satisfies the Parser protocol from src.domain.protocols.
+
+        NOTE: report_month / report_year columns are NOT injected here.
+        Date metadata is only available when loading via load_from_directory(),
+        which extracts month/year from filenames. get_monthly_distribution()
+        falls back to even 1/12 distribution when date columns are absent.
         """
         self.load_data()
         self.clean()

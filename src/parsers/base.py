@@ -68,21 +68,21 @@ class ParserUtils:
 
         Returns a new DataFrame with normalized values.
         """
+        def _handle_val(val):
+            s_val = str(val).strip().upper()
+            if s_val == "D":
+                return 1
+            if s_val.startswith("<"):
+                try:
+                    return int(s_val[1:]) // 2
+                except ValueError:
+                    return 1
+            return val
+
         result = df.copy()
 
         for col in columns:
             if col in result.columns:
-                def _handle_val(val):
-                    s_val = str(val).strip().upper()
-                    if s_val == "D":
-                        return 1
-                    if s_val.startswith("<"):
-                        try:
-                            return int(s_val[1:]) // 2
-                        except ValueError:
-                            return 1
-                    return val
-
                 result[col] = result[col].apply(_handle_val)
                 result[col] = pd.to_numeric(result[col], errors="coerce").fillna(0).astype(int)
 
@@ -114,13 +114,8 @@ class BaseParser:
     # Dependent multiplier (primary + 2.2x dependents) per project mandate
     DEPENDENT_MULTIPLIER = DEPENDENT_MULTIPLIER
 
-    # Common variations of the chargeability header
-    CHARGEABILITY_HEADERS = [
-        "Foreign State of Chargeability",
-        "Place of Birth",
-        "Country",
-        "Foreign State"
-    ]
+    # Canonical list lives in ParserUtils; alias here for backward compat
+    CHARGEABILITY_HEADERS = ParserUtils.CHARGEABILITY_HEADERS
 
     def __init__(self, file_path: str):
         self.file_path = file_path
@@ -146,19 +141,17 @@ class BaseParser:
         """
         Scans the first few rows to find the one containing most keywords.
         Updates self.df if found.
+
+        Delegates the row-search logic to ParserUtils.find_header_row(), then
+        reloads data with the correct header offset.
         """
-        temp_df = pd.read_excel(self.file_path, header=None, nrows=max_rows, sheet_name=sheet_name)
-        if isinstance(temp_df, dict):
-            # If multiple sheets, pick the first one
-            temp_df = list(temp_df.values())[0]
-            
-        for i, row in temp_df.iterrows():
-            row_str = " ".join(str(val).lower() for val in row.values)
-            if all(k.lower() in row_str for k in keywords):
-                # Reload with the correct header, using prevent_recursion to avoid infinite loops in subclasses
-                self.load_data(header=i, sheet_name=sheet_name, prevent_recursion=True)
-                return i
-        return 0
+        header_idx = ParserUtils.find_header_row(
+            self.file_path, keywords, max_rows=max_rows, sheet_name=sheet_name
+        )
+        if header_idx > 0:
+            # Reload with the correct header, using prevent_recursion to avoid infinite loops in subclasses
+            self.load_data(header=header_idx, sheet_name=sheet_name, prevent_recursion=True)
+        return header_idx
 
     def normalize_headers(self):
         """Standardizes common headers to a single canonical name.
