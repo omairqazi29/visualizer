@@ -127,6 +127,14 @@ class IndiaEB1Queue:
     valley: int
     total: int
 
+    def __post_init__(self) -> None:
+        if self.mountain < 0:
+            raise ValueError("mountain cannot be negative")
+        if self.valley < 0:
+            raise ValueError("valley cannot be negative")
+        if self.total < 0:
+            raise ValueError("total cannot be negative")
+
     @property
     def pipeline_excess(self) -> int:
         """Cases in total beyond mountain + valley (pipeline not yet in inventory)."""

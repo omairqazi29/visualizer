@@ -207,6 +207,18 @@ class TestIndiaEB1Queue:
         q = IndiaEB1Queue(mountain=100, valley=50, total=150)
         assert q.pipeline_excess == 0
 
+    def test_negative_mountain_raises(self):
+        with pytest.raises(ValueError, match="mountain cannot be negative"):
+            IndiaEB1Queue(mountain=-1, valley=0, total=100)
+
+    def test_negative_valley_raises(self):
+        with pytest.raises(ValueError, match="valley cannot be negative"):
+            IndiaEB1Queue(mountain=0, valley=-1, total=100)
+
+    def test_negative_total_raises(self):
+        with pytest.raises(ValueError, match="total cannot be negative"):
+            IndiaEB1Queue(mountain=0, valley=0, total=-1)
+
 
 class TestChargeability:
     def test_newtype(self):
