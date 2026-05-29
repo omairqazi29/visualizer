@@ -17,7 +17,7 @@
 │                  API Layer (FastAPI)                     │
 │  api/main.py  — thin routes, Pydantic models            │
 ├─────────────────────────────────────────────────────────┤
-│              Application Services                       │
+│         Application Services (PR6)  [*]                 │
 │  src/application/ — SupplyService,                      │
 │  DemandProjectionService, DataSourceService             │
 ├─────────────────────────────────────────────────────────┤
@@ -40,6 +40,8 @@
 
 Dependencies flow downward only. Domain has zero external dependencies.
 
+> **[*] Note:** The Application Services layer (`src/application/`) is introduced in PR6 of the refactoring stack and may not be present on all branches. Until the full stack is merged, `api/main.py` calls `src/engine/` and `src/parsers/` directly. This diagram describes the target architecture after all 8 PRs are assembled.
+
 ## Research-Backed INA Fidelity Notes
 - FB spillover (201(c)): Prior FY unused family (226k floor) added to EB pool.
 - EB shares (203(b)): EB-1 28.6% + EB4/5 unused (roll-up); EB-2/3 fall-down.
@@ -59,10 +61,12 @@ Dependencies flow downward only. Domain has zero external dependencies.
 ### 2. Adapters (`src/adapters/`)
 - **PandasDOSLoader**: Implements `DOSDataLoader` protocol; wraps `DOSParser` for file I/O.
 
-### 3. Application Services (`src/application/`)
+### 3. Application Services (`src/application/`) — *introduced in PR6*
 - **SupplyService**: Orchestrates `SupplyCalculator` with policy resolution.
 - **DemandProjectionService**: Orchestrates demand modeling and trajectory projection.
 - **DataSourceService**: Data file discovery and metadata.
+
+> Until the full PR stack is merged, `api/main.py` calls engine/parsers directly. See PR6 for the service layer wiring.
 
 ### 4. Data Parsers (`src/parsers/`)
 - **BaseParser**: Header normalization (CHARGEABILITY_HEADERS), 'D'/<10 disclosure ->1 or mid.

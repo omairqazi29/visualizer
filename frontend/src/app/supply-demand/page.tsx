@@ -89,8 +89,8 @@ export default function SupplyDemandPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-navy-900">
-              {standardData.cleared === false
-                ? 'Standard: Never Clears'
+              {(standardData.cleared === false || freezeData.cleared === false)
+                ? (standardData.cleared === false ? 'Standard: Never Clears' : 'Freeze: Never Clears')
                 : `${Math.round((standardData.months_to_clear ?? 0) - (freezeData.months_to_clear ?? 0))} Months Faster`}
             </div>
           </CardContent>

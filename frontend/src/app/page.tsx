@@ -94,10 +94,10 @@ export default function Overview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-emerald-700">
-              {sdData.cleared === false ? 'N/A' : `${acceleration} Months`}
+              {(sdData.cleared === false || freezeSD.cleared === false) ? 'N/A' : `${acceleration} Months`}
             </div>
             <p className="text-xs text-emerald-600 font-medium">
-              {sdData.cleared === false ? 'Standard scenario never clears' : 'Faster clearance due to bans'}
+              {sdData.cleared === false ? 'Standard scenario never clears' : freezeSD.cleared === false ? 'Freeze scenario never clears' : 'Faster clearance due to bans'}
             </p>
           </CardContent>
         </Card>

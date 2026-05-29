@@ -157,7 +157,9 @@ export default function PredictorPage() {
                 <div className="flex items-center gap-2 text-emerald-700">
                   <ArrowRight className="w-5 h-5" />
                   <span className="text-2xl font-bold">
-                    {Math.round((standardResult.months_to_clear - freezeResult.months_to_clear))} Months Earlier
+                    {(standardResult.cleared === false || freezeResult.cleared === false)
+                      ? (standardResult.cleared === false ? 'Standard: Never Clears' : 'Freeze: Never Clears')
+                      : `${Math.round(standardResult.months_to_clear - freezeResult.months_to_clear)} Months Earlier`}
                   </span>
                 </div>
                 <p className="text-sm text-emerald-600">Due to increased EB-1 supply from restriction-driven spillovers</p>
