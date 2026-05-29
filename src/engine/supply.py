@@ -3,7 +3,7 @@
 This module eliminates the duplication that previously existed across the three
 FastAPI route handlers. All INA 201/203 spillover math lives here.
 
-Supports dependency injection of loader, policy, and redistribution engine.
+Supports dependency injection of loader and policy.
 Includes internal shadow dual-run for fidelity verification during tests and
 when the SPILLOVER_SHADOW_VERIFY=1 env var is set.
 """
@@ -64,8 +64,8 @@ class SupplyCalculator:
     Computes visa supply and spillover numbers.
 
     Centralizes the logic previously duplicated in api/main.py.
-    Accepts optional dependency injection for loader, policy, and redistribution
-    engine while preserving full backward compatibility.
+    Accepts optional dependency injection for loader and policy while
+    preserving full backward compatibility.
     """
 
     def __init__(
