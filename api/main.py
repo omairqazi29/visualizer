@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 import sys
 import os
-from datetime import datetime
-from typing import List
+import logging
 
 # Add the project root to sys.path to import from src
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -10,18 +11,16 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from src.parsers.inventory_parser import InventoryParser
-from src.parsers.pipeline_parser import PipelineParser
-from src.engine.demand import DemandModeler
-from src.engine.supply import SupplyCalculator
-from pathlib import Path
-
-from src.data_discovery import (
-    get_latest_inventory_path,
-    get_latest_pipeline_path,
-    get_dos_dir,
-    parse_date_from_filename,
+from src.application.supply_service import SupplyService
+from src.application.demand_service import DemandProjectionService
+from src.application.data_source_service import DataSourceService
+from src.domain.exceptions import (
+    DataLoadError,
+    InvalidPolicyError,
+    MathInvariantViolation,
 )
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="The Spillover Engine API")
 
@@ -34,6 +33,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- Application services (shared across endpoints) ---
+# NOTE: Services cache loaded data for the lifetime of the process.
+# Restart the server after updating data files on disk.
+_supply_service = SupplyService()
+_demand_service = DemandProjectionService(supply_service=_supply_service)
+_data_source_service = DataSourceService()
+
+
+# --- Exception-to-HTTP mapping ---
+def _domain_to_http(exc: Exception) -> HTTPException:
+    """Map domain exceptions to appropriate HTTP status codes.
+
+    Sensitive details (file paths, library internals) are logged server-side
+    but NOT returned to the client.
+    """
+    if isinstance(exc, DataLoadError):
+        logger.error("Data load error: %s", exc, exc_info=True)
+        return HTTPException(status_code=503, detail="Data source unavailable")
+    if isinstance(exc, InvalidPolicyError):
+        return HTTPException(status_code=422, detail=str(exc))
+    if isinstance(exc, MathInvariantViolation):
+        logger.error("Math invariant violation: %s", exc, exc_info=True)
+        return HTTPException(status_code=500, detail="Internal computation error")
+    logger.exception("Unhandled error in endpoint: %s", exc)
+    return HTTPException(status_code=500, detail="Internal server error")
+
 
 # Pydantic response models for clean OpenAPI docs and validation
 class WaterfallResponse(BaseModel):
@@ -44,9 +69,7 @@ class WaterfallResponse(BaseModel):
     eb45_savings_freeze: int
     total_eb_supply: int
     eb1_supply: int
-    india_eb1_supply: (
-        int  # effective for India after non-India EB-1 usage (or full under freeze)
-    )
+    india_eb1_supply: int
 
 
 class SupplyDemandResponse(BaseModel):
@@ -58,7 +81,7 @@ class SupplyDemandResponse(BaseModel):
     clearance_date: str
     months_to_clear: int
     cleared: bool
-    trajectory: List[dict]
+    trajectory: list[dict]
 
 
 class PredictResponse(BaseModel):
@@ -71,7 +94,7 @@ class PredictResponse(BaseModel):
     projected_clearance_date: str
     months_to_clear: int
     cleared: bool
-    trajectory: List[dict]
+    trajectory: list[dict]
 
 
 class DataSourceFile(BaseModel):
@@ -82,7 +105,7 @@ class DataSourceFile(BaseModel):
 
 class DataSourcesResponse(BaseModel):
     dos_directory: str
-    dos_files: List[DataSourceFile]
+    dos_files: list[DataSourceFile]
     inventory_file: DataSourceFile
     pipeline_file: DataSourceFile
 
@@ -99,12 +122,10 @@ async def get_waterfall_data(
     ),
 ):
     try:
-        calc = SupplyCalculator()
-        breakdown = calc.get_supply_breakdown(
-            apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions
+        breakdown = _supply_service.get_supply_breakdown(
+            apply_freeze=apply_freeze,
+            apply_real_restrictions=apply_real_restrictions,
         )
-        # NOTE: when apply_real_restrictions, india_eb1_supply is preferentially boosted
-        # (see SupplyBreakdown docstring); other aggregates report base for compat.
         return WaterfallResponse(
             eb_base_limit=breakdown.eb_base_limit,
             fb_spillover_std=breakdown.fb_spillover_std,
@@ -115,8 +136,10 @@ async def get_waterfall_data(
             eb1_supply=breakdown.eb1_supply,
             india_eb1_supply=breakdown.india_eb1_supply,
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _domain_to_http(exc)
 
 
 @app.get("/api/supply-demand", response_model=SupplyDemandResponse)
@@ -131,44 +154,15 @@ async def get_supply_demand_data(
     ),
 ):
     try:
-        # Load inventory + pipeline (demand side) via auto-discovery for drop-in new data
-        inv_parser = InventoryParser.latest()
-        inv_stats = inv_parser.get_india_eb1_queue()
-
-        pipe_parser = PipelineParser.latest()
-        pipe_parser.load_data()
-        pipe_total = pipe_parser.get_india_eb1_backlog()
-
-        total_queue = int(inv_stats["total"] + pipe_total)
-
-        # Supply side via centralized calculator
-        calc = SupplyCalculator()
-        breakdown = calc.get_supply_breakdown(
-            apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions
+        result = _demand_service.project_supply_demand(
+            apply_freeze=apply_freeze,
+            apply_real_restrictions=apply_real_restrictions,
         )
-        india_eb1_supply = breakdown.india_eb1_supply
-
-        # Monthly distribution for demand projection
-        monthly_dist = calc.dos_parser.get_monthly_distribution(
-            country="India", categories=["E11", "E12", "E13"]
-        )
-
-        modeler = DemandModeler(total_queue, int(india_eb1_supply), monthly_dist)
-        projection = modeler.project_clearance()
-
-        return SupplyDemandResponse(
-            inventory={k: int(v) for k, v in inv_stats.items()},
-            pipeline_total=int(pipe_total),
-            total_queue=int(total_queue),
-            annual_eb1_supply=int(india_eb1_supply),
-            monthly_inflow=modeler.monthly_inflow,
-            clearance_date=projection["clearance_date"].strftime("%Y-%m-%d"),
-            months_to_clear=int(projection["months_to_clear"]),
-            cleared=projection["cleared"],
-            trajectory=projection["trajectory"],
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return SupplyDemandResponse(**result)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _domain_to_http(exc)
 
 
 @app.get("/api/predict", response_model=PredictResponse)
@@ -184,118 +178,38 @@ async def predict_pd(
     ),
 ):
     try:
-        try:
-            pd_dt = datetime.strptime(priority_date, "%Y-%m-%d")
-        except ValueError:
-            raise HTTPException(
-                status_code=422, detail="priority_date must be in YYYY-MM-DD format"
-            )
-
-        # Demand side via auto-discovery (supports new USCIS files without code change)
-        inv_parser = InventoryParser.latest()
-        inv_stats_total = inv_parser.get_india_eb1_queue()
-
-        pipe_parser = PipelineParser.latest()
-        pipe_parser.load_data()
-        pipe_total = pipe_parser.get_india_eb1_backlog()
-
-        total_queue = inv_stats_total["total"] + pipe_total
-
-        inv_ahead = inv_parser.get_india_eb1_queue(
-            cutoff_month=pd_dt.month, cutoff_year=pd_dt.year
+        result = _demand_service.predict(
+            priority_date,
+            apply_freeze=apply_freeze,
+            apply_real_restrictions=apply_real_restrictions,
         )
-
-        if pd_dt.year > 2023:
-            months_into_pipeline = (pd_dt.year - 2024) * 12 + pd_dt.month
-            pipeline_fraction = min(1.0, months_into_pipeline / 24.0)
-            backlog_ahead = inv_stats_total["total"] + int(
-                pipe_total * pipeline_fraction
-            )
-        else:
-            # Use 'mountain' (PDs strictly before cutoff_year per parser design) for
-            # backlog ahead of this PD. Fixes prior use of full 'total' which
-            # overstated queue for pre-2024 PDs and reduced prediction accuracy.
-            backlog_ahead = inv_ahead.get("mountain", inv_ahead["total"])
-
-        # Supply side via centralized calculator
-        calc = SupplyCalculator()
-        breakdown = calc.get_supply_breakdown(
-            apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions
-        )
-        india_eb1_supply = breakdown.india_eb1_supply
-
-        monthly_dist = calc.dos_parser.get_monthly_distribution(
-            country="India", categories=["E11", "E12", "E13"]
-        )
-
-        modeler = DemandModeler(total_queue, int(india_eb1_supply), monthly_dist)
-        target_fy = modeler.default_target_fy()
-        score = modeler.calculate_confidence_score(
-            pd_dt, backlog_ahead=backlog_ahead, target_fy=target_fy
-        )
-        projection = modeler.project_clearance(backlog=backlog_ahead)
-
-        return PredictResponse(
-            confidence_score=float(score),
-            backlog_ahead=int(backlog_ahead),
-            total_queue=int(total_queue),
-            annual_eb1_supply=int(india_eb1_supply),
-            monthly_inflow=modeler.monthly_inflow,
-            target_fy=target_fy,
-            projected_clearance_date=projection["clearance_date"].strftime("%Y-%m-%d"),
-            months_to_clear=int(projection["months_to_clear"]),
-            cleared=projection["cleared"],
-            trajectory=projection["trajectory"],
-        )
+        return PredictResponse(**result)
+    except ValueError as exc:
+        # Catches ValueError from predict() — in practice only the
+        # date-validation path (demand_service.py). DemandModeler and
+        # supply errors are wrapped in domain exceptions before reaching here.
+        raise HTTPException(status_code=422, detail=str(exc))
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise _domain_to_http(exc)
 
 
 @app.get("/api/data-sources", response_model=DataSourcesResponse)
 async def get_data_sources():
     """Returns metadata about all currently loaded data files."""
     try:
-        # DOS directory files
-        dos_dir = get_dos_dir()
-        dos_path = Path(dos_dir)
-        dos_files = []
-        if dos_path.is_dir():
-            for f in sorted(dos_path.iterdir()):
-                if f.suffix == ".xlsx":
-                    parsed = parse_date_from_filename(f)
-                    date_str = f"{parsed[0]}-{parsed[1]:02d}" if parsed else None
-                    dos_files.append(
-                        DataSourceFile(filename=f.name, parsed_date=date_str)
-                    )
-
-        # Inventory file
-        inv_path_str = get_latest_inventory_path()
-        inv_path = Path(inv_path_str)
-        inv_parsed = parse_date_from_filename(inv_path)
-        inv_date = f"{inv_parsed[0]}-{inv_parsed[1]:02d}" if inv_parsed else None
-        inv_file = DataSourceFile(
-            filename=inv_path.name, parsed_date=inv_date, exists=inv_path.exists()
-        )
-
-        # Pipeline file
-        pipe_path_str = get_latest_pipeline_path()
-        pipe_path = Path(pipe_path_str)
-        pipe_parsed = parse_date_from_filename(pipe_path)
-        pipe_date = f"{pipe_parsed[0]}-{pipe_parsed[1]:02d}" if pipe_parsed else None
-        pipe_file = DataSourceFile(
-            filename=pipe_path.name, parsed_date=pipe_date, exists=pipe_path.exists()
-        )
-
+        result = _data_source_service.get_data_sources()
         return DataSourcesResponse(
-            dos_directory=dos_dir,
-            dos_files=dos_files,
-            inventory_file=inv_file,
-            pipeline_file=pipe_file,
+            dos_directory=result["dos_directory"],
+            dos_files=[DataSourceFile(**f) for f in result["dos_files"]],
+            inventory_file=DataSourceFile(**result["inventory_file"]),
+            pipeline_file=DataSourceFile(**result["pipeline_file"]),
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _domain_to_http(exc)
 
 
 if __name__ == "__main__":

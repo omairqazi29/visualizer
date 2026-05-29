@@ -99,6 +99,20 @@ class SupplyCalculator:
         assert self._dos_parser is not None
         return self._dos_parser
 
+    def get_monthly_distribution(
+        self, country: str | None = None, categories: list[str] | None = None
+    ) -> dict:
+        """Get historical monthly issuance distribution.
+
+        Provides clean access to monthly distribution data without
+        requiring callers to access the internal dos_parser property.
+        """
+        self._ensure_dos_loaded()
+        assert self._dos_parser is not None
+        return self._dos_parser.get_monthly_distribution(
+            country=country, categories=categories
+        )
+
     def _resolve_policy(self, policy_name: str):
         """Map a policy name string to a SpilloverPolicy instance."""
         from ..domain.policies import StandardPolicy, FreezePolicy, RealRestrictionsPolicy
