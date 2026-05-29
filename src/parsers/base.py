@@ -92,7 +92,7 @@ class ParserUtils:
     def find_header_row(file_path: str, keywords: List[str], max_rows: int = 15, sheet_name: Optional[Any] = 0) -> int:
         """Scans the first few rows to find the one containing most keywords.
 
-        Returns the row index where the header was found, or 0 if not found.
+        Returns the row index where the header was found, or -1 if not found.
         """
         temp_df = pd.read_excel(file_path, header=None, nrows=max_rows, sheet_name=sheet_name)
         if isinstance(temp_df, dict):
@@ -102,7 +102,7 @@ class ParserUtils:
             row_str = " ".join(str(val).lower() for val in row.values)
             if all(k.lower() in row_str for k in keywords):
                 return i
-        return 0
+        return -1
 
 
 class BaseParser:
@@ -148,7 +148,7 @@ class BaseParser:
         header_idx = ParserUtils.find_header_row(
             self.file_path, keywords, max_rows=max_rows, sheet_name=sheet_name
         )
-        if header_idx > 0:
+        if header_idx >= 0:
             # Reload with the correct header, using prevent_recursion to avoid infinite loops in subclasses
             self.load_data(header=header_idx, sheet_name=sheet_name, prevent_recursion=True)
         return header_idx
