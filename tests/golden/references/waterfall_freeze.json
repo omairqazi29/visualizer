@@ -1,0 +1,10 @@
+{
+  "eb_base_limit": 140000,
+  "fb_spillover_std": 46582,
+  "fb_savings_freeze": 93112,
+  "eb45_spillover_std": 0,
+  "eb45_savings_freeze": 5703,
+  "total_eb_supply": 285397,
+  "eb1_supply": 85695,
+  "india_eb1_supply": 78837
+}
