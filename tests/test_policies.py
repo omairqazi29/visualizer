@@ -238,6 +238,7 @@ class TestFreezePolicy:
         df = pd.DataFrame(columns=['chargeability', 'visa_category', 'count'])
         assert p.compute_fb_savings(df) == 0
         assert p.compute_eb45_savings(df) == 0
+        assert p.adjust_india_eb1_supply(100, 0, 0, 1000, df) == 1000
 
 
 # ---------------------------------------------------------------------------
@@ -318,6 +319,7 @@ class TestRealRestrictionsPolicy:
         df = pd.DataFrame(columns=['chargeability', 'visa_category', 'count'])
         assert p.compute_fb_savings(df) == 0
         assert p.compute_eb45_savings(df) == 0
+        assert p.adjust_india_eb1_supply(100, 0, 0, 1000, df) == 100
 
 
 # ---------------------------------------------------------------------------

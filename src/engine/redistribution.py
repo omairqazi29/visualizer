@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import pandas as pd
-from typing import Set
 
 from ..constants import (
     EB_BASE_LIMIT,
@@ -20,7 +21,7 @@ from ..constants import (
 
 def apply_freeze_to_df(
     df: pd.DataFrame,
-    restricted_countries: Set[str],
+    restricted_countries: set[str],
     chargeability_col: str = 'chargeability',
     count_col: str = 'count',
 ) -> pd.DataFrame:
@@ -32,9 +33,8 @@ def apply_freeze_to_df(
     """
     df_frozen = df.copy()
     restricted_lower = {c.lower() for c in restricted_countries}
-    for idx, row in df_frozen.iterrows():
-        if str(row[chargeability_col]).lower() in restricted_lower:
-            df_frozen.at[idx, count_col] = 0
+    mask = df_frozen[chargeability_col].astype(str).str.lower().isin(restricted_lower)
+    df_frozen.loc[mask, count_col] = 0
     return df_frozen
 
 
@@ -56,7 +56,7 @@ class RedistributionEngine:
     Identifies visa savings from restricted countries and converts them into spillover.
     """
 
-    def __init__(self, restricted_countries: Set[str], per_country_cap: float = PER_COUNTRY_CAP):
+    def __init__(self, restricted_countries: set[str], per_country_cap: float = PER_COUNTRY_CAP):
         self.restricted_countries = {c.lower() for c in restricted_countries}
         self.per_country_cap = per_country_cap
         self.base_eb_limit = EB_BASE_LIMIT
@@ -168,7 +168,7 @@ class RedistributionEngine:
         return calculate_savings_from_freeze(original_df, frozen_df, count_col=count_col)
 
     @staticmethod
-    def get_default_restricted_list() -> Set[str]:
+    def get_default_restricted_list() -> set[str]:
         """
         Returns the default list of restricted countries for the 75-Country Freeze.
         """
