@@ -25,13 +25,7 @@ exclude_lines = [
 fail_under = 80
 show_missing = true
 
-[tool.hypothesis]
-# Default profile: balanced speed/thoroughness
-[tool.hypothesis.profiles.default]
-max_examples = 50
-
-[tool.hypothesis.profiles.ci]
-max_examples = 200
-
-[tool.hypothesis.profiles.dev]
-max_examples = 10
+# Hypothesis profiles are registered in tests/conftest.py via
+# hypothesis.settings.register_profile().  Select with:
+#   pytest --hypothesis-profile=ci
+#   pytest --hypothesis-profile=dev

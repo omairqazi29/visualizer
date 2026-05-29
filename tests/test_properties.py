@@ -11,17 +11,18 @@ At least 8 invariants covering the INA 201/203 math model:
 5. EB1 share: eb1_supply <= total_eb_supply
 6. Non-negative at every step in project_clearance
 7. Dependent multiplier applied consistently
-8. FB floor constraint respected (fb_spillover_std >= 0)
+8. FB floor constraint respected via SupplyCalculator
 """
 
 from datetime import datetime
 from unittest.mock import MagicMock
 
 import pandas as pd
+from src.engine.supply import SupplyCalculator
 import pytest
 
 hypothesis = pytest.importorskip("hypothesis")
-from hypothesis import given, settings, assume, HealthCheck
+from hypothesis import given, assume
 from hypothesis import strategies as st
 
 from src.constants import (
@@ -30,6 +31,7 @@ from src.constants import (
     EB1_STATUTORY_SHARE,
     EB45_STATUTORY_SHARE,
     DEPENDENT_MULTIPLIER,
+    DEFAULT_INDIA_EB1_SUPPLY,
     FB_CATEGORIES,
     EB45_CATEGORIES,
     EB1_CATEGORIES,
@@ -57,26 +59,24 @@ VALID_CHARGEABILITIES = [
     "Nigeria",
 ]
 
-VALID_EB1_CATS = EB1_CATEGORIES[:3]  # E11, E12, E13
-VALID_FB_CATS = FB_CATEGORIES
-VALID_EB45_CATS = ["SD", "SE", "C5", "I5"]
-
 
 @st.composite
 def dos_dataframes(draw):
     """Generate a synthetic DOS DataFrame with valid structure.
 
-    Counts are constrained to realistic per-country/per-category ranges
-    (0–15000 for FB, 0–5000 for EB-1, 0–3000 for EB-4/5) to avoid
+    Uses the full EB1_CATEGORIES, FB_CATEGORIES, and EB45_CATEGORIES from
+    src.constants.  Counts are constrained to realistic per-country/category
+    ranges (0–15000 for FB, 0–5000 for EB-1, 0–3000 for EB-4/5) to avoid
     unrealistic edge cases that would never occur in real DOS data.
     """
     n_rows = draw(st.integers(min_value=3, max_value=30))
+    all_cats = list(EB1_CATEGORIES) + list(FB_CATEGORIES) + list(EB45_CATEGORIES)
     rows = []
     for _ in range(n_rows):
-        cat = draw(st.sampled_from(VALID_EB1_CATS + VALID_FB_CATS + VALID_EB45_CATS))
-        if cat in VALID_EB1_CATS:
+        cat = draw(st.sampled_from(all_cats))
+        if cat in EB1_CATEGORIES:
             count = draw(st.integers(min_value=0, max_value=5000))
-        elif cat in VALID_FB_CATS:
+        elif cat in FB_CATEGORIES:
             count = draw(st.integers(min_value=0, max_value=15000))
         else:
             count = draw(st.integers(min_value=0, max_value=3000))
@@ -107,7 +107,6 @@ class TestSupplyInvariants:
     """Property-based tests on SupplyCalculator with injected synthetic data."""
 
     @given(dos_df=dos_dataframes())
-    @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
     def test_non_negative_india_supply(self, dos_df):
         """Invariant 1: india_eb1_supply >= 0 for all policies."""
         for policy_cls in (StandardPolicy, FreezePolicy, RealRestrictionsPolicy):
@@ -124,14 +123,12 @@ class TestSupplyInvariants:
             eb45_spillover = max(0, int(EB_BASE_LIMIT * EB45_STATUTORY_SHARE) - int(eb45_usage))
             total_eb1 = eb1_share + eb45_spillover
 
-            from src.constants import DEFAULT_INDIA_EB1_SUPPLY
             result = policy.adjust_india_eb1_supply(
                 DEFAULT_INDIA_EB1_SUPPLY, fb_savings, eb45_savings, total_eb1, dos_df
             )
             assert result >= 0, f"{policy_cls.__name__}: india_eb1_supply={result} < 0"
 
     @given(dos_df=dos_dataframes())
-    @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
     def test_conservation_total_eb_ge_base(self, dos_df):
         """Invariant 2: total_eb_supply >= eb_base_limit.
 
@@ -145,7 +142,6 @@ class TestSupplyInvariants:
         assert total_eb >= EB_BASE_LIMIT
 
     @given(dos_df=dos_dataframes())
-    @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
     def test_monotonicity_freeze_ge_standard(self, dos_df):
         """Invariant 3: freeze india_supply >= standard india_supply.
 
@@ -154,8 +150,6 @@ class TestSupplyInvariants:
         """
         std = StandardPolicy()
         frz = FreezePolicy()
-
-        from src.constants import DEFAULT_INDIA_EB1_SUPPLY
 
         # Compute full waterfall for both
         total_fb_usage = dos_df[dos_df['visa_category'].isin(FB_CATEGORIES)]['count'].sum()
@@ -175,6 +169,16 @@ class TestSupplyInvariants:
         eb45_savings = frz.compute_eb45_savings(dos_df)
         frz_total_shared = EB_BASE_LIMIT + fb_spillover + fb_savings
         frz_eb1 = int(frz_total_shared * EB1_STATUTORY_SHARE) + eb45_spillover + eb45_savings
+
+        # Filter unrealistic inputs: DOS can't issue more EB-1 visas than
+        # exist in the pool.  In real data, non-India EB-1 usage is always
+        # well below total_eb1_supply.
+        non_india_eb1_usage = dos_df[
+            (~dos_df['chargeability'].str.contains('India', case=False, na=False))
+            & (dos_df['visa_category'].isin(EB1_CATEGORIES))
+        ]['count'].sum()
+        assume(int(non_india_eb1_usage) <= frz_eb1)
+
         frz_result = frz.adjust_india_eb1_supply(
             DEFAULT_INDIA_EB1_SUPPLY, fb_savings, eb45_savings, frz_eb1, dos_df
         )
@@ -184,7 +188,6 @@ class TestSupplyInvariants:
         )
 
     @given(dos_df=dos_dataframes())
-    @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
     def test_india_eb1_le_total_eb1(self, dos_df):
         """Invariant 4: india_eb1_supply <= total_eb1_supply for std/freeze.
 
@@ -214,7 +217,6 @@ class TestSupplyInvariants:
             else:
                 total_eb1 = int(total_shared * EB1_STATUTORY_SHARE) + eb45_spillover
 
-            from src.constants import DEFAULT_INDIA_EB1_SUPPLY
             result = policy.adjust_india_eb1_supply(
                 DEFAULT_INDIA_EB1_SUPPLY, fb_savings, eb45_savings, total_eb1, dos_df
             )
@@ -223,7 +225,6 @@ class TestSupplyInvariants:
             )
 
     @given(dos_df=dos_dataframes())
-    @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
     def test_eb1_share_le_total_eb(self, dos_df):
         """Invariant 5: eb1_supply <= total_eb_supply.
 
@@ -248,7 +249,6 @@ class TestDemandInvariants:
         annual_supply=st.integers(min_value=1000, max_value=100000),
         dist=monthly_distributions(),
     )
-    @settings(max_examples=30, suppress_health_check=[HealthCheck.too_slow])
     def test_non_negative_backlog_in_trajectory(self, backlog, annual_supply, dist):
         """Invariant 6: backlog >= 0 at every step in project_clearance."""
         modeler = DemandModeler(
@@ -266,7 +266,6 @@ class TestDemandInvariants:
             )
 
     @given(inflow_rate=st.integers(min_value=0, max_value=5000))
-    @settings(max_examples=30, suppress_health_check=[HealthCheck.too_slow])
     def test_dependent_multiplier_consistent(self, inflow_rate):
         """Invariant 7: monthly_inflow = int(inflow_rate * DEPENDENT_MULTIPLIER)."""
         dist = {m: 1 / 12 for m in range(1, 13)}
@@ -280,12 +279,16 @@ class TestDemandInvariants:
         assert modeler.monthly_inflow == expected
 
     @given(dos_df=dos_dataframes())
-    @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
     def test_fb_floor_respected(self, dos_df):
-        """Invariant 8: fb_spillover_std >= 0 (FB floor constraint).
+        """Invariant 8: fb_spillover_std >= 0 via actual SupplyCalculator.
 
-        FB spillover is max(0, FB_STATUTORY_LIMIT - usage), always non-negative.
+        Exercises the engine's code path (not a locally-duplicated formula)
+        to verify the FB floor constraint produces non-negative spillover.
         """
-        total_fb_usage = dos_df[dos_df['visa_category'].isin(FB_CATEGORIES)]['count'].sum()
-        fb_spillover = max(0, FB_STATUTORY_LIMIT - int(total_fb_usage))
-        assert fb_spillover >= 0
+        mock_loader = MagicMock()
+        mock_loader.load_all_issuances.return_value = dos_df
+        calc = SupplyCalculator(dos_loader=mock_loader)
+        result = calc.get_supply_breakdown(policy_name="standard")
+        assert result.fb_spillover_std >= 0, (
+            f"fb_spillover_std={result.fb_spillover_std} < 0"
+        )

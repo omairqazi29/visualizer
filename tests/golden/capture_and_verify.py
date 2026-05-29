@@ -56,17 +56,15 @@ _SCENARIOS = {
     "real_restrictions": {"apply_freeze": False, "apply_real_restrictions": True},
 }
 
-# Fields in each scenario breakdown
-_BREAKDOWN_FIELDS = [
-    "eb_base_limit",
-    "fb_spillover_std",
-    "fb_savings_freeze",
-    "eb45_spillover_std",
-    "eb45_savings_freeze",
-    "total_eb_supply",
-    "eb1_supply",
-    "india_eb1_supply",
-]
+# Fields in each scenario breakdown — derived from the dataclass definition
+# to stay in sync automatically if SupplyBreakdown changes.
+def _get_breakdown_fields() -> list[str]:
+    from dataclasses import fields as dc_fields
+    from src.engine.supply import SupplyBreakdown
+    return [f.name for f in dc_fields(SupplyBreakdown)]
+
+
+_BREAKDOWN_FIELDS = _get_breakdown_fields()
 
 
 def _capture_parser_metadata() -> dict:
@@ -176,15 +174,24 @@ def _values_equal(expected, actual, path: str = "") -> list[str]:
     """
     errors: list[str] = []
 
+    _SKIP_KEYS = ("captured_at", "engine_version", "parsers")
+
     if isinstance(expected, dict) and isinstance(actual, dict):
         for key in expected:
-            if key in ("captured_at", "engine_version", "parsers"):
+            if key in _SKIP_KEYS:
                 continue  # metadata — skip
             child_path = f"{path}.{key}" if path else key
             if key not in actual:
                 errors.append(f"MISSING: {child_path}")
                 continue
             errors.extend(_values_equal(expected[key], actual[key], child_path))
+        # Detect extra keys in actual that aren't in expected (shape change)
+        for key in actual:
+            if key in _SKIP_KEYS:
+                continue
+            child_path = f"{path}.{key}" if path else key
+            if key not in expected:
+                errors.append(f"EXTRA KEY: {child_path}")
     elif isinstance(expected, float) and isinstance(actual, (int, float)):
         if abs(expected - actual) > _FLOAT_TOL:
             errors.append(f"FLOAT MISMATCH: {path} expected={expected} actual={actual}")
