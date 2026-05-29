@@ -81,33 +81,6 @@ class SupplyService:
         )
         return breakdown
 
-    def compute_waterfall(
-        self,
-        *,
-        apply_freeze: bool = False,
-        apply_real_restrictions: bool = False,
-        policy_name: Optional[str] = None,
-    ) -> dict:
-        """Compute waterfall-style supply breakdown as a dict.
-
-        Convenience wrapper returning a plain dict matching WaterfallResponse fields.
-        """
-        b = self.get_supply_breakdown(
-            apply_freeze=apply_freeze,
-            apply_real_restrictions=apply_real_restrictions,
-            policy_name=policy_name,
-        )
-        return {
-            "eb_base_limit": b.eb_base_limit,
-            "fb_spillover_std": b.fb_spillover_std,
-            "fb_savings_freeze": b.fb_savings_freeze,
-            "eb45_spillover_std": b.eb45_spillover_std,
-            "eb45_savings_freeze": b.eb45_savings_freeze,
-            "total_eb_supply": b.total_eb_supply,
-            "eb1_supply": b.eb1_supply,
-            "india_eb1_supply": b.india_eb1_supply,
-        }
-
     def get_monthly_distribution(
         self,
         country: str = "India",

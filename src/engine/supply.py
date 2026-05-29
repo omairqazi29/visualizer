@@ -100,7 +100,7 @@ class SupplyCalculator:
         return self._dos_parser
 
     def get_monthly_distribution(
-        self, country: str = None, categories: list = None
+        self, country: str | None = None, categories: list[str] | None = None
     ) -> dict:
         """Get historical monthly issuance distribution.
 

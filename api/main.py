@@ -33,6 +33,8 @@ app.add_middleware(
 )
 
 # --- Application services (shared across endpoints) ---
+# NOTE: Services cache loaded data for the lifetime of the process.
+# Restart the server after updating data files on disk.
 _supply_service = SupplyService()
 _demand_service = DemandProjectionService(supply_service=_supply_service)
 _data_source_service = DataSourceService()
@@ -40,15 +42,21 @@ _data_source_service = DataSourceService()
 
 # --- Exception-to-HTTP mapping ---
 def _domain_to_http(exc: Exception) -> HTTPException:
-    """Map domain exceptions to appropriate HTTP status codes."""
+    """Map domain exceptions to appropriate HTTP status codes.
+
+    Sensitive details (file paths, library internals) are logged server-side
+    but NOT returned to the client.
+    """
     if isinstance(exc, DataLoadError):
-        return HTTPException(status_code=503, detail=str(exc))
-    if isinstance(exc, (InvalidPolicyError, ValueError)):
+        logger.error("Data load error: %s", exc, exc_info=True)
+        return HTTPException(status_code=503, detail="Data source unavailable")
+    if isinstance(exc, InvalidPolicyError):
         return HTTPException(status_code=422, detail=str(exc))
     if isinstance(exc, MathInvariantViolation):
         logger.error("Math invariant violation: %s", exc, exc_info=True)
         return HTTPException(status_code=500, detail="Internal computation error")
-    return HTTPException(status_code=500, detail=str(exc))
+    logger.exception("Unhandled error in endpoint: %s", exc)
+    return HTTPException(status_code=500, detail="Internal server error")
 
 
 # Pydantic response models for clean OpenAPI docs and validation
@@ -175,6 +183,10 @@ async def predict_pd(
             apply_real_restrictions=apply_real_restrictions,
         )
         return PredictResponse(**result)
+    except ValueError as exc:
+        # Date-validation ValueError from predict(); caught narrowly here
+        # so that ValueErrors from deeper in the stack hit the generic 500.
+        raise HTTPException(status_code=422, detail=str(exc))
     except HTTPException:
         raise
     except Exception as exc:

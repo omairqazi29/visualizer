@@ -32,12 +32,8 @@ class DemandProjectionService:
         self._supply_svc = supply_service or SupplyService()
         self._data_dir = data_dir
 
-    def _load_demand_data(self):
-        """Load inventory and pipeline data via auto-discovery.
-
-        Returns:
-            Tuple of (inv_parser, inv_stats, pipe_total).
-        """
+    def _load_demand_data(self) -> tuple[InventoryParser, dict, int]:
+        """Load inventory and pipeline data via auto-discovery."""
         try:
             inv_parser = InventoryParser.latest(self._data_dir)
             inv_stats = inv_parser.get_india_eb1_queue()
@@ -116,10 +112,10 @@ class DemandProjectionService:
         try:
             pd_dt = datetime.strptime(priority_date, "%Y-%m-%d")
         except ValueError:
-            raise ValueError("priority_date must be in YYYY-MM-DD format")
+            raise ValueError("priority_date must be in YYYY-MM-DD format") from None
 
         inv_parser, inv_stats_total, pipe_total = self._load_demand_data()
-        total_queue = inv_stats_total["total"] + pipe_total
+        total_queue = int(inv_stats_total["total"] + pipe_total)
 
         # Calculate backlog ahead of this priority date
         inv_ahead = inv_parser.get_india_eb1_queue(

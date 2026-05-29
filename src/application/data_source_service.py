@@ -11,6 +11,7 @@ from ..data_discovery import (
     get_latest_pipeline_path,
     parse_date_from_filename,
 )
+from ..domain.exceptions import DataLoadError
 
 
 class DataSourceService:
@@ -23,7 +24,21 @@ class DataSourceService:
         """Returns metadata about all currently loaded data files.
 
         Returns dict matching DataSourcesResponse fields.
+
+        Raises:
+            DataLoadError: If filesystem access fails.
         """
+        try:
+            return self._collect_data_sources()
+        except DataLoadError:
+            raise
+        except Exception as exc:
+            raise DataLoadError(
+                f"Failed to load data source metadata: {exc}"
+            ) from exc
+
+    def _collect_data_sources(self) -> dict:
+        """Internal: gather data source metadata from the filesystem."""
         # DOS directory files
         dos_dir = get_dos_dir(self._data_dir)
         dos_path = Path(dos_dir)
