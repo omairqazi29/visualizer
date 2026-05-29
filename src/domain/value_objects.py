@@ -70,13 +70,15 @@ class INALimit:
 class SupplyBreakdown:
     """Enhanced supply breakdown — backward-compatible field set with metadata.
 
-    NOTE: This is the *domain* SupplyBreakdown.  The existing
-    ``src.engine.supply.SupplyBreakdown`` is untouched in this PR;
-    the two will be reconciled in PR4.
+    NOTE: This is the *domain* SupplyBreakdown.  The engine-layer
+    ``src.engine.supply.SupplyBreakdown`` (8 core fields, no metadata) is the
+    active one used by SupplyCalculator and api/main.py.  The two will be
+    reconciled in a future PR once all consumers are migrated to the DI-based
+    SupplyCalculator interface.
 
     Intentionally mutable (not frozen): the engine-layer SupplyBreakdown is also
-    mutable, and PR4 reconciliation may use builder/factory patterns that
-    assign fields incrementally.  The ``__post_init__`` guard catches invalid
+    mutable, and reconciliation may use builder/factory patterns that assign
+    fields incrementally.  The ``__post_init__`` guard catches invalid
     *construction*; post-construction mutation is the caller's responsibility.
     """
 
