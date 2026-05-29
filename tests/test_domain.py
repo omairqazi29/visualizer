@@ -272,17 +272,14 @@ class TestPolicyStubs:
         p = RealRestrictionsPolicy()
         assert p.name == PolicyName.REAL_RESTRICTIONS
 
-    def test_standard_stubs_raise(self):
+    def test_standard_policy_returns_base_values(self):
         import pandas as pd
 
         p = StandardPolicy()
         df = pd.DataFrame()
-        with pytest.raises(NotImplementedError):
-            p.compute_fb_savings(df)
-        with pytest.raises(NotImplementedError):
-            p.compute_eb45_savings(df)
-        with pytest.raises(NotImplementedError):
-            p.adjust_india_eb1_supply(0, 0, 0, 0, df)
+        assert p.compute_fb_savings(df) == 0
+        assert p.compute_eb45_savings(df) == 0
+        assert p.adjust_india_eb1_supply(100, 0, 0, 0, df) == 100
 
     def test_spillover_policy_protocol_check(self):
         """Policy stubs should satisfy the SpilloverPolicy protocol at runtime."""

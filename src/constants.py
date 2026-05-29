@@ -89,6 +89,10 @@ ACTUAL_RESTRICTED_COUNTRIES: set[str] = {
     "Burkina Faso",
 }
 
+# Family-Based visa categories (used for FB spillover calculations).
+# Centralized to avoid duplication between DOSParser and domain policies.
+FB_CATEGORIES: list[str] = ["F1", "F2A", "F2B", "F3", "F4", "FX"]
+
 # EB-4/EB-5 visa categories that spill over to EB-1 (per INA 203(b)).
 # Centralized to avoid duplication across supply calc paths (standard, freeze, real_restrictions).
 EB45_CATEGORIES: list[str] = [
@@ -124,6 +128,7 @@ __all__ = [
     "DEFAULT_INDIA_EB1_SUPPLY",
     "DEFAULT_RESTRICTED_COUNTRIES",
     "ACTUAL_RESTRICTED_COUNTRIES",
+    "FB_CATEGORIES",
     "EB45_CATEGORIES",
     "DEFAULT_MONTHLY_INFLOW",
 ]

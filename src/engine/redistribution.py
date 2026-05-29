@@ -13,6 +13,43 @@ from ..constants import (
 )
 
 
+# ---------------------------------------------------------------------------
+# Pure helper functions — usable from both policies and RedistributionEngine
+# ---------------------------------------------------------------------------
+
+
+def apply_freeze_to_df(
+    df: pd.DataFrame,
+    restricted_countries: Set[str],
+    chargeability_col: str = 'chargeability',
+    count_col: str = 'count',
+) -> pd.DataFrame:
+    """Return a copy of *df* with counts zeroed for restricted countries.
+
+    This is a pure function extracted from ``RedistributionEngine.apply_freeze``
+    so that domain-layer policies can reuse the logic without instantiating
+    the full engine.
+    """
+    df_frozen = df.copy()
+    restricted_lower = {c.lower() for c in restricted_countries}
+    for idx, row in df_frozen.iterrows():
+        if str(row[chargeability_col]).lower() in restricted_lower:
+            df_frozen.at[idx, count_col] = 0
+    return df_frozen
+
+
+def calculate_savings_from_freeze(
+    original_df: pd.DataFrame,
+    frozen_df: pd.DataFrame,
+    count_col: str = 'count',
+) -> int:
+    """Return total visa savings (original total − frozen total).
+
+    Pure function extracted from ``RedistributionEngine.calculate_savings``.
+    """
+    return int(original_df[count_col].sum() - frozen_df[count_col].sum())
+
+
 class RedistributionEngine:
     """
     Implements the '75-Country Freeze' redistribution logic and INA spillover.
@@ -39,21 +76,10 @@ class RedistributionEngine:
         """
         Returns a DataFrame where volumes for restricted countries are adjusted.
         Under a 'freeze', we zero them out to see redistribution potential.
+
+        Delegates to the module-level ``apply_freeze_to_df`` pure function.
         """
-        df_frozen = df.copy()
-        cat_limits = self.calculate_category_limits(total_limit)
-        cat_limit = cat_limits.get(category, int(total_limit * 0.286))
-        
-        # INA 7% per-country cap for this category
-        cap_value = int(cat_limit * self.per_country_cap)
-        
-        for idx, row in df_frozen.iterrows():
-            country = str(row[chargeability_col]).lower()
-            
-            if country in self.restricted_countries:
-                df_frozen.at[idx, count_col] = 0
-                
-        return df_frozen
+        return apply_freeze_to_df(df, self.restricted_countries, chargeability_col=chargeability_col, count_col=count_col)
 
     def distribute_spillover(self, demand_df: pd.DataFrame, supply: int, chargeability_col: str = 'chargeability', count_col: str = 'count') -> tuple:
         """
@@ -136,10 +162,10 @@ class RedistributionEngine:
     def calculate_savings(self, original_df: pd.DataFrame, frozen_df: pd.DataFrame, count_col: str = 'count') -> int:
         """
         Calculates the total 'saved' visas from the freeze.
+
+        Delegates to the module-level ``calculate_savings_from_freeze`` pure function.
         """
-        original_total = original_df[count_col].sum()
-        frozen_total = frozen_df[count_col].sum()
-        return int(original_total - frozen_total)
+        return calculate_savings_from_freeze(original_df, frozen_df, count_col=count_col)
 
     @staticmethod
     def get_default_restricted_list() -> Set[str]:
