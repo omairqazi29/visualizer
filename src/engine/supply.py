@@ -23,7 +23,9 @@ from ..constants import (
     EB45_STATUTORY_SHARE,
     DEFAULT_INDIA_EB1_SUPPLY,
     ACTUAL_RESTRICTED_COUNTRIES,
+    EB1_CATEGORIES,
     EB45_CATEGORIES,
+    FB_CATEGORIES,
 )
 from .redistribution import RedistributionEngine
 
@@ -70,7 +72,6 @@ class SupplyCalculator:
         self,
         dos_loader=None,
         policy=None,
-        redistribution=None,
         dos_dir: str = "data/DOS",
     ):
         from ..adapters.pandas_dos_loader import PandasDOSLoader
@@ -79,15 +80,16 @@ class SupplyCalculator:
         self.dos_dir = dos_dir
         self._loader = dos_loader or PandasDOSLoader(dos_dir)
         self._default_policy = policy or StandardPolicy()
-        self._redistribution = redistribution or RedistributionEngine(
-            RedistributionEngine.get_default_restricted_list()
-        )
         self._dos_df: Optional[pd.DataFrame] = None
         self._dos_parser: Optional[DOSParser] = None
 
     def _ensure_dos_loaded(self) -> None:
         if self._dos_df is None:
             self._dos_df = self._loader.load_all_issuances()
+            # Shim: DOSParser is used only for get_total_fb_usage() and
+            # get_monthly_distribution() which read self.df — the file_path
+            # arg (dos_dir) is never used for I/O.  Do NOT call load_data()
+            # or parse() on this instance.
             self._dos_parser = DOSParser(self.dos_dir)
             self._dos_parser.df = self._dos_df
 
@@ -180,7 +182,7 @@ class SupplyCalculator:
             engine = RedistributionEngine(restricted)
 
             # FB savings (spill to EB 1/2/3)
-            fb_df = dos_parser.df[dos_parser.df['visa_category'].isin(DOSParser.FB_CATEGORIES)]
+            fb_df = dos_parser.df[dos_parser.df['visa_category'].isin(FB_CATEGORIES)]
             fb_frozen = engine.apply_freeze(fb_df)
             fb_savings = engine.calculate_savings(fb_df, fb_frozen)
 
@@ -198,7 +200,7 @@ class SupplyCalculator:
         if apply_real_restrictions and not apply_freeze:
             real_restricted = ACTUAL_RESTRICTED_COUNTRIES
             engine = RedistributionEngine(real_restricted)
-            fb_df = dos_parser.df[dos_parser.df['visa_category'].isin(DOSParser.FB_CATEGORIES)]
+            fb_df = dos_parser.df[dos_parser.df['visa_category'].isin(FB_CATEGORIES)]
             fb_frozen = engine.apply_freeze(fb_df)
             real_fb_savings = engine.calculate_savings(fb_df, fb_frozen)
             eb45_df = dos_parser.df[dos_parser.df['visa_category'].isin(EB45_CATEGORIES)]
@@ -218,11 +220,11 @@ class SupplyCalculator:
             india_eb1_supply = DEFAULT_INDIA_EB1_SUPPLY
             if apply_real_restrictions:
                 india_eb1_supply += real_eb45_savings + int(real_fb_savings * EB1_STATUTORY_SHARE)
+            india_eb1_supply = max(0, india_eb1_supply)
         else:
-            eb1_cats = ['E11', 'E12', 'E13', 'E1', 'IB1', 'IB2']
             row_eb1_usage = dos_parser.df[
                 (~dos_parser.df['chargeability'].str.contains('India', case=False, na=False)) &
-                (dos_parser.df['visa_category'].isin(eb1_cats))
+                (dos_parser.df['visa_category'].isin(EB1_CATEGORIES))
             ]['count'].sum()
             india_eb1_supply = max(0, total_eb1_supply - row_eb1_usage)
 
@@ -257,6 +259,12 @@ class SupplyCalculator:
         # Resolve policy from new or legacy API
         from ..domain.policies import FreezePolicy, RealRestrictionsPolicy
 
+        if policy_name is not None and (apply_freeze or apply_real_restrictions):
+            raise ValueError(
+                "Cannot specify both policy_name and boolean flags "
+                "(apply_freeze / apply_real_restrictions)"
+            )
+
         if policy_name is not None:
             policy = self._resolve_policy(policy_name)
         elif apply_freeze:
@@ -273,10 +281,13 @@ class SupplyCalculator:
         # Only when using boolean flag API (backward compat path) so that
         # injected-policy / policy_name callers aren't double-checked against
         # a legacy path that may not apply.
+        # Uses explicit if/raise (not assert) so it survives python -O.
         if policy_name is None:
             if os.environ.get("SPILLOVER_SHADOW_VERIFY") == "1" or "pytest" in sys.modules:
                 old_result = self._legacy_compute(apply_freeze, apply_real_restrictions)
-                assert abs(new_result.india_eb1_supply - old_result.india_eb1_supply) < 1e-9, \
-                    f"Fidelity drift: new={new_result.india_eb1_supply}, old={old_result.india_eb1_supply}"
+                if new_result != old_result:
+                    raise AssertionError(
+                        f"Fidelity drift: new={new_result}, old={old_result}"
+                    )
 
         return new_result

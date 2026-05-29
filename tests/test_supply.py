@@ -32,26 +32,21 @@ class TestDIConstructor:
         assert isinstance(calc._loader, PandasDOSLoader)
 
     def test_custom_loader(self, sample_dos_df):
-        """Custom loader is invoked when dos_parser is accessed."""
+        """Custom loader is invoked and data reaches _dos_df."""
         mock_loader = MagicMock()
         mock_loader.load_all_issuances.return_value = sample_dos_df
 
         calc = SupplyCalculator(dos_loader=mock_loader)
         _ = calc.dos_parser
         mock_loader.load_all_issuances.assert_called_once()
+        assert calc._dos_df is sample_dos_df
+        assert len(calc._dos_df) == len(sample_dos_df)
 
     def test_custom_policy(self):
         """Custom default policy is stored."""
         policy = FreezePolicy()
         calc = SupplyCalculator(policy=policy)
         assert calc._default_policy is policy
-
-    def test_custom_redistribution(self):
-        """Custom redistribution engine is stored."""
-        from src.engine.redistribution import RedistributionEngine
-        engine = RedistributionEngine({"TestCountry"})
-        calc = SupplyCalculator(redistribution=engine)
-        assert calc._redistribution is engine
 
     def test_dos_dir_backward_compat(self):
         """dos_dir parameter still works as a public attribute."""
@@ -220,6 +215,14 @@ class TestPolicyNameAPI:
         calc = SupplyCalculator()
         with pytest.raises(ValueError, match="Unknown policy"):
             calc.get_supply_breakdown(policy_name="nonexistent")
+
+    def test_conflicting_policy_name_and_flags_raises(self):
+        """Specifying policy_name alongside boolean flags raises ValueError."""
+        calc = SupplyCalculator()
+        with pytest.raises(ValueError, match="Cannot specify both"):
+            calc.get_supply_breakdown(policy_name="standard", apply_freeze=True)
+        with pytest.raises(ValueError, match="Cannot specify both"):
+            calc.get_supply_breakdown(policy_name="freeze", apply_real_restrictions=True)
 
     def test_policy_name_matches_boolean_flag(self):
         """policy_name results match equivalent boolean flag results."""
