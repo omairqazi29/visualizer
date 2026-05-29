@@ -8,3 +8,5 @@ venv/
 ENV/
 .streamlit/
 data/mock_*.csv
+*.DS_Store
+.pytest_cache/
