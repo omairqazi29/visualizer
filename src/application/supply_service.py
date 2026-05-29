@@ -6,8 +6,9 @@ property leak that previously forced API callers to reach into
 SupplyCalculator internals).
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Optional
 
 from ..adapters.pandas_dos_loader import PandasDOSLoader
 from ..domain.exceptions import DataLoadError, InvalidPolicyError
@@ -26,7 +27,7 @@ class SupplyService:
 
     def __init__(self, dos_dir: str = "data/DOS"):
         self._dos_dir = dos_dir
-        self._calc: Optional[SupplyCalculator] = None
+        self._calc: SupplyCalculator | None = None
 
     def _ensure_calculator(self) -> SupplyCalculator:
         """Lazy-init SupplyCalculator with PandasDOSLoader."""
@@ -45,7 +46,7 @@ class SupplyService:
         *,
         apply_freeze: bool = False,
         apply_real_restrictions: bool = False,
-        policy_name: Optional[str] = None,
+        policy_name: str | None = None,
     ) -> SupplyBreakdown:
         """Compute supply breakdown for a given policy scenario.
 
@@ -84,7 +85,7 @@ class SupplyService:
     def get_monthly_distribution(
         self,
         country: str = "India",
-        categories: Optional[list[str]] = None,
+        categories: list[str] | None = None,
     ) -> dict[int, float]:
         """Get historical monthly issuance distribution.
 

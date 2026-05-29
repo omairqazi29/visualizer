@@ -127,13 +127,30 @@ class TestDemandProjectionService:
 # ---------------------------------------------------------------------------
 
 
+_DS_MODULE = "src.application.data_source_service"
+
+
+def _mock_data_discovery():
+    """Return a stack of patches that replace data_discovery calls with synthetic values."""
+    return [
+        patch(f"{_DS_MODULE}.get_dos_dir", return_value="/fake/data/DOS"),
+        patch(f"{_DS_MODULE}.get_latest_inventory_path", return_value="/fake/data/eb_inventory_january_2026.xlsx"),
+        patch(f"{_DS_MODULE}.get_latest_pipeline_path", return_value="/fake/data/eb_i140_performance_fy2025_q4.xlsx"),
+        patch(f"{_DS_MODULE}.parse_date_from_filename", return_value=(2026, 1)),
+    ]
+
+
 class TestDataSourceService:
     """Tests for DataSourceService dict shape and error handling."""
 
     def test_get_data_sources_returns_expected_keys(self):
         """get_data_sources returns dict with all required top-level keys."""
         svc = DataSourceService()
-        result = svc.get_data_sources()
+        with patch(f"{_DS_MODULE}.get_dos_dir", return_value="/fake/DOS"), \
+             patch(f"{_DS_MODULE}.get_latest_inventory_path", return_value="/fake/inv.xlsx"), \
+             patch(f"{_DS_MODULE}.get_latest_pipeline_path", return_value="/fake/pipe.xlsx"), \
+             patch(f"{_DS_MODULE}.parse_date_from_filename", return_value=(2026, 1)):
+            result = svc.get_data_sources()
         assert "dos_directory" in result
         assert "dos_files" in result
         assert "inventory_file" in result
@@ -142,7 +159,11 @@ class TestDataSourceService:
     def test_get_data_sources_inventory_shape(self):
         """Inventory file entry has filename, parsed_date, exists keys."""
         svc = DataSourceService()
-        result = svc.get_data_sources()
+        with patch(f"{_DS_MODULE}.get_dos_dir", return_value="/fake/DOS"), \
+             patch(f"{_DS_MODULE}.get_latest_inventory_path", return_value="/fake/eb_inventory_january_2026.xlsx"), \
+             patch(f"{_DS_MODULE}.get_latest_pipeline_path", return_value="/fake/pipe.xlsx"), \
+             patch(f"{_DS_MODULE}.parse_date_from_filename", return_value=(2026, 1)):
+            result = svc.get_data_sources()
         inv = result["inventory_file"]
         assert "filename" in inv
         assert "parsed_date" in inv
@@ -152,7 +173,11 @@ class TestDataSourceService:
     def test_get_data_sources_pipeline_shape(self):
         """Pipeline file entry has filename, parsed_date, exists keys."""
         svc = DataSourceService()
-        result = svc.get_data_sources()
+        with patch(f"{_DS_MODULE}.get_dos_dir", return_value="/fake/DOS"), \
+             patch(f"{_DS_MODULE}.get_latest_inventory_path", return_value="/fake/inv.xlsx"), \
+             patch(f"{_DS_MODULE}.get_latest_pipeline_path", return_value="/fake/eb_i140_fy2025_q4.xlsx"), \
+             patch(f"{_DS_MODULE}.parse_date_from_filename", return_value=(2025, 10)):
+            result = svc.get_data_sources()
         pipe = result["pipeline_file"]
         assert "filename" in pipe
         assert "parsed_date" in pipe
@@ -163,7 +188,7 @@ class TestDataSourceService:
         """Filesystem errors are wrapped in DataLoadError."""
         svc = DataSourceService()
         with patch(
-            "src.application.data_source_service.get_dos_dir",
+            f"{_DS_MODULE}.get_dos_dir",
             side_effect=PermissionError("access denied"),
         ):
             with pytest.raises(DataLoadError, match="Failed to load data source"):

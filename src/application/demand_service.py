@@ -4,9 +4,10 @@ Thin wrapper combining InventoryParser, PipelineParser, DemandModeler,
 and SupplyService to produce demand projections and predictions.
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime
-from typing import Optional
 
 from ..domain.exceptions import DataLoadError
 from ..engine.demand import DemandModeler
@@ -26,7 +27,7 @@ class DemandProjectionService:
 
     def __init__(
         self,
-        supply_service: Optional[SupplyService] = None,
+        supply_service: SupplyService | None = None,
         data_dir: str = "data",
     ):
         self._supply_svc = supply_service or SupplyService()

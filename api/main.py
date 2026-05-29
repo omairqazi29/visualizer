@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 import sys
 import os
 import logging
-from typing import List
 
 # Add the project root to sys.path to import from src
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -80,7 +81,7 @@ class SupplyDemandResponse(BaseModel):
     clearance_date: str
     months_to_clear: int
     cleared: bool
-    trajectory: List[dict]
+    trajectory: list[dict]
 
 
 class PredictResponse(BaseModel):
@@ -93,7 +94,7 @@ class PredictResponse(BaseModel):
     projected_clearance_date: str
     months_to_clear: int
     cleared: bool
-    trajectory: List[dict]
+    trajectory: list[dict]
 
 
 class DataSourceFile(BaseModel):
@@ -104,7 +105,7 @@ class DataSourceFile(BaseModel):
 
 class DataSourcesResponse(BaseModel):
     dos_directory: str
-    dos_files: List[DataSourceFile]
+    dos_files: list[DataSourceFile]
     inventory_file: DataSourceFile
     pipeline_file: DataSourceFile
 
@@ -184,8 +185,9 @@ async def predict_pd(
         )
         return PredictResponse(**result)
     except ValueError as exc:
-        # Date-validation ValueError from predict(); caught narrowly here
-        # so that ValueErrors from deeper in the stack hit the generic 500.
+        # Catches ValueError from predict() — in practice only the
+        # date-validation path (demand_service.py). DemandModeler and
+        # supply errors are wrapped in domain exceptions before reaching here.
         raise HTTPException(status_code=422, detail=str(exc))
     except HTTPException:
         raise
