@@ -14,6 +14,17 @@ export const mockWaterfallData: WaterfallData = {
   india_eb1_supply: 9000,
 }
 
+export const mockWaterfallRealData: WaterfallData = {
+  eb_base_limit: 140000,
+  fb_spillover_std: 15000,
+  fb_savings_freeze: 2000,
+  eb45_spillover_std: 3000,
+  eb45_savings_freeze: 1000,
+  total_eb_supply: 161000,
+  eb1_supply: 31000,
+  india_eb1_supply: 10500,
+}
+
 export const mockWaterfallFreezeData: WaterfallData = {
   eb_base_limit: 140000,
   fb_spillover_std: 15000,
@@ -25,7 +36,7 @@ export const mockWaterfallFreezeData: WaterfallData = {
   india_eb1_supply: 12000,
 }
 
-export const mockSupplyDemandData: SupplyDemandData = {
+export const mockSupplyDemandStandardData: SupplyDemandData = {
   inventory: { EB1: 5000 },
   pipeline_total: 10000,
   total_queue: 15000,
@@ -37,6 +48,36 @@ export const mockSupplyDemandData: SupplyDemandData = {
   trajectory: [
     { date: '2025-06-01', backlog: 15000 },
     { date: '2025-07-01', backlog: 14500 },
+  ],
+}
+
+export const mockSupplyDemandRealData: SupplyDemandData = {
+  inventory: { EB1: 5000 },
+  pipeline_total: 10000,
+  total_queue: 15000,
+  annual_eb1_supply: 10500,
+  monthly_inflow: 500,
+  clearance_date: '2027-09-01',
+  months_to_clear: 28,
+  cleared: true,
+  trajectory: [
+    { date: '2025-06-01', backlog: 15000 },
+    { date: '2025-07-01', backlog: 14300 },
+  ],
+}
+
+export const mockSupplyDemandFreezeData: SupplyDemandData = {
+  inventory: { EB1: 5000 },
+  pipeline_total: 10000,
+  total_queue: 15000,
+  annual_eb1_supply: 12000,
+  monthly_inflow: 500,
+  clearance_date: '2027-03-01',
+  months_to_clear: 22,
+  cleared: true,
+  trajectory: [
+    { date: '2025-06-01', backlog: 15000 },
+    { date: '2025-07-01', backlog: 14000 },
   ],
 }
 
@@ -85,11 +126,19 @@ export const handlers = [
   http.get(`${API_BASE}/waterfall`, ({ request }) => {
     const url = new URL(request.url)
     const applyFreeze = url.searchParams.get('apply_freeze') === 'true'
-    return HttpResponse.json(applyFreeze ? mockWaterfallFreezeData : mockWaterfallData)
+    const applyReal = url.searchParams.get('apply_real_restrictions') === 'true'
+    if (applyFreeze) return HttpResponse.json(mockWaterfallFreezeData)
+    if (applyReal) return HttpResponse.json(mockWaterfallRealData)
+    return HttpResponse.json(mockWaterfallData)
   }),
 
-  http.get(`${API_BASE}/supply-demand`, () => {
-    return HttpResponse.json(mockSupplyDemandData)
+  http.get(`${API_BASE}/supply-demand`, ({ request }) => {
+    const url = new URL(request.url)
+    const applyFreeze = url.searchParams.get('apply_freeze') === 'true'
+    const applyReal = url.searchParams.get('apply_real_restrictions') === 'true'
+    if (applyFreeze) return HttpResponse.json(mockSupplyDemandFreezeData)
+    if (applyReal) return HttpResponse.json(mockSupplyDemandRealData)
+    return HttpResponse.json(mockSupplyDemandStandardData)
   }),
 
   http.get(`${API_BASE}/predict`, ({ request }) => {

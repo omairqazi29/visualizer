@@ -2,7 +2,7 @@ import { renderHook, waitFor, act } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../../tests/mocks/server'
-import { mockWaterfallData, mockWaterfallFreezeData } from '../../../tests/mocks/handlers'
+import { mockWaterfallData, mockWaterfallFreezeData, mockWaterfallRealData } from '../../../tests/mocks/handlers'
 import { useWaterfallData } from '../useWaterfallData'
 
 const API_BASE = 'http://localhost:8000/api'
@@ -69,5 +69,18 @@ describe('useWaterfallData', () => {
     })
 
     expect(result.current.data).toEqual(mockWaterfallFreezeData)
+  })
+
+  it('returns distinct data for real mode', async () => {
+    const { result } = renderHook(() => useWaterfallData('real'))
+
+    expect(result.current.mode).toBe('real')
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    expect(result.current.data).toEqual(mockWaterfallRealData)
+    expect(result.current.data).not.toEqual(mockWaterfallData)
   })
 })

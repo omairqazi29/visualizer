@@ -1,5 +1,5 @@
 import { renderHook, waitFor, act } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../../tests/mocks/server'
 import { mockPredictData, mockPredictFreezeData } from '../../../tests/mocks/handlers'
@@ -28,6 +28,28 @@ describe('usePredictData', () => {
     expect(result.current.standardResult).toEqual(mockPredictData)
     expect(result.current.freezeResult).toEqual(mockPredictFreezeData)
     expect(result.current.error).toBeNull()
+  })
+
+  it('passes priority_date param to the API', async () => {
+    const receivedDates: string[] = []
+    server.use(
+      http.get(`${API_BASE}/predict`, ({ request }) => {
+        const url = new URL(request.url)
+        const pd = url.searchParams.get('priority_date')
+        if (pd) receivedDates.push(pd)
+        const applyFreeze = url.searchParams.get('apply_freeze') === 'true'
+        return HttpResponse.json(applyFreeze ? mockPredictFreezeData : mockPredictData)
+      })
+    )
+
+    const { result } = renderHook(() => usePredictData())
+
+    await act(async () => {
+      await result.current.runPrediction('2024-07-01')
+    })
+
+    // Both standard and freeze calls should include the priority_date
+    expect(receivedDates).toEqual(['2024-07-01', '2024-07-01'])
   })
 
   it('handles prediction error', async () => {

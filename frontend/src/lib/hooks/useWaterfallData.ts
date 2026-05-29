@@ -10,21 +10,26 @@ export function useWaterfallData(initialMode: WaterfallMode = 'standard') {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let cancelled = false
+    setData(null)
     setLoading(true)
     setError(null)
     const applyFreeze = mode === 'freeze'
     const applyReal = mode === 'real'
     getWaterfallData(applyFreeze, applyReal)
       .then((d) => {
-        setData(d)
+        if (!cancelled) setData(d)
       })
       .catch((e: unknown) => {
-        const err = e as { message?: string }
-        setError(err?.message || 'Failed to load waterfall data')
+        if (!cancelled) {
+          const err = e as { message?: string }
+          setError(err?.message || 'Failed to load waterfall data')
+        }
       })
       .finally(() => {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       })
+    return () => { cancelled = true }
   }, [mode])
 
   return { data, loading, error, mode, setMode }
