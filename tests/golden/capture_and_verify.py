@@ -13,9 +13,7 @@ This is a SKELETON in PR1 — capture works, full verify logic comes in PR7.
 
 import argparse
 import json
-import os
 import sys
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
@@ -32,6 +30,13 @@ KNOWN_INTEGERS = {
     "eb_base_limit": 140000,
 }
 
+# Maps KNOWN_INTEGERS keys to their location in the captured snapshot
+_KNOWN_INT_PATHS = {
+    "india_eb1_supply_std": ("standard", "india_eb1_supply"),
+    "fb_statutory_limit": ("constants", "fb_statutory_limit"),
+    "eb_base_limit": ("standard", "eb_base_limit"),
+}
+
 
 def _capture() -> dict:
     """Run the current engine and return a reference snapshot dict."""
@@ -43,9 +48,14 @@ def _capture() -> dict:
     freeze = calc.get_supply_breakdown(apply_freeze=True, apply_real_restrictions=False)
     real = calc.get_supply_breakdown(apply_freeze=False, apply_real_restrictions=True)
 
+    from src.constants import FB_STATUTORY_LIMIT
+
     snapshot = {
         "captured_at": datetime.now().isoformat(),
         "engine_version": "pre-refactor",
+        "constants": {
+            "fb_statutory_limit": FB_STATUTORY_LIMIT,
+        },
         "standard": {
             "eb_base_limit": std.eb_base_limit,
             "fb_spillover_std": std.fb_spillover_std,
@@ -104,20 +114,15 @@ def verify_against_reference() -> bool:
     with open(ref_path) as f:
         reference = json.load(f)
 
-    # Quick smoke check: known integers
-    std_ref = reference.get("standard", {})
+    # Quick smoke check: known integers via path mapping
     for key, expected in KNOWN_INTEGERS.items():
-        if key == "india_eb1_supply_std":
-            actual = std_ref.get("india_eb1_supply")
-        elif key == "eb_base_limit":
-            actual = std_ref.get("eb_base_limit")
-        elif key == "fb_statutory_limit":
-            # Not stored directly; skip for now
-            continue
-        else:
-            continue
+        section, field = _KNOWN_INT_PATHS[key]
+        actual = reference.get(section, {}).get(field)
 
-        if actual is not None and actual != expected:
+        if actual is None:
+            print(f"[golden] MISSING: {key} (section={section}, field={field})")
+            return False
+        if actual != expected:
             print(f"[golden] MISMATCH: {key} expected={expected} actual={actual}")
             return False
 

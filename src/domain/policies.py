@@ -2,9 +2,17 @@
 
 Stub implementations — class signatures and ``name`` attributes only.
 Full logic will be migrated from src/engine/supply.py in PR3.
+
+pandas is imported only under TYPE_CHECKING to keep the domain layer free of
+heavyweight runtime dependencies.
 """
 
-import pandas as pd
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 from .value_objects import PolicyName
 

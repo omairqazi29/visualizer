@@ -1,12 +1,18 @@
 """Domain protocols (interfaces) for The Spillover Engine.
 
 These define the contracts that adapters and engine components must satisfy.
-Runtime-checkable where practical for adapter validation.
+All protocols are runtime-checkable for adapter validation at registration time.
+
+pandas is imported only under TYPE_CHECKING to keep the domain layer free of
+heavyweight runtime dependencies.
 """
 
-from typing import Protocol, runtime_checkable
+from __future__ import annotations
 
-import pandas as pd
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 from .value_objects import PolicyName
 
@@ -37,6 +43,7 @@ class SpilloverPolicy(Protocol):
         ...
 
 
+@runtime_checkable
 class DOSDataLoader(Protocol):
     """Contract for loading consolidated DOS IV issuance data."""
 
@@ -45,6 +52,7 @@ class DOSDataLoader(Protocol):
         ...
 
 
+@runtime_checkable
 class Parser(Protocol):
     """Contract for a generic data parser."""
 

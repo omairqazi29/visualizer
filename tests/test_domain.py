@@ -1,10 +1,13 @@
 """Tests for src/domain/ value objects, exceptions, protocols, and policy stubs."""
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
+
+from typing import get_args
 
 from src.domain.value_objects import (
     Chargeability,
+    VisaCategory,
     PolicyName,
     FiscalYear,
     INALimit,
@@ -32,6 +35,24 @@ from src.constants import (
 # ---------------------------------------------------------------------------
 # Value Objects
 # ---------------------------------------------------------------------------
+
+
+class TestVisaCategory:
+    def test_expected_categories_present(self):
+        args = get_args(VisaCategory)
+        # EB-1
+        for cat in ("E11", "E12", "E13", "E1", "IB1", "IB2"):
+            assert cat in args, f"{cat} missing from VisaCategory"
+        # EB-4/5
+        for cat in ("SD", "SE", "C5", "I5", "R5", "T5"):
+            assert cat in args, f"{cat} missing from VisaCategory"
+        # FB
+        for cat in ("F1", "F2A", "F2B", "F3", "F4", "FX"):
+            assert cat in args, f"{cat} missing from VisaCategory"
+
+    def test_category_count(self):
+        args = get_args(VisaCategory)
+        assert len(args) == 28
 
 
 class TestPolicyName:
@@ -114,6 +135,14 @@ class TestSupplyBreakdown:
         with pytest.raises(ValueError, match="india_eb1_supply cannot be negative"):
             self._make(india_eb1_supply=-1)
 
+    def test_negative_total_eb_supply_raises(self):
+        with pytest.raises(ValueError, match="total_eb_supply cannot be negative"):
+            self._make(total_eb_supply=-1)
+
+    def test_negative_eb1_supply_raises(self):
+        with pytest.raises(ValueError, match="eb1_supply cannot be negative"):
+            self._make(eb1_supply=-1)
+
     def test_zero_india_supply_ok(self):
         sb = self._make(india_eb1_supply=0)
         assert sb.india_eb1_supply == 0
@@ -121,6 +150,11 @@ class TestSupplyBreakdown:
     def test_computed_at_auto(self):
         sb = self._make()
         assert isinstance(sb.computed_at, datetime)
+
+    def test_computed_at_is_utc(self):
+        sb = self._make()
+        assert sb.computed_at.tzinfo is not None
+        assert sb.computed_at.tzinfo == timezone.utc
 
     def test_policy_applied_override(self):
         sb = self._make(policy_applied=PolicyName.FREEZE)
@@ -140,6 +174,14 @@ class TestBacklogSnapshot:
     def test_negative_total_raises(self):
         with pytest.raises(ValueError, match="total cannot be negative"):
             BacklogSnapshot(mountain=0, valley=0, total=-1)
+
+    def test_negative_mountain_raises(self):
+        with pytest.raises(ValueError, match="mountain cannot be negative"):
+            BacklogSnapshot(mountain=-1, valley=0, total=100)
+
+    def test_negative_valley_raises(self):
+        with pytest.raises(ValueError, match="valley cannot be negative"):
+            BacklogSnapshot(mountain=0, valley=-1, total=100)
 
     def test_frozen(self):
         snap = BacklogSnapshot(mountain=100, valley=50, total=150)

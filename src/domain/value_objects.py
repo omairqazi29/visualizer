@@ -5,7 +5,7 @@ These will be reconciled with the engine-layer SupplyBreakdown in a later PR.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import NewType, Literal, Optional
 from enum import Enum
 
@@ -73,6 +73,11 @@ class SupplyBreakdown:
     NOTE: This is the *domain* SupplyBreakdown.  The existing
     ``src.engine.supply.SupplyBreakdown`` is untouched in this PR;
     the two will be reconciled in PR4.
+
+    Intentionally mutable (not frozen): the engine-layer SupplyBreakdown is also
+    mutable, and PR4 reconciliation may use builder/factory patterns that
+    assign fields incrementally.  The ``__post_init__`` guard catches invalid
+    *construction*; post-construction mutation is the caller's responsibility.
     """
 
     eb_base_limit: int
@@ -84,10 +89,14 @@ class SupplyBreakdown:
     eb1_supply: int
     india_eb1_supply: int
     policy_applied: PolicyName = PolicyName.STANDARD
-    computed_at: datetime = field(default_factory=datetime.now)
+    computed_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
     source_data_checksum: Optional[str] = None
 
     def __post_init__(self) -> None:
+        if self.total_eb_supply < 0:
+            raise ValueError("total_eb_supply cannot be negative")
+        if self.eb1_supply < 0:
+            raise ValueError("eb1_supply cannot be negative")
         if self.india_eb1_supply < 0:
             raise ValueError("india_eb1_supply cannot be negative")
 
@@ -102,6 +111,10 @@ class BacklogSnapshot:
     as_of: Optional[datetime] = None
 
     def __post_init__(self) -> None:
+        if self.mountain < 0:
+            raise ValueError("mountain cannot be negative")
+        if self.valley < 0:
+            raise ValueError("valley cannot be negative")
         if self.total < 0:
             raise ValueError("total cannot be negative")
 
