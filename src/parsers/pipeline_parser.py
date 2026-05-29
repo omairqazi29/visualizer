@@ -59,3 +59,12 @@ class PipelineParser(BaseParser):
             return int(float(val))
         except:
             return 0
+
+    def parse(self) -> pd.DataFrame:
+        """Parse pipeline data: load, clean, and return the DataFrame.
+
+        Satisfies the Parser protocol from src.domain.protocols.
+        """
+        self.load_data()
+        self.clean()
+        return self.df

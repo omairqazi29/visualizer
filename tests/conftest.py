@@ -48,3 +48,74 @@ def sample_inventory_stats() -> dict:
         "valley": 9035,
         "total": 48162,
     }
+
+
+@pytest.fixture
+def sample_inventory_df() -> pd.DataFrame:
+    """Synthetic inventory DataFrame mimicking USCIS EB Inventory format.
+
+    Includes a Preference Category column and Priority Date Year columns,
+    with 'D' values for disclosure handling tests.
+    """
+    data = [
+        {
+            "Preference Category": "Employment-Based 1st Preference Category (EB1)",
+            "Prior Years": 50,
+            "Priority Date Year - 2020": 100,
+            "Priority Date Year - 2021": "D",
+            "Priority Date Year - 2022": 200,
+            "Priority Date Year - 2023": 150,
+            "Priority Date Year - 2024": 300,
+            "Priority Date Year - 2025": 100,
+        },
+        {
+            "Preference Category": "Employment-Based 2nd Preference Category (EB2)",
+            "Prior Years": 30,
+            "Priority Date Year - 2020": 80,
+            "Priority Date Year - 2021": 90,
+            "Priority Date Year - 2022": 70,
+            "Priority Date Year - 2023": 60,
+            "Priority Date Year - 2024": 50,
+            "Priority Date Year - 2025": 40,
+        },
+        {
+            "Preference Category": "Employment-Based 1st Preference Category (EB1)",
+            "Prior Years": 10,
+            "Priority Date Year - 2020": 20,
+            "Priority Date Year - 2021": 30,
+            "Priority Date Year - 2022": "-",
+            "Priority Date Year - 2023": 40,
+            "Priority Date Year - 2024": 50,
+            "Priority Date Year - 2025": 60,
+        },
+    ]
+    return pd.DataFrame(data)
+
+
+@pytest.fixture
+def sample_pipeline_df() -> pd.DataFrame:
+    """Synthetic pipeline DataFrame mimicking I-140 performance report.
+
+    Includes a Country column and EB-1 category column with realistic values.
+    """
+    data = [
+        {"Country": "India", "1st Preference": 5000, "2nd Preference": 8000, "TOTAL": 13000},
+        {"Country": "China", "1st Preference": 2000, "2nd Preference": 3000, "TOTAL": 5000},
+        {"Country": "Philippines", "1st Preference": "D", "2nd Preference": 500, "TOTAL": 500},
+        {"Country": "All Other", "1st Preference": 1000, "2nd Preference": 2000, "TOTAL": 3000},
+    ]
+    return pd.DataFrame(data)
+
+
+@pytest.fixture
+def sample_raw_dos_df() -> pd.DataFrame:
+    """Synthetic raw DOS DataFrame before normalization.
+
+    Has original column names that need header normalization.
+    """
+    data = [
+        {"Foreign State of Chargeability": "India", "Visa Class": "E11", "Issuances": 100},
+        {"Foreign State of Chargeability": "China", "Visa Class": "E12", "Issuances": "D"},
+        {"Foreign State of Chargeability": "Mexico", "Visa Class": "F1", "Issuances": "<10"},
+    ]
+    return pd.DataFrame(data)

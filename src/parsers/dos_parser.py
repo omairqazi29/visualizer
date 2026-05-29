@@ -135,3 +135,12 @@ class DOSParser(BaseParser):
         """
         usage = self.get_total_fb_usage()
         return max(0, statutory_limit - usage)
+
+    def parse(self) -> "pd.DataFrame":
+        """Parse DOS data: load, clean, and return the DataFrame.
+
+        Satisfies the Parser protocol from src.domain.protocols.
+        """
+        self.load_data()
+        self.clean()
+        return self.df
