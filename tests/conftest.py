@@ -4,8 +4,38 @@ These provide minimal DataFrames that don't require live data files,
 enabling fast, isolated testing of engine and domain logic.
 """
 
+import os
+
 import pytest
 import pandas as pd
+
+# ---------------------------------------------------------------------------
+# Hypothesis profile registration
+# ---------------------------------------------------------------------------
+# Profiles are selected via: pytest --hypothesis-profile=ci
+# Defaults to "default" when no --hypothesis-profile is given.
+
+try:
+    from hypothesis import HealthCheck, settings as hyp_settings
+
+    hyp_settings.register_profile(
+        "default",
+        max_examples=50,
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    hyp_settings.register_profile(
+        "ci",
+        max_examples=200,
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    hyp_settings.register_profile(
+        "dev",
+        max_examples=10,
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    hyp_settings.load_profile(os.getenv("HYPOTHESIS_PROFILE", "default"))
+except ImportError:
+    pass  # hypothesis not installed — property tests will be skipped
 
 
 @pytest.fixture

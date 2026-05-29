@@ -1,0 +1,71 @@
+{
+  "captured_at": "2026-05-29T02:19:52.302726+00:00",
+  "engine_version": "pr7-goldens",
+  "constants": {
+    "fb_statutory_limit": 226000
+  },
+  "standard": {
+    "eb_base_limit": 140000,
+    "fb_spillover_std": 46582,
+    "fb_savings_freeze": 0,
+    "eb45_spillover_std": 0,
+    "eb45_savings_freeze": 0,
+    "total_eb_supply": 186582,
+    "eb1_supply": 53362,
+    "india_eb1_supply": 6952
+  },
+  "freeze": {
+    "eb_base_limit": 140000,
+    "fb_spillover_std": 46582,
+    "fb_savings_freeze": 93112,
+    "eb45_spillover_std": 0,
+    "eb45_savings_freeze": 5703,
+    "total_eb_supply": 285397,
+    "eb1_supply": 85695,
+    "india_eb1_supply": 78837
+  },
+  "real_restrictions": {
+    "eb_base_limit": 140000,
+    "fb_spillover_std": 46582,
+    "fb_savings_freeze": 0,
+    "eb45_spillover_std": 0,
+    "eb45_savings_freeze": 0,
+    "total_eb_supply": 186582,
+    "eb1_supply": 53362,
+    "india_eb1_supply": 31053
+  },
+  "parsers": {
+    "dos": {
+      "columns": [
+        "chargeability",
+        "count",
+        "report_month",
+        "report_year",
+        "visa_category"
+      ],
+      "row_count": 19720
+    },
+    "inventory": {
+      "queue": {
+        "mountain": 48162,
+        "valley": 0,
+        "total": 48162
+      }
+    },
+    "pipeline": {
+      "columns": [
+        "1st (Priority)",
+        "2nd (Advanced Degree Professional)",
+        "3rd (Other)",
+        "3rd (Professional and Skilled)",
+        "4th \n(Certain Religious Workers)",
+        "4th (Certain Special Immigrants)",
+        "5th\n (Investor \nSet Aside)",
+        "5th\n(Investor Unreserved)",
+        "Country",
+        "TOTAL"
+      ],
+      "row_count": 21
+    }
+  }
+}

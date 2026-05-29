@@ -1,0 +1,31 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-fail-under=80",
+    "--strict-markers",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "src/scripts/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.",
+]
+fail_under = 80
+show_missing = true
+
+# Hypothesis profiles are registered in tests/conftest.py via
+# hypothesis.settings.register_profile().  Select with:
+#   pytest --hypothesis-profile=ci
+#   pytest --hypothesis-profile=dev
