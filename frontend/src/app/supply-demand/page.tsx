@@ -64,7 +64,7 @@ export default function SupplyDemandPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Baseline Clearance</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-500">Baseline FAD Current</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-400">
@@ -74,7 +74,7 @@ export default function SupplyDemandPage() {
         </Card>
         <Card className="border-crimson-200 bg-crimson-50/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-crimson-800">Current Policy Clearance</CardTitle>
+            <CardTitle className="text-sm font-medium text-crimson-800">Current Policy FAD Current</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-crimson-600">

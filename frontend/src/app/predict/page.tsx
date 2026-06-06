@@ -43,7 +43,7 @@ export default function PredictorPage() {
     <div className="space-y-6 max-w-5xl">
       <div>
         <h2 className="text-3xl font-bold tracking-tight text-navy-900">Personal PD Predictor</h2>
-        <p className="text-slate-500">Compare baseline (no restrictions) vs. current 91-country administrative policy (INA 201/203 model; India EB-1 cutoff ~Apr 2023).</p>
+        <p className="text-slate-500">Predicts when the <span className="font-semibold">Final Action Date (FAD)</span> reaches your priority date — i.e., when your visa number becomes available for approval. Compare baseline vs. current 91-country policy.</p>
       </div>
 
       <Card className="max-w-md">
@@ -112,7 +112,7 @@ export default function PredictorPage() {
                     <Calendar className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-sm text-slate-500 font-medium">Projected Clearance</p>
+                    <p className="text-sm text-slate-500 font-medium">FAD Reaches Your PD</p>
                     <p className="text-2xl font-bold text-slate-700">
                       {new Date(standardResult.projected_clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
                     </p>
@@ -149,7 +149,7 @@ export default function PredictorPage() {
                     <Calendar className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-sm text-slate-500 font-medium">Accelerated Clearance</p>
+                    <p className="text-sm text-slate-500 font-medium">FAD Reaches Your PD</p>
                     <p className="text-2xl font-bold text-navy-900">
                       {new Date(freezeResult.projected_clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
                     </p>
@@ -186,6 +186,15 @@ export default function PredictorPage() {
               </div>
             </CardContent>
           </Card>
+
+          <p className="text-xs text-slate-400 italic">
+            <span className="font-semibold text-slate-500">FAD vs DOF:</span>{' '}
+            This model predicts the <span className="font-medium">Final Action Date (FAD)</span> — the date
+            your visa number becomes available and your green card can be approved. The{' '}
+            <span className="font-medium">Date of Filing (DOF)</span>, which controls when you can
+            submit your I-485, typically advances faster and is not modeled here. Once your FAD is current,
+            you are eligible for final adjudication.
+          </p>
         </div>
       )}
     </div>
