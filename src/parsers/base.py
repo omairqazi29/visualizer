@@ -1,8 +1,12 @@
 import os
+import warnings
 
 import pandas as pd
 import numpy as np
 from typing import Any, List, Optional
+
+# Suppress openpyxl header/footer parsing warnings (cosmetic; does not affect data)
+warnings.filterwarnings("ignore", message="Cannot parse header or footer", module="openpyxl")
 
 from ..constants import DEPENDENT_MULTIPLIER
 
