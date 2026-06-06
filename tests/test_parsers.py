@@ -126,5 +126,5 @@ def test_pipeline_all_eb_pipeline():
     assert pipeline["India"]["EB1"] > 0
     assert "China" in pipeline
     assert pipeline["China"]["EB1"] > 0
-    # India EB2 pipeline is massive (346k primary * 2.5)
-    assert pipeline["India"]["EB2"] > 800000
+    # India EB2 pipeline is massive (346k primary * 2.0x EB-2 multiplier)
+    assert pipeline["India"]["EB2"] > 600000

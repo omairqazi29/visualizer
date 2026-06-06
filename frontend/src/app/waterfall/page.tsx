@@ -162,11 +162,11 @@ export default function WaterfallPage() {
   // 6. Total EB-1
   addItem('Total\nEB-1', data.total_eb1, bl.total_eb1, '#002868', true);
 
-  // 7. India EB-1 (baseline = FY2024 actual 6,952)
-  addItem('India\nEB-1', data.india_eb1_supply, bl.india_eb1_supply, '#003a94', true);
-
-  // 8. Non-India EB-1
+  // 7. Non-India EB-1 (the majority — shown first as the larger portion)
   addItem('Non-India\nEB-1', data.non_india_eb1, bl.non_india_eb1, '#64748b', true);
+
+  // 8. India EB-1 (the specific carve-out we're tracking)
+  addItem('India\nEB-1', data.india_eb1_supply, bl.india_eb1_supply, '#003a94', true);
 
   const totalSavings = (data.fb_savings || 0) + (data.eb1_savings || 0) + (data.eb45_savings || 0) + (data.eb23_savings || 0);
   const indiaAdditional = (data.india_eb1_supply || 0) - (data.india_eb1_baseline || 0);

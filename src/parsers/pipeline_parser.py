@@ -2,6 +2,12 @@ from .base import BaseParser
 import pandas as pd
 
 from ..data_discovery import get_latest_pipeline_path
+from ..constants import (
+    EB1_DEPENDENT_MULTIPLIER,
+    EB2_DEPENDENT_MULTIPLIER,
+    EB3_DEPENDENT_MULTIPLIER,
+    EB45_DEPENDENT_MULTIPLIER,
+)
 
 
 # Column header substrings for each EB category in the I-140 pipeline file
@@ -12,6 +18,16 @@ _PIPELINE_COL_MAP = {
     "EB3_other": "3rd (Other",            # "3rd (Other)"
     "EB4": "4th",
     "EB5": "5th",
+}
+
+# Category-specific dependent multipliers (DHS Yearbook Table 7)
+_CATEGORY_MULTIPLIERS = {
+    "EB1": EB1_DEPENDENT_MULTIPLIER,       # 2.5x
+    "EB2": EB2_DEPENDENT_MULTIPLIER,       # 2.0x
+    "EB3_skilled": EB3_DEPENDENT_MULTIPLIER,  # 2.1x
+    "EB3_other": EB3_DEPENDENT_MULTIPLIER,    # 2.1x
+    "EB4": EB45_DEPENDENT_MULTIPLIER,      # 1.5x
+    "EB5": EB45_DEPENDENT_MULTIPLIER,      # 1.5x
 }
 
 # Country row labels in the pipeline file
@@ -72,14 +88,15 @@ class PipelineParser(BaseParser):
         return int(self._get_cell("India", _PIPELINE_COL_MAP["EB1"]) * self.DEPENDENT_MULTIPLIER)
 
     def get_all_eb_pipeline(self) -> dict[str, dict[str, int]]:
-        """Return all EB category pipeline totals (with dependent multiplier) for each country.
+        """Return all EB category pipeline totals (with category-specific dependent multipliers).
 
-        Returns nested dict: {"India": {"EB1": 45302, "EB2": 761924, ...}, "China": {...}, ...}
+        I-140 pipeline counts primary beneficiaries only. Each category uses its own
+        multiplier from DHS Yearbook Table 7 (EB-1: 2.5x, EB-2: 2.0x, EB-3: 2.1x, EB-4/5: 1.5x).
+        Returns nested dict: {"India": {"EB1": 51480, "EB2": 692658, ...}, ...}
         """
         if self.df is None:
             self.load_data()
 
-        mult = self.DEPENDENT_MULTIPLIER
         result = {}
         for country in _PIPELINE_COUNTRIES:
             key = "ROW" if "Rest" in country else country
@@ -87,6 +104,7 @@ class PipelineParser(BaseParser):
             for cat_key, col_substr in _PIPELINE_COL_MAP.items():
                 val = self._get_cell(country, col_substr)
                 if val > 0:
+                    mult = _CATEGORY_MULTIPLIERS.get(cat_key, self.DEPENDENT_MULTIPLIER)
                     entry[cat_key] = int(val * mult)
             if entry:
                 result[key] = entry

@@ -28,14 +28,17 @@ INDIA_OVERSUBSCRIBED_SHARE: float = 0.80
 # INA 202(a)(2) per-country cap (7% of category limit)
 PER_COUNTRY_CAP: float = 0.07
 
-# Dependent multiplier for I-140 pipeline (primary-only data → total persons).
-# Source: DHS Yearbook of Immigration Statistics, Table 7 (EB-1 class codes
-# E11-E13 principals vs E14/E15/E19/E10 derivatives). EB-1 averages ~1.5
-# derivatives per principal → 2.5 total persons per petition.
+# Dependent multipliers for I-140 pipeline (primary-only data → total persons).
+# Source: DHS Yearbook of Immigration Statistics, Table 7; CRS Report R46291.
+# Each EB category has a different derivative rate based on historical data.
 # NOTE: Only applied to I-140 pipeline. I-485 inventory already counts each
 # person individually (principal + derivatives each file their own I-485).
 # See USCIS Q&A: "Pending EB I-485 Inventory" — confirmed to include derivatives.
-DEPENDENT_MULTIPLIER: float = 2.5
+DEPENDENT_MULTIPLIER: float = 2.5            # EB-1 default (used as fallback)
+EB1_DEPENDENT_MULTIPLIER: float = 2.5        # EB-1: ~1.5 derivatives per principal
+EB2_DEPENDENT_MULTIPLIER: float = 2.0        # EB-2: ~1.0 derivative per principal
+EB3_DEPENDENT_MULTIPLIER: float = 2.1        # EB-3: ~1.06 derivatives per principal
+EB45_DEPENDENT_MULTIPLIER: float = 1.5       # EB-4/5: lower derivative rate
 
 # Researched baseline for India EB-1 annual supply under standard INA flow.
 # Value derived from official FY2024 data: India received 6,952 EB-1 visas
@@ -232,4 +235,8 @@ __all__ = [
     "EB3_CATEGORIES",
     "EB45_CATEGORIES",
     "INDIA_OVERSUBSCRIBED_SHARE",
+    "EB1_DEPENDENT_MULTIPLIER",
+    "EB2_DEPENDENT_MULTIPLIER",
+    "EB3_DEPENDENT_MULTIPLIER",
+    "EB45_DEPENDENT_MULTIPLIER",
 ]
