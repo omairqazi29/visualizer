@@ -35,7 +35,9 @@ def test_per_country_cap():
 
 
 def test_dependent_multiplier():
-    assert DEPENDENT_MULTIPLIER == 2.2
+    # DHS Yearbook Table 7: EB-1 ~1.5 derivatives per principal → 2.5 total
+    # Only applied to I-140 pipeline (I-485 inventory already includes dependents)
+    assert DEPENDENT_MULTIPLIER == 2.5
 
 
 def test_default_india_eb1_supply():

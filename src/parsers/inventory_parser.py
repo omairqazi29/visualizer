@@ -96,36 +96,35 @@ class InventoryParser(BaseParser):
     # ──────────────────────────────────────────────
 
     def get_all_eb1_backlogs(self) -> dict[str, int]:
-        """Return EB-1 pending totals (with dependent multiplier) for each country group.
+        """Return EB-1 pending I-485 totals for each country group.
 
-        Returns dict like {"India": 48156, "China": 8774, "ROW": 69793, "Mexico": ..., "Philippines": ...}
+        NO multiplier applied — the I-485 inventory already counts each person
+        individually (principal + derivatives each file their own I-485).
+        Returns dict like {"India": 22340, "China": 4513, "ROW": 32286, ...}
         """
-        mult = self.DEPENDENT_MULTIPLIER
         result = {}
-        # India EB-1 is in the EB1/EW3/EB4/CRW/EB5 sheet
-        result["India"] = int(self._sum_category(_SHEET_MAP["India_EB1"], _CATEGORY_FILTERS["EB1"]) * mult)
-        # China, ROW, Mexico, Philippines each have their own sheet
+        result["India"] = self._sum_category(_SHEET_MAP["India_EB1"], _CATEGORY_FILTERS["EB1"])
         for key in ["China", "ROW", "Mexico", "Philippines"]:
-            result[key] = int(self._sum_category(_SHEET_MAP[key], _CATEGORY_FILTERS["EB1"]) * mult)
+            result[key] = self._sum_category(_SHEET_MAP[key], _CATEGORY_FILTERS["EB1"])
         return result
 
     def get_all_eb_backlogs(self) -> dict[str, dict[str, int]]:
-        """Return all EB category backlogs (with multiplier) for each country group.
+        """Return all EB category I-485 backlogs for each country group.
 
-        Returns nested dict: {"India": {"EB1": 48156, "EB2": 60282, "EB3": 36819, "EB4": 1683, "EB5": 11678}, ...}
+        NO multiplier — I-485 inventory already includes dependents.
+        Returns nested dict: {"India": {"EB1": 22340, "EB2": 27401, ...}, ...}
         """
-        mult = self.DEPENDENT_MULTIPLIER
         result = {}
 
         # India: EB1/EW3/EB4/EB5 from sheet 1, EB2/EB3 from sheet 2
         india_sheet1 = _SHEET_MAP["India_EB1"]
         india_sheet2 = _SHEET_MAP["India_EB23"]
         result["India"] = {
-            "EB1": int(self._sum_category(india_sheet1, _CATEGORY_FILTERS["EB1"]) * mult),
-            "EB2": int(self._sum_category(india_sheet2, _CATEGORY_FILTERS["EB2"]) * mult),
-            "EB3": int(self._sum_category(india_sheet2, _CATEGORY_FILTERS["EB3"]) * mult),
-            "EB4": int(self._sum_category(india_sheet1, _CATEGORY_FILTERS["EB4"]) * mult),
-            "EB5": int(self._sum_category(india_sheet1, _CATEGORY_FILTERS["EB5"]) * mult),
+            "EB1": self._sum_category(india_sheet1, _CATEGORY_FILTERS["EB1"]),
+            "EB2": self._sum_category(india_sheet2, _CATEGORY_FILTERS["EB2"]),
+            "EB3": self._sum_category(india_sheet2, _CATEGORY_FILTERS["EB3"]),
+            "EB4": self._sum_category(india_sheet1, _CATEGORY_FILTERS["EB4"]),
+            "EB5": self._sum_category(india_sheet1, _CATEGORY_FILTERS["EB5"]),
         }
 
         # China, ROW, Mexico, Philippines: all categories in one sheet each
@@ -134,10 +133,10 @@ class InventoryParser(BaseParser):
             result[key] = {}
             for cat_key, cat_filter in _CATEGORY_FILTERS.items():
                 if cat_key == "EW3":
-                    continue  # skip EW3 (subset of EB3)
+                    continue
                 val = self._sum_category(sheet, cat_filter)
                 if val > 0:
-                    result[key][cat_key] = int(val * mult)
+                    result[key][cat_key] = val
 
         return result
 
@@ -151,7 +150,9 @@ class InventoryParser(BaseParser):
         """
         Calculates India EB-1 queue by summing all Priority Date Year columns for EB-1 rows.
         Dynamically handles 2016-2025+ reports. cutoff filters PDs strictly before cutoff for 'backlog_ahead'.
-        Total always includes full inventory * 2.2x dependents.
+
+        NO multiplier applied — the I-485 inventory already counts each person
+        (principal + derivatives) individually. Each count = one visa number needed.
         """
         if self.df is None:
             self.load_india_eb1()
@@ -169,13 +170,13 @@ class InventoryParser(BaseParser):
             if "Priority Date Year" in str(c) or "Prior Years" in str(c)
         ]
 
-        total_primary = 0
+        total = 0
         mountain = 0
         valley = 0
 
         for col in year_cols:
             col_sum = int(eb1_df[col].apply(_parse_val).sum())
-            total_primary += col_sum
+            total += col_sum
 
             if "Prior Years" in str(col):
                 mountain += col_sum
@@ -199,9 +200,8 @@ class InventoryParser(BaseParser):
                 else:
                     valley += col_sum
 
-        mult = self.DEPENDENT_MULTIPLIER
         return {
-            "mountain": int(mountain * mult),
-            "valley": int(valley * mult),
-            "total": int(total_primary * mult),
+            "mountain": mountain,
+            "valley": valley,
+            "total": total,
         }

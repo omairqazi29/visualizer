@@ -125,22 +125,23 @@ def test_compute_india_share_data_driven():
 
 def test_predict_accuracy_for_2023_pd_uses_mountain_backlog():
     """For PD 2023-04-01 (near current May 2026 FAD 01APR23), backlog_ahead must use mountain (cutoff filter) not full total.
-    This + researched supply makes projections data-driven vs real Visa Bulletin observations."""
+    This + researched supply makes projections data-driven vs real Visa Bulletin observations.
+    I-485 inventory counts include dependents (each person files own I-485) — no multiplier."""
     from src.parsers.inventory_parser import InventoryParser
     from src.parsers.pipeline_parser import PipelineParser
     from datetime import datetime
     inv = InventoryParser("data/eb_inventory_january_2026.xlsx")
     pd_dt = datetime(2023, 4, 1)
     inv_ahead = inv.get_india_eb1_queue(cutoff_month=pd_dt.month, cutoff_year=pd_dt.year)
-    # The fix ensures mountain (<2023) is used; in data this is 39127 vs total 48162
+    # mountain (<2023) is used; raw I-485 count (no multiplier, includes dependents)
     assert inv_ahead['mountain'] < inv_ahead['total']
-    assert inv_ahead['mountain'] == 39127  # verifiable from Jan 2026 data
+    assert inv_ahead['mountain'] == 17785  # Jan 2026 data, no 2.2x multiplier
 
 
 @pytest.mark.parametrize("pd_str, apply_real, expected_max_months", [
-    ("2023-04-01", False, 80),  # std with researched supply + mountain fix
-    ("2023-04-01", True, 25),   # real restrictions boost shortens dramatically
-    ("2022-01-01", True, 15),
+    ("2023-04-01", False, 40),  # std with researched supply, no inv multiplier
+    ("2023-04-01", True, 15),   # real restrictions boost shortens dramatically
+    ("2022-01-01", True, 10),
 ])
 def test_predict_various_pds_and_flags(pd_str, apply_real, expected_max_months):
     """Parametrized coverage for new real flag + mountain logic across PDs (Issue 8)."""

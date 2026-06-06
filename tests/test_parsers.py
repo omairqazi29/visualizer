@@ -65,7 +65,7 @@ def test_pipeline_parser_multiplier():
 # ────────────────────────────────────────────────────────────
 
 def test_inventory_all_eb1_backlogs():
-    """get_all_eb1_backlogs returns India, China, ROW with sensible values."""
+    """get_all_eb1_backlogs returns raw I-485 counts (no multiplier, includes dependents)."""
     path = "data/eb_inventory_january_2026.xlsx"
     if not os.path.exists(path):
         pytest.skip("Inventory file not found")
@@ -76,10 +76,13 @@ def test_inventory_all_eb1_backlogs():
     assert "ROW" in backlogs and backlogs["ROW"] > 0
     # India EB-1 backlog should be larger than China (known fact)
     assert backlogs["India"] > backlogs["China"]
+    # Values should be RAW (no 2.2x multiplier) — I-485 includes dependents
+    # India EB-1 I-485 count ~22k (not ~48k which was the old 2.2x inflated value)
+    assert backlogs["India"] < 30000
 
 
 def test_inventory_all_eb_backlogs():
-    """get_all_eb_backlogs returns India with all 5 EB categories."""
+    """get_all_eb_backlogs returns raw I-485 counts (no multiplier)."""
     path = "data/eb_inventory_january_2026.xlsx"
     if not os.path.exists(path):
         pytest.skip("Inventory file not found")
@@ -91,6 +94,8 @@ def test_inventory_all_eb_backlogs():
     assert "EB3" in india and india["EB3"] > 0
     # EB2 backlog is historically the largest for India
     assert india["EB2"] > india["EB1"]
+    # Raw values (no multiplier) — EB2 should be ~27k not ~60k
+    assert india["EB2"] < 40000
 
 
 def test_inventory_india_share_from_eb1():
@@ -104,12 +109,12 @@ def test_inventory_india_share_from_eb1():
     china = backlogs["China"]
     share = india / (india + china)
     assert 0.5 < share < 1.0
-    # Should be close to the hardcoded 0.80 (actually ~0.846)
-    assert abs(share - 0.80) < 0.10
+    # Share is the same ratio regardless of multiplier
+    assert abs(share - 0.84) < 0.06
 
 
 def test_pipeline_all_eb_pipeline():
-    """get_all_eb_pipeline returns India and China with EB1, EB2 entries."""
+    """get_all_eb_pipeline returns pipeline with 2.5x multiplier (I-140 is primary only)."""
     path = "data/eb_i140_i360_i526_performance_data_fy2025_q4_v1.xlsx"
     if not os.path.exists(path):
         pytest.skip("Pipeline file not found")
@@ -121,5 +126,5 @@ def test_pipeline_all_eb_pipeline():
     assert pipeline["India"]["EB1"] > 0
     assert "China" in pipeline
     assert pipeline["China"]["EB1"] > 0
-    # India EB2 pipeline is massive (346k primary * 2.2)
-    assert pipeline["India"]["EB2"] > 500000
+    # India EB2 pipeline is massive (346k primary * 2.5)
+    assert pipeline["India"]["EB2"] > 800000

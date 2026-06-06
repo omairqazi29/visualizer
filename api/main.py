@@ -297,7 +297,7 @@ async def get_methodology():
         india_eb1_baseline=DEFAULT_INDIA_EB1_SUPPLY,
         eb_base_limit=140000,
         fb_statutory_limit=226000,
-        dependent_multiplier=2.2,
+        dependent_multiplier=2.5,
         data_sources=[
             {
                 "name": "DOS Monthly IV Issuances",
