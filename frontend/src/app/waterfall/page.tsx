@@ -3,7 +3,45 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getWaterfallData, WaterfallData } from '@/lib/api';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
+
+const BOOST_COLOR = '#BF0A30';  // crimson red for restriction delta
+
+/** Custom bar shape that splits a range bar into base (blue) + boost (red) portions. */
+const SplitBar = (props: Record<string, unknown>) => {
+  const { x: px, y: py, width: pw, height: ph, payload } = props as {
+    x: number; y: number; width: number; height: number;
+    payload: { baseFill: string; hasBoost: boolean; displayValue: [number, number]; baselineEnd: number };
+  };
+  const h = Math.abs(ph);
+  if (!h) return null;
+
+  if (!payload.hasBoost) {
+    return <rect x={px} y={py} width={pw} height={h} fill={payload.baseFill} rx={2} />;
+  }
+
+  const [rangeStart, rangeEnd] = payload.displayValue;
+  const totalSpan = rangeEnd - rangeStart;
+  if (totalSpan <= 0) {
+    return <rect x={px} y={py} width={pw} height={h} fill={payload.baseFill} rx={2} />;
+  }
+
+  const baseSpan = Math.max(0, payload.baselineEnd - rangeStart);
+  const baseFraction = baseSpan / totalSpan;
+  const baseH = baseFraction * h;
+  const boostH = h - baseH;
+
+  return (
+    <g>
+      {baseH > 0.5 && (
+        <rect x={px} y={py + boostH} width={pw} height={baseH} fill={payload.baseFill} rx={baseH > 4 ? 2 : 0} />
+      )}
+      {boostH > 0.5 && (
+        <rect x={px} y={py} width={pw} height={boostH} fill={BOOST_COLOR} rx={boostH > 4 ? 2 : 0} />
+      )}
+    </g>
+  );
+};
 
 
 export default function WaterfallPage() {
@@ -42,52 +80,93 @@ export default function WaterfallPage() {
   }
 
   const isBaseline = mode === 'baseline';
+  const bl = baselineData;
+  const showBoost = !isBaseline;
 
-  // Full INA cascade waterfall: Total EB → EB-1 → India / Non-India
-  interface ChartItem {
+  // Build waterfall items with baseline split points for red highlighting
+  interface WaterfallItem {
     name: string;
-    value: number;
-    fill: string;
+    displayValue: [number, number];
+    baselineEnd: number;     // data-unit Y where baseline portion ends (red starts above)
+    hasBoost: boolean;
+    baseFill: string;
+    label: string;
     isTotal?: boolean;
-    isSubtract?: boolean;
   }
-  const chartData: ChartItem[] = [
-    { name: 'EB Base\nLimit', value: data.eb_base_limit, fill: '#002868' },
-    { name: 'FB →\nEB Spill', value: data.fb_spillover, fill: '#1e40af' },
-    { name: 'Total EB\nPool', value: data.total_eb_pool, fill: '#002868', isTotal: true },
-    { name: 'EB-1\n(28.6%)', value: data.eb1_from_pool, fill: '#1e40af', isTotal: true },
-    ...(data.eb45_spillover > 0 ? [{ name: 'EB4/5 →\nEB-1', value: data.eb45_spillover, fill: '#BF0A30' }] : []),
-    { name: 'Total\nEB-1', value: data.total_eb1, fill: '#002868', isTotal: true },
-    { name: 'India\nEB-1', value: data.india_eb1_supply, fill: '#003a94', isTotal: true },
-    { name: 'Non-India\nEB-1', value: data.non_india_eb1, fill: '#64748b', isTotal: true },
-  ];
 
-  // Compute waterfall start/end positions
+  const items: WaterfallItem[] = [];
   let running = 0;
-  const processedData = chartData.map((item) => {
-    const val = Math.abs(item.value || 0);
+
+  const addItem = (
+    name: string, value: number, baselineValue: number,
+    fill: string, isTotal: boolean
+  ) => {
+    const val = Math.abs(value || 0);
+    const blVal = Math.abs(baselineValue || 0);
     let start: number, end: number;
 
-    if (item.isTotal) {
+    if (isTotal) {
       start = 0;
       end = val;
-      running = 0;  // reset for next additive section
-    } else if (item.isSubtract) {
-      start = running - val;
-      end = running;
-      running -= val;
+      running = 0;
     } else {
       start = running;
       end = running + val;
       running += val;
     }
 
-    return {
-      ...item,
+    const baseEnd = isTotal
+      ? Math.min(blVal, end)
+      : Math.min(start + blVal, end);
+
+    items.push({
+      name,
       displayValue: [start, end],
+      baselineEnd: showBoost && end > baseEnd ? baseEnd : end,
+      hasBoost: showBoost && end > baseEnd,
+      baseFill: fill,
       label: val.toLocaleString(),
-    };
-  });
+      isTotal,
+    });
+  };
+
+  // 1. EB Base Limit (same in both scenarios)
+  addItem('EB Base\nLimit', data.eb_base_limit, bl.eb_base_limit, '#002868', false);
+
+  // 2. FB → EB Spillover (restriction savings inflate this)
+  addItem('FB →\nEB Spill', data.fb_spillover, bl.fb_spillover, '#1e40af', false);
+
+  // 3. Total EB Pool
+  addItem('Total EB\nPool', data.total_eb_pool, bl.total_eb_pool, '#002868', true);
+
+  // 4. EB-1 (28.6%)
+  addItem('EB-1\n(28.6%)', data.eb1_from_pool, bl.eb1_from_pool, '#1e40af', true);
+
+  // 5. EB4/5 → EB-1 (entirely restriction benefit — baseline is 0)
+  if (data.eb45_spillover > 0) {
+    // Additive bar stacking on top of EB-1
+    const start = data.eb1_from_pool;
+    const end = start + data.eb45_spillover;
+    const blSpill = bl.eb45_spillover || 0;
+    items.push({
+      name: 'EB4/5 →\nEB-1',
+      displayValue: [start, end],
+      baselineEnd: showBoost ? start + blSpill : end,
+      hasBoost: showBoost && data.eb45_spillover > blSpill,
+      baseFill: '#1e40af',
+      label: data.eb45_spillover.toLocaleString(),
+    });
+    running = 0; // reset for next total
+  }
+
+  // 6. Total EB-1
+  addItem('Total\nEB-1', data.total_eb1, bl.total_eb1, '#002868', true);
+
+  // 7. India EB-1 (baseline = FY2024 actual 6,952)
+  addItem('India\nEB-1', data.india_eb1_supply, bl.india_eb1_supply, '#003a94', true);
+
+  // 8. Non-India EB-1
+  addItem('Non-India\nEB-1', data.non_india_eb1, bl.non_india_eb1, '#64748b', true);
 
   const totalSavings = (data.fb_savings || 0) + (data.eb1_savings || 0) + (data.eb45_savings || 0) + (data.eb23_savings || 0);
   const indiaAdditional = (data.india_eb1_supply || 0) - (data.india_eb1_baseline || 0);
@@ -117,16 +196,32 @@ export default function WaterfallPage() {
 
       <Card className="p-6">
         <CardHeader>
-          <CardTitle>{isBaseline ? 'Baseline INA Cascade' : 'Current Policy Cascade (91-Country Restrictions)'}</CardTitle>
-          <CardDescription>
-            {isBaseline
-              ? 'Standard INA flow: EB base + FB spillover → 28.6% to EB-1 → India gets its share.'
-              : `Restricted countries\u2019 unused FB/EB visas expand the pool. India gets ${Math.round((data.india_oversubscribed_share || 0.84) * 100)}% of additional EB-1 (shared with China).`}
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>{isBaseline ? 'Baseline INA Cascade' : 'Current Policy Cascade (91-Country Restrictions)'}</CardTitle>
+              <CardDescription>
+                {isBaseline
+                  ? 'Standard INA flow: EB base + FB spillover \u2192 28.6% to EB-1 \u2192 India gets its share.'
+                  : `Restricted countries\u2019 unused FB/EB visas expand the pool. India gets ${Math.round((data.india_oversubscribed_share || 0.84) * 100)}% of additional EB-1 (shared with China).`}
+              </CardDescription>
+            </div>
+            {!isBaseline && (
+              <div className="flex items-center gap-4 text-xs font-medium shrink-0 ml-4">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#002868' }} />
+                  Baseline
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: BOOST_COLOR }} />
+                  Restriction Boost
+                </span>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="h-[500px] mt-4">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={processedData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <BarChart data={items} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} interval={0} />
               <YAxis tickFormatter={(val: number) => `${(val / 1000).toFixed(0)}k`} fontSize={12} tickLine={false} axisLine={false} />
@@ -138,10 +233,7 @@ export default function WaterfallPage() {
                 labelStyle={{ fontWeight: 'bold' }}
                 contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
               />
-              <Bar dataKey="displayValue">
-                {processedData.map((entry) => (
-                  <Cell key={entry.name} fill={entry.fill} />
-                ))}
+              <Bar dataKey="displayValue" shape={<SplitBar />}>
                 <LabelList dataKey="label" position="top" style={{ fontSize: '11px', fontWeight: 'bold', fill: '#475569' }} />
               </Bar>
             </BarChart>
@@ -158,8 +250,8 @@ export default function WaterfallPage() {
             <div className="text-2xl font-bold text-navy-900">{(data.total_eb1 || 0).toLocaleString()}</div>
             <p className="text-xs text-slate-500 mt-1">
               {isBaseline
-                ? '28.6% of EB pool. EB4/5 oversubscribed — no spillover to EB-1.'
-                : `vs baseline ${(baselineData.total_eb1 || 0).toLocaleString()} (+${((data.total_eb1 || 0) - (baselineData.total_eb1 || 0)).toLocaleString()})`}
+                ? '28.6% of EB pool. EB4/5 oversubscribed \u2014 no spillover to EB-1.'
+                : <>vs baseline {(bl.total_eb1 || 0).toLocaleString()} (<span className="text-crimson-600 font-semibold">+{((data.total_eb1 || 0) - (bl.total_eb1 || 0)).toLocaleString()}</span>)</>}
             </p>
           </CardContent>
         </Card>
@@ -171,8 +263,8 @@ export default function WaterfallPage() {
             <div className="text-2xl font-bold text-navy-900">{(data.india_eb1_supply || 0).toLocaleString()}</div>
             <p className="text-xs text-slate-500 mt-1">
               {isBaseline
-                ? `FY2024 actual (consular + AOS). India is ~${Math.round(((data.india_eb1_baseline || 6952) / (baselineData.total_eb1 || 47462)) * 100)}% of EB-1.`
-                : `Baseline ${(data.india_eb1_baseline || 0).toLocaleString()} + ${indiaAdditional.toLocaleString()} from restrictions`}
+                ? `FY2024 actual (consular + AOS). India is ~${Math.round(((data.india_eb1_baseline || 6952) / (bl.total_eb1 || 47462)) * 100)}% of EB-1.`
+                : <>Baseline {(data.india_eb1_baseline || 0).toLocaleString()} + <span className="text-crimson-600 font-semibold">+{indiaAdditional.toLocaleString()}</span> from restrictions</>}
             </p>
           </CardContent>
         </Card>
@@ -190,7 +282,7 @@ export default function WaterfallPage() {
             <CardTitle className="text-sm font-semibold">Restriction Savings (All EB)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-navy-900">{isBaseline ? '0' : totalSavings.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-crimson-600">{isBaseline ? '0' : `+${totalSavings.toLocaleString()}`}</div>
             <p className="text-xs text-slate-500 mt-1">
               {isBaseline
                 ? 'No restrictions in baseline.'
@@ -202,7 +294,8 @@ export default function WaterfallPage() {
 
       {!isBaseline && (
         <p className="text-xs text-slate-400 italic">
-          DOS monthly data captures consular IV issuances only (not domestic AOS). EB categories are AOS-heavy, so direct EB savings from restrictions are small.
+          <span className="font-semibold text-crimson-500">Red portions</span> show the restriction boost vs baseline.
+          DOS monthly data captures consular IV issuances only (not domestic AOS). EB categories are AOS-heavy, so direct EB savings are small.
           The main India EB-1 benefit comes through FB savings (consular-heavy) expanding the total EB pool. India receives {Math.round((data.india_oversubscribed_share || 0.84) * 100)}% of additional EB-1 based on relative I-485 backlogs (computed from USCIS inventory data).
         </p>
       )}
