@@ -121,7 +121,7 @@ export default function WaterfallPage() {
           <CardDescription>
             {isBaseline
               ? 'Standard INA flow: EB base + FB spillover → 28.6% to EB-1 → India gets its share.'
-              : 'Restricted countries\u2019 unused FB/EB visas expand the pool. India gets 80% of additional EB-1 (shared with China).'}
+              : `Restricted countries\u2019 unused FB/EB visas expand the pool. India gets ${Math.round((data.india_oversubscribed_share || 0.84) * 100)}% of additional EB-1 (shared with China).`}
           </CardDescription>
         </CardHeader>
         <CardContent className="h-[500px] mt-4">
@@ -171,7 +171,7 @@ export default function WaterfallPage() {
             <div className="text-2xl font-bold text-navy-900">{(data.india_eb1_supply || 0).toLocaleString()}</div>
             <p className="text-xs text-slate-500 mt-1">
               {isBaseline
-                ? 'FY2024 actual (consular + AOS). India is ~13% of EB-1.'
+                ? `FY2024 actual (consular + AOS). India is ~${Math.round(((data.india_eb1_baseline || 6952) / (baselineData.total_eb1 || 47462)) * 100)}% of EB-1.`
                 : `Baseline ${(data.india_eb1_baseline || 0).toLocaleString()} + ${indiaAdditional.toLocaleString()} from restrictions`}
             </p>
           </CardContent>
@@ -182,7 +182,7 @@ export default function WaterfallPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-navy-900">{(data.non_india_eb1 || 0).toLocaleString()}</div>
-            <p className="text-xs text-slate-500 mt-1">China + Rest of World (includes ~20% of additional to China)</p>
+            <p className="text-xs text-slate-500 mt-1">China + Rest of World (includes ~{Math.round((1 - (data.india_oversubscribed_share || 0.84)) * 100)}% of additional to China)</p>
           </CardContent>
         </Card>
         <Card>
@@ -203,7 +203,7 @@ export default function WaterfallPage() {
       {!isBaseline && (
         <p className="text-xs text-slate-400 italic">
           DOS monthly data captures consular IV issuances only (not domestic AOS). EB categories are AOS-heavy, so direct EB savings from restrictions are small.
-          The main India EB-1 benefit comes through FB savings (consular-heavy) expanding the total EB pool. India receives 80% of additional EB-1 based on relative I-485 backlogs (India ~48k vs China ~10k).
+          The main India EB-1 benefit comes through FB savings (consular-heavy) expanding the total EB pool. India receives {Math.round((data.india_oversubscribed_share || 0.84) * 100)}% of additional EB-1 based on relative I-485 backlogs (computed from USCIS inventory data).
         </p>
       )}
     </div>

@@ -269,7 +269,7 @@ async def get_inventory_context():
             india_all_eb_backlogs=india_all,
             pipeline=pipeline,
             india_oversubscribed_share=round(india_share, 4),
-            inventory_date="January 2026",
+            inventory_date="February 2026",
             pipeline_date="September 2025",
         )
     except Exception as e:
@@ -310,7 +310,7 @@ async def get_methodology():
                 "name": "USCIS EB I-485 Inventory",
                 "description": "Pending adjustment of status cases by country, category, PD year",
                 "url": "https://www.uscis.gov/tools/reports-and-studies",
-                "coverage": "January 2026",
+                "coverage": "February 2026",
                 "update_frequency": "Quarterly",
             },
             {

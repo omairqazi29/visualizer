@@ -34,6 +34,8 @@ export interface WaterfallData {
   eb1_savings: number;
   eb45_savings: number;
   eb23_savings: number;
+  // Data-driven share
+  india_oversubscribed_share: number;
 }
 
 export interface TrajectoryPoint {

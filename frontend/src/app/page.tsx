@@ -154,7 +154,7 @@ export default function Overview() {
               </li>
               <li className="flex items-center gap-2">
                 <Badge variant="outline" className="text-[10px] h-4">USCIS</Badge>
-                EB Inventory: January 2026
+                EB Inventory: February 2026
               </li>
               <li className="flex items-center gap-2">
                 <Badge variant="outline" className="text-[10px] h-4">USCIS</Badge>
