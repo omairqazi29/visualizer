@@ -162,11 +162,28 @@ export default function WaterfallPage() {
   // 6. Total EB-1
   addItem('Total\nEB-1', data.total_eb1, bl.total_eb1, '#002868', true);
 
-  // 7. Non-India EB-1 (the majority — shown first as the larger portion)
-  addItem('Non-India\nEB-1', data.non_india_eb1, bl.non_india_eb1, '#64748b', true);
-
-  // 8. India EB-1 (the specific carve-out we're tracking)
+  // 7–8. Breakdown of Total EB-1: India (base) + Non-India (stacked on top)
+  // India EB-1 is what we're tracking — shown as the base portion
   addItem('India\nEB-1', data.india_eb1_supply, bl.india_eb1_supply, '#003a94', true);
+
+  // Non-India stacks on top of India (additive), so together they = Total EB-1
+  {
+    const indiaEnd = data.india_eb1_supply;
+    const blIndiaEnd = bl.india_eb1_supply;
+    const nonIndia = data.non_india_eb1;
+    const blNonIndia = bl.non_india_eb1;
+    items.push({
+      name: 'Non-India\nEB-1',
+      displayValue: [indiaEnd, indiaEnd + nonIndia],
+      baselineEnd: showBoost && (indiaEnd + nonIndia) > (blIndiaEnd + blNonIndia)
+        ? blIndiaEnd + blNonIndia
+        : indiaEnd + nonIndia,
+      hasBoost: showBoost && (indiaEnd + nonIndia) > (blIndiaEnd + blNonIndia),
+      baseFill: '#64748b',
+      label: nonIndia.toLocaleString(),
+    });
+    running = 0;
+  }
 
   const totalSavings = (data.fb_savings || 0) + (data.eb1_savings || 0) + (data.eb45_savings || 0) + (data.eb23_savings || 0);
   const indiaAdditional = (data.india_eb1_supply || 0) - (data.india_eb1_baseline || 0);
