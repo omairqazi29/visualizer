@@ -20,6 +20,11 @@ EB5_STATUTORY_SHARE: float = 0.071  # 7.1% for EB-5
 # Combined EB-4 + EB-5 share (used for spillover calculations)
 EB45_STATUTORY_SHARE: float = 0.142
 
+# India's share of marginal EB-1 supply among oversubscribed countries.
+# Based on relative I-485 EB-1 backlogs: India ~48k vs China ~10k → ~83%.
+# Conservative default 80%. Update when new USCIS inventory data available.
+INDIA_OVERSUBSCRIBED_SHARE: float = 0.80
+
 # INA 202(a)(2) per-country cap (7% of category limit)
 PER_COUNTRY_CAP: float = 0.07
 
@@ -39,11 +44,12 @@ DEPENDENT_MULTIPLIER: float = 2.2
 # current-policy projections.
 DEFAULT_INDIA_EB1_SUPPLY: int = 6952
 
-# Default restricted countries for the 75-Country Freeze (hypothetical "Restriction Scenario").
-# NOTE: Research (INA 201/203, 2026 Visa Bulletins) shows no enacted broad 75-country IV freeze.
-# This models "what-if" demand reduction on high-FB/EB4-5 users to generate spillovers to EB-1.
+# Default restricted countries for the hypothetical "Maximum Restriction Scenario".
+# This models "what-if" demand reduction on the LARGEST FB/EB4-5 consuming countries
+# (Philippines, Mexico, Dominican Republic, Vietnam, China-mainland) that are NOT on
+# any real restriction list. Combined with ACTUAL_RESTRICTED_COUNTRIES (91 real countries),
+# this represents the most extreme supply scenario.
 # India deliberately excluded: it is the primary beneficiary of modeled surplus redistribution.
-# Sources: travel.state.gov Visa Bulletins (India EB-1 FA 01APR23 as of May 2026), INA 202(a)(5) surplus rules.
 DEFAULT_RESTRICTED_COUNTRIES: set[str] = {
     "Dominican Republic",
     "Philippines",
@@ -53,39 +59,135 @@ DEFAULT_RESTRICTED_COUNTRIES: set[str] = {
     "China - mainland born",
 }
 
-# Actual countries subject to real immigrant visa entry suspensions / restrictions
-# under 2025-2026 Presidential Proclamations and DOS public-benefits pause (distinct
-# from hypothetical 75-country freeze). India and China-mainland explicitly NOT
-# restricted. These generate limited but real additional EB-1 spillover via reduced
-# FB/EB4-5 usage from listed countries.
-# Sources (mid-2026):
-# - https://www.whitehouse.gov/presidential-actions/2025/06/restricting-the-entry-of-foreign-nationals-to-protect-the-united-states-from-foreign-terrorists-and-other-national-security-and-public-safety-threats/
-# - https://www.whitehouse.gov/presidential-actions/2025/12/restricting-and-limiting-the-entry-of-foreign-nationals-to-protect-the-security-of-the-united-states/
-# - https://travel.state.gov/content/travel/en/News/visas-news/suspension-of-visa-issuance-to-foreign-nationals-to-protect-the-security-of-the-united-states.html
-# - https://travel.state.gov/content/travel/en/News/visas-news/immigrant-visa-processing-updates-for-nationalities-at-high-risk-of-public-benefits-usage.html
+# Countries whose consular immigrant visa issuance is currently paused or suspended.
+# UNION of two overlapping real policies (India/China-mainland explicitly NOT on either):
+#
+# POLICY 1 — Presidential Proclamations 10949 (Jun 2025) + 10998 (Dec 2025):
+#   39 countries with entry suspension (security/vetting). Full or partial IV ban.
+#   Source: whitehouse.gov/presidential-actions, travel.state.gov visa news
+#
+# POLICY 2 — DOS 75-Country IV Pause (eff. Jan 21, 2026, still in effect Jun 2026):
+#   75 countries with consular immigrant visa issuance paused (public charge risk).
+#   Source: travel.state.gov → "Immigrant Visa Processing Updates for Nationalities
+#   at High Risk of U.S. Public Benefits Reliance" (last updated Feb 2, 2026)
+#   Lawsuit pending: CLINIC v. Rubio (1:26-cv-00858, S.D.N.Y.) — no nationwide
+#   injunction as of Jun 2026.
+#
+# Union = 91 countries. Both policies halt consular IV issuances (= DOS data).
+# 16 countries only on Proclamation ban (not IV pause): Angola, Benin, Burkina Faso,
+#   Burundi, Chad, Equatorial Guinea, Gabon, Malawi, Mali, Mauritania, Niger, Tonga,
+#   Turkmenistan, Venezuela, Zambia, Zimbabwe
+# 52 countries only on IV pause (not Proclamation): Albania, Algeria, Armenia, ...
+#   Brazil, Pakistan, Bangladesh, Egypt, Ethiopia, Colombia, Ghana, etc.
+# 23 countries on BOTH lists.
+#
+# USCIS adjudicative hold (PM-602-0192/0194) for the 39 Proclamation countries was
+# vacated nationwide Jun 5, 2026 (Dorcas v. USCIS). No model impact — savings are
+# derived from DOS consular data, not domestic I-485 processing.
 ACTUAL_RESTRICTED_COUNTRIES: set[str] = {
-    "Haiti",
-    "Nigeria",
-    "Venezuela",
-    "Cuba",
-    "Iran",
-    "Somalia",
-    "Sudan",
+    # --- On BOTH Proclamation ban AND DOS IV pause ---
     "Afghanistan",
-    "Syria",
-    "Libya",
-    "Yemen",
+    "Antigua and Barbuda",
     "Burma",
-    "Laos",
+    "Cote d'Ivoire",
+    "Cuba",
+    "Dominica",
     "Eritrea",
-    "Chad",
-    "Mali",
-    "Niger",
+    "Gambia",
+    "Haiti",
+    "Iran",
+    "Laos",
+    "Libya",
+    "Nigeria",
+    "Republic of the Congo",
+    "Senegal",
+    "Sierra Leone",
+    "Somalia",
+    "South Sudan",
+    "Sudan",
+    "Syria",
+    "Tanzania",
+    "Togo",
+    "Yemen",
+    # --- Proclamation ban only (39-list, not on 75-country IV pause) ---
+    "Angola",
+    "Benin",
     "Burkina Faso",
+    "Burundi",
+    "Chad",
+    "Equatorial Guinea",
+    "Gabon",
+    "Malawi",
+    "Mali",
+    "Mauritania",
+    "Niger",
+    "Tonga",
+    "Turkmenistan",
+    "Venezuela",
+    "Zambia",
+    "Zimbabwe",
+    # --- DOS 75-country IV pause only (not on Proclamation ban) ---
+    "Albania",
+    "Algeria",
+    "Armenia",
+    "Azerbaijan",
+    "Bahamas",
+    "Bangladesh",
+    "Barbados",
+    "Belarus",
+    "Belize",
+    "Bhutan",
+    "Bosnia and Herzegovina",
+    "Brazil",
+    "Cambodia",
+    "Cameroon",
+    "Cape Verde",
+    "Colombia",
+    "Democratic Republic of the Congo",
+    "Egypt",
+    "Ethiopia",
+    "Fiji",
+    "Georgia",
+    "Ghana",
+    "Grenada",
+    "Guatemala",
+    "Guinea",
+    "Iraq",
+    "Jamaica",
+    "Jordan",
+    "Kazakhstan",
+    "Kosovo",
+    "Kuwait",
+    "Kyrgyz Republic",
+    "Lebanon",
+    "Liberia",
+    "Moldova",
+    "Mongolia",
+    "Montenegro",
+    "Morocco",
+    "Nepal",
+    "Nicaragua",
+    "North Macedonia",
+    "Pakistan",
+    "Russia",
+    "Rwanda",
+    "Saint Kitts and Nevis",
+    "Saint Lucia",
+    "Saint Vincent and the Grenadines",
+    "Thailand",
+    "Tunisia",
+    "Uganda",
+    "Uruguay",
+    "Uzbekistan",
 }
 
+
+# DOS visa symbol codes by EB preference category.
+# Used to compute savings from restricted countries across ALL EB categories.
+EB2_CATEGORIES: list[str] = ['E21', 'E22', 'E26', 'E27']
+EB3_CATEGORIES: list[str] = ['E31', 'E32', 'E34', 'E36', 'E37', 'EW3', 'EW4', 'EW5']
+
 # EB-4/EB-5 visa categories that spill over to EB-1 (per INA 203(b)).
-# Centralized to avoid duplication across supply calc paths (standard, freeze, real_restrictions).
 EB45_CATEGORIES: list[str] = [
     "SD",
     "SE",
@@ -119,5 +221,9 @@ __all__ = [
     "DEFAULT_INDIA_EB1_SUPPLY",
     "DEFAULT_RESTRICTED_COUNTRIES",
     "ACTUAL_RESTRICTED_COUNTRIES",
+
+    "EB2_CATEGORIES",
+    "EB3_CATEGORIES",
     "EB45_CATEGORIES",
+    "INDIA_OVERSUBSCRIBED_SHARE",
 ]

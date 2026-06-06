@@ -1,6 +1,6 @@
 # The Spillover Engine 🇺🇸 📈
 
-A modern web application to visualize and predict the impact of hypothetical U.S. Immigrant Visa restrictions on the India EB-1 backlog (INA 201/203 spillover modeling, revamped 2026 with current Visa Bulletin data).
+A modern web application to visualize and predict the impact of U.S. Immigrant Visa restrictions on the India EB-1 backlog (INA 201/203 spillover modeling, revamped 2026 with current Visa Bulletin and restriction policy data).
 
 ## Stack
 - **Backend**: FastAPI (Python)
@@ -9,15 +9,16 @@ A modern web application to visualize and predict the impact of hypothetical U.S
 
 ## Features
 - **Waterfall Visualization**: INA-compliant path from FB/EB limits to India EB-1 supply (with/without Restriction Scenario).
-- **Hypothetical Restriction Scenario**: Configurable 75-country demand freeze savings + EB4/5 roll-up to EB-1 (research: not enacted as of 2026; India excluded from restricted).
+- **Current Policy Mode**: 91-country real restrictions (39-country Proclamation ban + 75-country DOS IV pause). India/China excluded.
+- **Maximum Scenario**: Additional hypothetical freeze on top-consuming countries (Philippines, Mexico, etc.) beyond real restrictions.
 - **Inventory + Pipeline**: Auto-discovered latest USCIS EB I-485 + I-140 files (drop new eb_inventory_*.xlsx or performance data into data/ — no code change), 2.2x dependents.
 - **PD Predictor**: FY2027 confidence with high-supply blend + backlog_ahead by PD year.
 
-## INA 201/203 Spillover Flow (Freeze Mode)
+## INA 201/203 Spillover Flow (Restriction Mode)
 
 ```mermaid
 graph TD
-    A[Family-Based Limit: 226k Floor] --> B{75-Country Freeze}
+    A[Family-Based Limit: 226k Floor] --> B{91-Country Restrictions}
     B -->|Restricted Volume| C[Visa Savings]
     B -->|Active Volume| D[Actual FB Usage]
     C --> E[EB Vertical Spillover]
@@ -58,3 +59,4 @@ Access the app at `http://localhost:3000`.
 
 ## Documentation
 - [Architecture & Design](docs/ARCHITECTURE.md)
+- [Policy & Data Verification](docs/POLICY_VERIFICATION.md) — how to cross-verify and update data, country lists, and legal status

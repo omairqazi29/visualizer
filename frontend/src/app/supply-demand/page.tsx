@@ -12,8 +12,8 @@ export default function SupplyDemandPage() {
 
   useEffect(() => {
     Promise.all([
-      getSupplyDemandData(false),
-      getSupplyDemandData(true)
+      getSupplyDemandData(false, false),  // Baseline (no restrictions)
+      getSupplyDemandData(false, true)    // Current policy (91-country real restrictions)
     ])
       .then(([std, frz]) => {
         setStandardData(std);
@@ -58,13 +58,13 @@ export default function SupplyDemandPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight text-navy-900">Backlog Comparison</h2>
-        <p className="text-slate-500">Comparing Standard INA Flow vs. 75-Country Freeze Impact.</p>
+        <p className="text-slate-500">Comparing baseline (no restrictions) vs. current 91-country administrative policy.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Standard Clearance</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-500">Baseline Clearance</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-400">
@@ -74,7 +74,7 @@ export default function SupplyDemandPage() {
         </Card>
         <Card className="border-crimson-200 bg-crimson-50/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-crimson-800">Restriction Clearance</CardTitle>
+            <CardTitle className="text-sm font-medium text-crimson-800">Current Policy Clearance</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-crimson-600">
@@ -97,7 +97,7 @@ export default function SupplyDemandPage() {
       <Card className="p-6">
         <CardHeader>
           <CardTitle>The Restriction Delta</CardTitle>
-          <CardDescription>How travel bans and 75-country freezes accelerate India EB-1 backlog clearance.</CardDescription>
+          <CardDescription>How current 91-country restrictions accelerate India EB-1 backlog clearance vs. baseline.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-[450px] mt-4">
@@ -125,7 +125,7 @@ export default function SupplyDemandPage() {
                 <Area 
                   type="monotone" 
                   dataKey="standardBacklog" 
-                  name="Standard INA Flow"
+                  name="Baseline (no restrictions)"
                   stroke="#94a3b8" 
                   strokeWidth={2}
                   fillOpacity={1} 
@@ -134,7 +134,7 @@ export default function SupplyDemandPage() {
                 <Area 
                   type="monotone" 
                   dataKey="freezeBacklog" 
-                  name="Restriction Mode (Freeze)"
+                  name="Current Policy (91 countries)"
                   stroke="#BF0A30" 
                   strokeWidth={3}
                   fillOpacity={1} 

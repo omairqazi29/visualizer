@@ -58,3 +58,68 @@ def test_pipeline_parser_multiplier():
     # We detect mock by checking if a small known value appears.
     # Simpler: just ensure multiplier effect (value is not equal to raw first-column India value).
     assert isinstance(backlog, int)
+
+
+# ────────────────────────────────────────────────────────────
+# New tests: multi-country / multi-category from existing data
+# ────────────────────────────────────────────────────────────
+
+def test_inventory_all_eb1_backlogs():
+    """get_all_eb1_backlogs returns India, China, ROW with sensible values."""
+    path = "data/eb_inventory_january_2026.xlsx"
+    if not os.path.exists(path):
+        pytest.skip("Inventory file not found")
+    parser = InventoryParser(path)
+    backlogs = parser.get_all_eb1_backlogs()
+    assert "India" in backlogs and backlogs["India"] > 0
+    assert "China" in backlogs and backlogs["China"] > 0
+    assert "ROW" in backlogs and backlogs["ROW"] > 0
+    # India EB-1 backlog should be larger than China (known fact)
+    assert backlogs["India"] > backlogs["China"]
+
+
+def test_inventory_all_eb_backlogs():
+    """get_all_eb_backlogs returns India with all 5 EB categories."""
+    path = "data/eb_inventory_january_2026.xlsx"
+    if not os.path.exists(path):
+        pytest.skip("Inventory file not found")
+    parser = InventoryParser(path)
+    all_eb = parser.get_all_eb_backlogs()
+    india = all_eb["India"]
+    assert "EB1" in india and india["EB1"] > 0
+    assert "EB2" in india and india["EB2"] > 0
+    assert "EB3" in india and india["EB3"] > 0
+    # EB2 backlog is historically the largest for India
+    assert india["EB2"] > india["EB1"]
+
+
+def test_inventory_india_share_from_eb1():
+    """Data-driven India share is between 0.5 and 1.0 (India dominates EB-1 backlog vs China)."""
+    path = "data/eb_inventory_january_2026.xlsx"
+    if not os.path.exists(path):
+        pytest.skip("Inventory file not found")
+    parser = InventoryParser(path)
+    backlogs = parser.get_all_eb1_backlogs()
+    india = backlogs["India"]
+    china = backlogs["China"]
+    share = india / (india + china)
+    assert 0.5 < share < 1.0
+    # Should be close to the hardcoded 0.80 (actually ~0.846)
+    assert abs(share - 0.80) < 0.10
+
+
+def test_pipeline_all_eb_pipeline():
+    """get_all_eb_pipeline returns India and China with EB1, EB2 entries."""
+    path = "data/eb_i140_i360_i526_performance_data_fy2025_q4_v1.xlsx"
+    if not os.path.exists(path):
+        pytest.skip("Pipeline file not found")
+    parser = PipelineParser(path)
+    parser.load_data()
+    pipeline = parser.get_all_eb_pipeline()
+    assert "India" in pipeline
+    assert "EB1" in pipeline["India"]
+    assert pipeline["India"]["EB1"] > 0
+    assert "China" in pipeline
+    assert pipeline["China"]["EB1"] > 0
+    # India EB2 pipeline is massive (346k primary * 2.2)
+    assert pipeline["India"]["EB2"] > 500000

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BarChart3, TrendingUp, Calculator } from 'lucide-react';
+import { LayoutDashboard, BarChart3, TrendingUp, Calculator, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
@@ -8,6 +8,7 @@ const navigation = [
   { name: 'Waterfall Chart', href: '/waterfall', icon: BarChart3 },
   { name: 'Supply/Demand', href: '/supply-demand', icon: TrendingUp },
   { name: 'PD Predictor', icon: Calculator, href: '/predict' },
+  { name: 'Methodology', icon: BookOpen, href: '/methodology' },
 ];
 
 export default function Sidebar() {

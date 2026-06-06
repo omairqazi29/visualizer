@@ -20,8 +20,8 @@ export default function PredictorPage() {
     setError(null);
     try {
       const [std, frz] = await Promise.all([
-        predictPD(dateStr, false),
-        predictPD(dateStr, true)
+        predictPD(dateStr, false, false),  // Baseline (no restrictions)
+        predictPD(dateStr, false, true)    // Current policy (91-country real restrictions)
       ]);
       setStandardResult(std);
       setFreezeResult(frz);
@@ -43,7 +43,7 @@ export default function PredictorPage() {
     <div className="space-y-6 max-w-5xl">
       <div>
         <h2 className="text-3xl font-bold tracking-tight text-navy-900">Personal PD Predictor</h2>
-        <p className="text-slate-500">Compare Standard INA vs. hypothetical Restriction Scenario (research-backed INA 201/203 model; current India EB-1 cutoff ~Apr 2023).</p>
+        <p className="text-slate-500">Compare baseline (no restrictions) vs. current 91-country administrative policy (INA 201/203 model; India EB-1 cutoff ~Apr 2023).</p>
       </div>
 
       <Card className="max-w-md">
@@ -101,10 +101,10 @@ export default function PredictorPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
-                  Standard INA Flow
-                  <Badge variant="outline">Baseline</Badge>
+                  Baseline
+                  <Badge variant="outline">No Restrictions</Badge>
                 </CardTitle>
-                <CardDescription>Historical ~9k/yr EB-1 supply with normal spillovers.</CardDescription>
+                <CardDescription>Standard INA flow — no administrative restrictions applied.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center gap-4">
@@ -138,10 +138,10 @@ export default function PredictorPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
-                  Restriction Scenario
-                  <Badge className="bg-crimson-600">Restriction Impact</Badge>
+                  Current Policy
+                  <Badge className="bg-crimson-600">91 Countries</Badge>
                 </CardTitle>
-                <CardDescription>EB-4/5 roll-up + 75-country freeze savings applied.</CardDescription>
+                <CardDescription>91-country restrictions (Proclamation ban + DOS IV pause) — savings from DOS data.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center gap-4">

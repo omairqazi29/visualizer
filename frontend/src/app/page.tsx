@@ -15,10 +15,10 @@ export default function Overview() {
 
   useEffect(() => {
     Promise.all([
-      getWaterfallData(false), 
-      getSupplyDemandData(false),
-      getWaterfallData(true),
-      getSupplyDemandData(true)
+      getWaterfallData(false, false),  // Baseline (no restrictions)
+      getSupplyDemandData(false, false), // Baseline
+      getWaterfallData(false, true),   // Current policy (91-country real restrictions)
+      getSupplyDemandData(false, true)  // Current policy
     ])
       .then(([w, sd, fw, fsd]) => {
         setData(w);
@@ -49,7 +49,7 @@ export default function Overview() {
     );
   }
 
-  const windfall = (freezeWaterfall.fb_savings_freeze || 0) + (freezeWaterfall.eb45_savings_freeze || 0);
+  const windfall = (freezeWaterfall.fb_savings || 0) + (freezeWaterfall.eb1_savings || 0) + (freezeWaterfall.eb45_savings || 0) + (freezeWaterfall.eb23_savings || 0);
   const acceleration = (sdData.months_to_clear || 0) - (freezeSD.months_to_clear || 0);
 
   return (
@@ -57,7 +57,7 @@ export default function Overview() {
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-navy-900">Dashboard Overview</h2>
-          <p className="text-slate-500">Predicting the Impact of 2026/2027 U.S. Immigrant Visa Restrictions</p>
+          <p className="text-slate-500">India EB-1 projections under current 91-country IV restrictions (Proclamations + DOS pause)</p>
         </div>
         <div className="flex gap-2">
           <div className="px-3 py-1 bg-crimson-600 text-white text-xs font-bold rounded-full flex items-center gap-1 animate-pulse">
@@ -75,7 +75,7 @@ export default function Overview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-navy-900">+{windfall?.toLocaleString()}</div>
-            <p className="text-xs text-crimson-600 font-medium">Extra visas from bans & freezes</p>
+            <p className="text-xs text-crimson-600 font-medium">Extra visas from 91-country restrictions</p>
           </CardContent>
         </Card>
         
@@ -97,7 +97,7 @@ export default function Overview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-emerald-700">{acceleration} Months</div>
-            <p className="text-xs text-emerald-600 font-medium">Faster clearance due to bans</p>
+            <p className="text-xs text-emerald-600 font-medium">Faster vs. baseline (no restrictions)</p>
           </CardContent>
         </Card>
 
@@ -122,7 +122,7 @@ export default function Overview() {
           </CardHeader>
           <CardContent className="space-y-4 text-slate-600">
             <p>
-              <strong>Hypothetical Scenario:</strong> Models potential demand reductions (per INA 201/203 spillover). As of May 2026 Visa Bulletin, India EB-1 Final Action is 01APR23 (no enacted broad 75-country freeze). See research notes in docs/.
+              <strong>Current Policy:</strong> 91 countries have consular IV issuance paused or suspended (39-country Proclamation entry ban + 75-country DOS public charge IV pause, eff. Jan 2026). India/China excluded. Savings computed from actual DOS issuance data (INA 201/203 spillover). See <a href="/methodology" className="underline text-navy-900 hover:text-crimson-600">Methodology</a>.
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 border rounded-lg bg-slate-50">
@@ -130,14 +130,14 @@ export default function Overview() {
                   <span className="w-2 h-2 rounded-full bg-crimson-600" />
                   Bypassing 7% Caps
                 </h4>
-                <p className="text-sm">Unused visas spill over to backlogged countries by priority date, ignoring per-country limits.</p>
+                <p className="text-sm">Unused visas from restricted countries spill to backlogged countries like India, bypassing 7% caps.</p>
               </div>
               <div className="p-4 border rounded-lg bg-slate-50">
                 <h4 className="font-semibold text-navy-900 mb-1 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-navy-900" />
                   EB-4/5 Spill-Up
                 </h4>
-                <p className="text-sm">Restrictions on investor and special categories funnel 100% of unused capacity to EB-1.</p>
+                <p className="text-sm">Unused EB-4/5 (investor + special immigrant) capacity rolls up 100% to EB-1 per INA 203(b).</p>
               </div>
             </div>
           </CardContent>

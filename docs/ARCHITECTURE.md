@@ -10,8 +10,12 @@
 - FB spillover (201(c)): Prior FY unused family (226k floor) added to EB pool.
 - EB shares (203(b)): EB-1 28.6% + EB4/5 unused (roll-up); EB-2/3 fall-down.
 - Per-country (202): 7% cap, surplus bypass for India/China backlogs.
-- "75-Country Freeze": Hypothetical demand-curtailment scenario (not enacted policy as of May 2026 bulletins). India excluded from default restricted list.
-- **Real 2025-2026 policy (distinct):** Presidential Proclamations 10949 (Jun 2025) + 10998 (Dec 2025, eff Jan 2026) suspend IVs for specific countries (full: Afghanistan, Haiti, Iran, etc.; partial incl. Nigeria, Venezuela, Cuba; **India/China explicitly excluded** per DOS). "allowed some reallocation of visa numbers to other countries under INA limits." (travel.state.gov). ACTUAL_RESTRICTED_COUNTRIES models this for accurate spillover.
+- "Maximum Restriction Scenario" (`apply_freeze`): Hypothetical demand-curtailment on top-consuming countries NOT already restricted (Philippines, Mexico, Dominican Republic, Vietnam, China-mainland). Extends beyond the real 91-country restrictions. India excluded.
+- **Real 2025-2026 policy (TWO stacking policies):**
+  - *Proclamation entry ban (39 countries):* Proclamations 10949 (Jun 2025) + 10998 (Dec 2025) suspend IV entry. India/China explicitly excluded.
+  - *DOS 75-country IV pause (eff. Jan 21, 2026):* Consular IV issuance paused for 75 countries (public charge risk). Adds major countries not on Proclamation: Brazil, Pakistan, Bangladesh, Egypt, Ethiopia, Colombia, Ghana, Iraq, etc. Pending lawsuit: CLINIC v. Rubio (S.D.N.Y.).
+  - *Union = 91 countries* in `ACTUAL_RESTRICTED_COUNTRIES`. Savings derived from actual DOS consular IV issuance data (ground truth). No dampening.
+  - *USCIS adjudicative hold (39 Proclamation countries):* Vacated Jun 5, 2026 (Dorcas v. USCIS). No model impact — affects domestic I-485 processing, not consular issuances measured by DOS.
 - Current reality (May 2026 VB): "India EB-1 Final Action Date (FAD): 01APR23" (https://travel.state.gov/.../visa-bulletin-for-may-2026.html). "High demand and number use by aliens chargeable to India in the EB-1 ... have made it necessary to retrogress the final action dates..." FY2024 Visa Office: "~6,952 were issued to applicants chargeable to India" (out of 47,462 EB-1 total). USCIS Jan 2026 inv: 48,162 (2.2x) India EB-1 pending. No INA 201/203 amendments.
 
 ## Core Components

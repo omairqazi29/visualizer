@@ -45,10 +45,22 @@ def test_default_india_eb1_supply():
 
 
 def test_actual_restricted_countries():
-    # Real (not hypo) countries from 2025-2026 Proclamations; India/China excluded; used for accurate current-policy spillover
+    # Union of 39-country Proclamation ban + 75-country DOS IV pause = 91 countries
     assert isinstance(ACTUAL_RESTRICTED_COUNTRIES, set)
-    assert len(ACTUAL_RESTRICTED_COUNTRIES) >= 10
+    assert len(ACTUAL_RESTRICTED_COUNTRIES) == 91
+    # Proclamation ban countries
     assert "Haiti" in ACTUAL_RESTRICTED_COUNTRIES
     assert "Nigeria" in ACTUAL_RESTRICTED_COUNTRIES
+    assert "Venezuela" in ACTUAL_RESTRICTED_COUNTRIES
+    # DOS IV pause countries (not on Proclamation)
+    assert "Brazil" in ACTUAL_RESTRICTED_COUNTRIES
+    assert "Pakistan" in ACTUAL_RESTRICTED_COUNTRIES
+    assert "Bangladesh" in ACTUAL_RESTRICTED_COUNTRIES
+    assert "Egypt" in ACTUAL_RESTRICTED_COUNTRIES
+    # Beneficiaries must never be on the list
     assert "India" not in ACTUAL_RESTRICTED_COUNTRIES
     assert "China - mainland born" not in ACTUAL_RESTRICTED_COUNTRIES
+    # Major IV consumers NOT on any real restriction list
+    assert "Philippines" not in ACTUAL_RESTRICTED_COUNTRIES
+    assert "Mexico" not in ACTUAL_RESTRICTED_COUNTRIES
+

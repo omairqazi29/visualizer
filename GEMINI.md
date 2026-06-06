@@ -9,3 +9,15 @@
 - **Python/Pandas**: Mandatory for data processing to handle messy government Excel/CSV headers and 'D' disclosure strings.
 - **Dependent Multiplier**: Always use a 2.2x multiplier for dependents on all primary I-140 and I-485 counts.
 - **INA Logic**: Adhere to INA 201/203 spillover flow and the '75-Country Freeze' redistribution logic as defined in the core engine.
+
+## Policy & Data Verification (IMPORTANT)
+When asked to update numbers, verify policies, or respond to legal/policy changes:
+
+1. **Read `docs/POLICY_VERIFICATION.md` first** — it is the canonical process for all data and policy updates.
+2. **DOS data is ground truth.** The model derives restriction savings from actual DOS consular IV issuance data (`data/DOS/*.xlsx`). Never apply artificial dampening factors to DOS-derived numbers.
+3. **Distinguish consular vs domestic.** Presidential Proclamation entry bans affect consular IVs (DOS data, model uses this). USCIS adjudicative holds affect domestic I-485 processing (NOT in DOS data, no model impact). Court rulings must be evaluated against this distinction.
+4. **Country list lives in `src/constants.py`** as `ACTUAL_RESTRICTED_COUNTRIES`. Must match current Presidential Proclamations. India and China-mainland must always be EXCLUDED.
+5. **Data updates are drop-in.** New DOS/USCIS Excel files go in `data/` — auto-discovered by parsers. No code changes needed for new data files.
+6. **Always run tests** after any change: `python3 -m pytest tests/ -v`
+7. **Update the changelog** at the bottom of `docs/POLICY_VERIFICATION.md` after any policy or data change.
+8. **The `/api/methodology` endpoint and frontend `/methodology` page** expose the current model parameters, country list, data sources, and legal status. Keep `api/main.py` `get_methodology()` in sync with `src/constants.py`.

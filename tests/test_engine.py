@@ -77,15 +77,50 @@ def test_ina_7_percent_bypass():
 
 
 def test_supply_real_restrictions_increases_india_supply():
-    """Real restrictions (actual policy) must increase India EB-1 supply over baseline for accuracy."""
+    """Real restrictions must increase India EB-1 supply with proper INA cascade."""
     from src.engine.supply import SupplyCalculator
-    from src.constants import DEFAULT_INDIA_EB1_SUPPLY, ACTUAL_RESTRICTED_COUNTRIES
+    from src.constants import ACTUAL_RESTRICTED_COUNTRIES, INDIA_OVERSUBSCRIBED_SHARE
     calc = SupplyCalculator()
     std = calc.get_supply_breakdown(apply_freeze=False, apply_real_restrictions=False)
     real = calc.get_supply_breakdown(apply_freeze=False, apply_real_restrictions=True)
+    # India supply must increase under restrictions
     assert real.india_eb1_supply > std.india_eb1_supply
-    assert real.india_eb1_supply >= DEFAULT_INDIA_EB1_SUPPLY
+    # Baseline is always the same constant (FY2024)
+    assert real.india_eb1_baseline == std.india_eb1_baseline
+    assert std.india_eb1_baseline == 6952
+    # India does NOT get 100% of total EB-1
+    assert real.india_eb1_supply < real.total_eb1
+    assert real.non_india_eb1 > 0
+    # Total EB-1 = eb1_from_pool + eb45_spillover
+    assert real.total_eb1 == real.eb1_from_pool + real.eb45_spillover
+    # Full INA cascade: pool = base + fb_spillover
+    assert real.total_eb_pool == real.eb_base_limit + real.fb_spillover
+    # Savings from ALL categories under restrictions
+    assert real.fb_savings > 0
+    assert real.eb1_savings >= 0   # small — EBs are AOS-heavy
+    assert real.eb45_savings >= 0
+    assert real.eb23_savings >= 0
+    # Baseline: all savings zero, India = baseline constant
+    assert std.fb_savings == 0
+    assert std.eb45_savings == 0
+    assert std.eb1_savings == 0
+    assert std.eb23_savings == 0
+    assert std.india_eb1_supply == std.india_eb1_baseline
+    # Restrictions expand total EB pool and total EB-1
+    assert real.total_eb_pool > std.total_eb_pool
+    assert real.total_eb1 > std.total_eb1
     assert len(ACTUAL_RESTRICTED_COUNTRIES) > 0
+    # Data-driven share is included and reasonable
+    assert 0.5 < real.india_oversubscribed_share < 1.0
+    assert 0.5 < std.india_oversubscribed_share < 1.0
+
+
+def test_compute_india_share_data_driven():
+    """SupplyCalculator.compute_india_share uses inventory data, not hardcoded."""
+    from src.engine.supply import SupplyCalculator
+    share = SupplyCalculator.compute_india_share()
+    # Should be between 0.80 and 0.90 given current data (India ~22k vs China ~4k EB-1)
+    assert 0.75 < share < 0.95
 
 
 def test_predict_accuracy_for_2023_pd_uses_mountain_backlog():
