@@ -4,6 +4,9 @@ All statutory limits, shares, and multipliers are defined here per INA 201/203
 and the project's modeling assumptions.
 """
 
+import csv
+from functools import lru_cache
+
 # INA 201(c) Family-Based annual floor (used to compute EB spillover)
 FB_STATUTORY_LIMIT: int = 226000
 
@@ -34,11 +37,12 @@ PER_COUNTRY_CAP: float = 0.07
 # NOTE: Only applied to I-140 pipeline. I-485 inventory already counts each
 # person individually (principal + derivatives each file their own I-485).
 # See USCIS Q&A: "Pending EB I-485 Inventory" — confirmed to include derivatives.
+# Prefer get_data_driven_multipliers() for data-driven values; these are fallback defaults.
 DEPENDENT_MULTIPLIER: float = 2.5            # EB-1 default (used as fallback)
 EB1_DEPENDENT_MULTIPLIER: float = 2.5        # EB-1: ~1.5 derivatives per principal
 EB2_DEPENDENT_MULTIPLIER: float = 2.0        # EB-2: ~1.0 derivative per principal
 EB3_DEPENDENT_MULTIPLIER: float = 2.1        # EB-3: ~1.06 derivatives per principal
-EB45_DEPENDENT_MULTIPLIER: float = 1.5       # EB-4/5: lower derivative rate
+EB45_DEPENDENT_MULTIPLIER: float = 2.35      # EB-4/5: 5-year avg from DHS Table 7 (EB-4 ~2.35x, EB-5 ~2.55x)
 
 # Researched baseline for India EB-1 annual supply under standard INA flow.
 # Value derived from official FY2024 data: India received 6,952 EB-1 visas
@@ -216,6 +220,37 @@ EB45_CATEGORIES: list[str] = [
     "T5",
 ]
 
+
+@lru_cache(maxsize=1)
+def get_data_driven_multipliers(csv_path: str = "data/DHS_Yearbook/dhs_table7_eb_multipliers.csv") -> dict[str, float]:
+    """Load dependent multipliers from DHS Yearbook Table 7 data.
+
+    Returns multipliers for the latest available fiscal year.
+    Falls back to hardcoded constants if CSV is unavailable.
+
+    Source: DHS Yearbook of Immigration Statistics, Table 7 —
+    Persons Obtaining LPR Status by Type and Detailed Class of Admission.
+    """
+    try:
+        with open(csv_path, newline="") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+        if not rows:
+            raise FileNotFoundError
+        # Find latest fiscal year
+        latest_fy = max(int(r["fiscal_year"]) for r in rows)
+        latest = {r["category"]: float(r["multiplier"]) for r in rows if int(r["fiscal_year"]) == latest_fy}
+        return latest
+    except (FileNotFoundError, KeyError, ValueError):
+        return {
+            "EB1": EB1_DEPENDENT_MULTIPLIER,
+            "EB2": EB2_DEPENDENT_MULTIPLIER,
+            "EB3": EB3_DEPENDENT_MULTIPLIER,
+            "EB4": EB45_DEPENDENT_MULTIPLIER,
+            "EB5": EB45_DEPENDENT_MULTIPLIER,
+        }
+
+
 __all__ = [
     "FB_STATUTORY_LIMIT",
     "EB_BASE_LIMIT",
@@ -239,4 +274,5 @@ __all__ = [
     "EB2_DEPENDENT_MULTIPLIER",
     "EB3_DEPENDENT_MULTIPLIER",
     "EB45_DEPENDENT_MULTIPLIER",
+    "get_data_driven_multipliers",
 ]

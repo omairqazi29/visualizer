@@ -15,8 +15,10 @@ from src.parsers.pipeline_parser import PipelineParser
 from src.parsers.visa_bulletin_parser import VisaBulletinParser
 from src.parsers.nvc_parser import NVCParser
 from src.parsers.i485_parser import I485FlowParser
+from src.parsers.processing_times_parser import ProcessingTimesParser
 from src.engine.demand import DemandModeler
 from src.engine.supply import SupplyCalculator
+from src.parsers.dhs_yearbook_parser import DhsYearbookParser
 from src.constants import ACTUAL_RESTRICTED_COUNTRIES, DEFAULT_INDIA_EB1_SUPPLY, FB_STATUTORY_LIMIT
 
 app = FastAPI(title="The Spillover Engine API")
@@ -473,6 +475,72 @@ async def get_i485_flow():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class ProcessingTimePoint(BaseModel):
+    publication_date: str
+    office_code: str
+    office_name: str
+    form_type: str
+    category: str
+    processing_time_min_months: float
+    processing_time_max_months: float
+    receipt_date_for_inquiry: str
+
+
+class ProcessingTimesCategoryBreakdown(BaseModel):
+    avg_min_months: float
+    avg_max_months: float
+    avg_midpoint_months: float
+    avg_spread_months: float
+    centers_count: int
+    fastest_center: str
+    slowest_center: str
+
+
+class ProcessingTimesResponse(BaseModel):
+    time_series: list[ProcessingTimePoint]
+    latest: list[ProcessingTimePoint]
+    summary: dict
+
+
+@app.get("/api/processing-times", response_model=ProcessingTimesResponse)
+async def get_processing_times(
+    category: str = Query(
+        None,
+        description="Filter by EB category (EB-1, EB-2, EB-3). Returns all if omitted.",
+    ),
+    office_code: str = Query(
+        None,
+        description="Filter by service center code (NSC, TSC, NBC, PSC). Returns all if omitted.",
+    ),
+):
+    """Returns USCIS processing times by service center for EB I-485.
+
+    Shows how fast each service center (Nebraska, Texas, NBC, Potomac) is
+    actually adjudicating EB I-485s. Reveals domestic processing bottlenecks
+    that affect how quickly approved visa numbers turn into green cards.
+
+    Data source: USCIS Processing Times page (egov.uscis.gov/processing-times/).
+    Published monthly.
+    """
+    try:
+        parser = ProcessingTimesParser()
+        time_series = parser.get_time_series(category=category, office_code=office_code)
+        latest = parser.get_latest()
+        if category:
+            latest = [r for r in latest if r["category"] == category]
+        if office_code:
+            latest = [r for r in latest if r["office_code"] == office_code]
+        summary = parser.get_bottleneck_summary()
+
+        return ProcessingTimesResponse(
+            time_series=[ProcessingTimePoint(**{k: v for k, v in r.items() if k in ProcessingTimePoint.model_fields}) for r in time_series],
+            latest=[ProcessingTimePoint(**{k: v for k, v in r.items() if k in ProcessingTimePoint.model_fields}) for r in latest],
+            summary=summary,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class MethodologyResponse(BaseModel):
     restricted_countries: List[str]
     restricted_countries_count: int
@@ -494,7 +562,7 @@ async def get_methodology():
         india_eb1_baseline=DEFAULT_INDIA_EB1_SUPPLY,
         eb_base_limit=140000,
         fb_statutory_limit=226000,
-        dependent_multiplier=2.5,
+        dependent_multiplier=DhsYearbookParser().get_latest_multipliers().get("EB1", 2.5),
         data_sources=[
             {
                 "name": "DOS Monthly IV Issuances",
@@ -537,6 +605,20 @@ async def get_methodology():
                 "url": "https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data",
                 "coverage": "Jul 2024 – Feb 2026 (monthly) + FY2024–FY2025 (quarterly)",
                 "update_frequency": "Monthly (Congressional mandate)",
+            },
+            {
+                "name": "USCIS Processing Times by Service Center",
+                "description": "Monthly processing times for EB I-485 at each service center (Nebraska, Texas, NBC, Potomac). Shows domestic adjudication bottlenecks.",
+                "url": "https://egov.uscis.gov/processing-times/",
+                "coverage": "Jan 2024 – May 2025",
+                "update_frequency": "Monthly",
+            },
+            {
+                "name": "DHS Yearbook Table 7 (EB Multipliers)",
+                "description": "Persons Obtaining LPR Status by Type and Detailed Class of Admission — used to compute principal-to-total multipliers per EB category",
+                "url": "https://ohss.dhs.gov/topics/immigration/yearbook",
+                "coverage": "FY2015–FY2023",
+                "update_frequency": "Annual (released ~9 months after FY end)",
             },
             {
                 "name": "NVC IV Backlog Report",
@@ -619,6 +701,48 @@ async def get_visa_bulletin_history(
             categories=categories,
             total_rows=len(history),
             history=history,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class DependentMultiplierResponse(BaseModel):
+    """DHS Yearbook Table 7 dependent multiplier data."""
+    available_years: List[int]
+    latest_year: int
+    latest_multipliers: dict[str, float]
+    average_multipliers_5yr: dict[str, float]
+    historical: dict[str, list[dict]]  # {category: [{fiscal_year, multiplier, ...}]}
+    notes: dict
+
+
+@app.get("/api/dependent-multipliers", response_model=DependentMultiplierResponse)
+async def get_dependent_multipliers():
+    """Returns dependent multiplier data from DHS Yearbook Table 7.
+
+    Shows how many total persons (principals + spouses + children) are admitted
+    per EB category for each I-140 principal. Used to convert I-140 pipeline
+    counts (principal-only) into total visa demand.
+
+    Data source: DHS Yearbook of Immigration Statistics, Table 7 —
+    Persons Obtaining LPR Status by Type and Detailed Class of Admission.
+    FY2015–FY2023.
+    """
+    try:
+        parser = DhsYearbookParser()
+        summary = parser.get_summary()
+
+        historical: dict[str, list[dict]] = {}
+        for cat in ["EB1", "EB2", "EB3", "EB4", "EB5"]:
+            historical[cat] = parser.get_category_detail(cat)
+
+        return DependentMultiplierResponse(
+            available_years=summary["available_years"],
+            latest_year=summary["latest_year"],
+            latest_multipliers=summary["latest_multipliers"],
+            average_multipliers_5yr=summary["average_multipliers_5yr"],
+            historical=historical,
+            notes=summary["notes"],
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -2,12 +2,7 @@ from .base import BaseParser
 import pandas as pd
 
 from ..data_discovery import get_latest_pipeline_path
-from ..constants import (
-    EB1_DEPENDENT_MULTIPLIER,
-    EB2_DEPENDENT_MULTIPLIER,
-    EB3_DEPENDENT_MULTIPLIER,
-    EB45_DEPENDENT_MULTIPLIER,
-)
+from ..constants import get_data_driven_multipliers
 
 
 # Column header substrings for each EB category in the I-140 pipeline file
@@ -20,15 +15,23 @@ _PIPELINE_COL_MAP = {
     "EB5": "5th",
 }
 
-# Category-specific dependent multipliers (DHS Yearbook Table 7)
-_CATEGORY_MULTIPLIERS = {
-    "EB1": EB1_DEPENDENT_MULTIPLIER,       # 2.5x
-    "EB2": EB2_DEPENDENT_MULTIPLIER,       # 2.0x
-    "EB3_skilled": EB3_DEPENDENT_MULTIPLIER,  # 2.1x
-    "EB3_other": EB3_DEPENDENT_MULTIPLIER,    # 2.1x
-    "EB4": EB45_DEPENDENT_MULTIPLIER,      # 1.5x
-    "EB5": EB45_DEPENDENT_MULTIPLIER,      # 1.5x
-}
+
+def _get_category_multipliers() -> dict[str, float]:
+    """Build pipeline category multipliers from DHS Yearbook Table 7 data.
+
+    Maps pipeline column keys (EB1, EB2, EB3_skilled, EB3_other, EB4, EB5)
+    to data-driven multipliers.  Falls back to hardcoded constants if CSV
+    is unavailable.
+    """
+    m = get_data_driven_multipliers()
+    return {
+        "EB1": m.get("EB1", 2.5),
+        "EB2": m.get("EB2", 2.0),
+        "EB3_skilled": m.get("EB3", 2.1),
+        "EB3_other": m.get("EB3", 2.1),
+        "EB4": m.get("EB4", 2.35),
+        "EB5": m.get("EB5", 2.55),
+    }
 
 # Country row labels in the pipeline file
 _PIPELINE_COUNTRIES = ["India", "China", "Mexico", "Philippines", "Rest of the World"]
@@ -91,12 +94,13 @@ class PipelineParser(BaseParser):
         """Return all EB category pipeline totals (with category-specific dependent multipliers).
 
         I-140 pipeline counts primary beneficiaries only. Each category uses its own
-        multiplier from DHS Yearbook Table 7 (EB-1: 2.5x, EB-2: 2.0x, EB-3: 2.1x, EB-4/5: 1.5x).
+        multiplier from DHS Yearbook Table 7 data (data-driven, auto-updated).
         Returns nested dict: {"India": {"EB1": 51480, "EB2": 692658, ...}, ...}
         """
         if self.df is None:
             self.load_data()
 
+        cat_multipliers = _get_category_multipliers()
         result = {}
         for country in _PIPELINE_COUNTRIES:
             key = "ROW" if "Rest" in country else country
@@ -104,7 +108,7 @@ class PipelineParser(BaseParser):
             for cat_key, col_substr in _PIPELINE_COL_MAP.items():
                 val = self._get_cell(country, col_substr)
                 if val > 0:
-                    mult = _CATEGORY_MULTIPLIERS.get(cat_key, self.DEPENDENT_MULTIPLIER)
+                    mult = cat_multipliers.get(cat_key, self.DEPENDENT_MULTIPLIER)
                     entry[cat_key] = int(val * mult)
             if entry:
                 result[key] = entry

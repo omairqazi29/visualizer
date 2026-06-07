@@ -127,8 +127,84 @@ def test_pipeline_all_eb_pipeline():
     assert pipeline["India"]["EB1"] > 0
     assert "China" in pipeline
     assert pipeline["China"]["EB1"] > 0
-    # India EB2 pipeline is massive (346k primary * 2.0x EB-2 multiplier)
+    # India EB2 pipeline is massive (346k primary * ~2.0x EB-2 multiplier from DHS data)
     assert pipeline["India"]["EB2"] > 600000
+
+
+# ────────────────────────────────────────────────────────────
+# DHS Yearbook Table 7 (Dependent Multipliers) parser tests
+# ────────────────────────────────────────────────────────────
+
+from src.parsers.dhs_yearbook_parser import DhsYearbookParser
+
+
+def test_dhs_yearbook_latest_multipliers():
+    """Latest multipliers return all 5 EB categories with reasonable values."""
+    parser = DhsYearbookParser()
+    mults = parser.get_latest_multipliers()
+    assert len(mults) == 5
+    for cat in ["EB1", "EB2", "EB3", "EB4", "EB5"]:
+        assert cat in mults
+        assert 1.0 < mults[cat] < 4.0, f"{cat} multiplier {mults[cat]} out of range"
+    # EB-1 should be around 2.5 (historically stable)
+    assert 2.3 < mults["EB1"] < 2.6
+    # EB-2 should be around 2.0
+    assert 1.6 < mults["EB2"] < 2.2
+
+
+def test_dhs_yearbook_historical_multipliers():
+    """Historical multipliers cover FY2015-FY2023."""
+    parser = DhsYearbookParser()
+    hist = parser.get_historical_multipliers()
+    assert len(hist) >= 9  # FY2015-FY2023
+    assert 2023 in hist
+    assert 2015 in hist
+    # Multipliers should be consistent across years
+    for fy, mults in hist.items():
+        assert 2.0 < mults["EB1"] < 3.0, f"FY{fy} EB1 out of range"
+
+
+def test_dhs_yearbook_average_multipliers():
+    """5-year average multipliers match expectations."""
+    parser = DhsYearbookParser()
+    avg = parser.get_average_multipliers(5)
+    # EB-1 5yr avg should be ~2.47
+    assert 2.3 < avg["EB1"] < 2.6
+    # EB-2 5yr avg should be ~1.92
+    assert 1.7 < avg["EB2"] < 2.2
+
+
+def test_dhs_yearbook_category_detail():
+    """Category detail returns per-year breakdown with principals/derivatives."""
+    parser = DhsYearbookParser()
+    detail = parser.get_category_detail("EB1")
+    assert len(detail) >= 9
+    # Each row should have the expected fields
+    for row in detail:
+        assert "fiscal_year" in row
+        assert "principals" in row
+        assert "derivatives" in row
+        assert "multiplier" in row
+        assert row["total"] == row["principals"] + row["derivatives"]
+
+
+def test_dhs_yearbook_summary():
+    """Summary returns comprehensive data."""
+    parser = DhsYearbookParser()
+    summary = parser.get_summary()
+    assert summary["latest_year"] == 2023
+    assert len(summary["available_years"]) >= 9
+    assert "notes" in summary
+    assert summary["notes"]["source"] == "DHS Yearbook of Immigration Statistics, Table 7"
+
+
+def test_dhs_yearbook_fallback():
+    """Parser falls back to hardcoded values when data dir is missing."""
+    parser = DhsYearbookParser(data_dir="/nonexistent/path")
+    mults = parser.get_latest_multipliers()
+    assert mults["EB1"] == 2.5
+    assert mults["EB2"] == 2.0
+    assert mults["EB3"] == 2.1
 
 
 # ────────────────────────────────────────────────────────────
@@ -200,3 +276,107 @@ def test_nvc_parser_yoy_comparison():
     # 2022 EB1 was 8818, 2023 was 20582 (+133%)
     assert yoy["2022-11-01"]["EB1"] == 8818
     assert yoy["2023-11-01"]["EB1"] == 20582
+
+
+# ────────────────────────────────────────────────────────────
+# USCIS Processing Times by Service Center
+# ────────────────────────────────────────────────────────────
+
+from src.parsers.processing_times_parser import ProcessingTimesParser
+
+def test_processing_times_load():
+    """Processing times CSV loads and returns data."""
+    parser = ProcessingTimesParser()
+    data = parser.get_time_series()
+    assert len(data) > 0
+    # Each record has required fields
+    first = data[0]
+    assert "publication_date" in first
+    assert "office_code" in first
+    assert "category" in first
+    assert "processing_time_min_months" in first
+    assert "processing_time_max_months" in first
+    # Min < max always
+    for r in data:
+        assert r["processing_time_min_months"] < r["processing_time_max_months"]
+
+
+def test_processing_times_centers():
+    """All four service centers present in data."""
+    parser = ProcessingTimesParser()
+    centers = parser.get_all_centers()
+    assert "NSC" in centers
+    assert "TSC" in centers
+    assert "NBC" in centers
+    assert "PSC" in centers
+
+
+def test_processing_times_categories():
+    """EB-1, EB-2, EB-3 all present."""
+    parser = ProcessingTimesParser()
+    data = parser.get_time_series()
+    categories = set(r["category"] for r in data)
+    assert "EB-1" in categories
+    assert "EB-2" in categories
+    assert "EB-3" in categories
+
+
+def test_processing_times_latest():
+    """Latest snapshot has data for all 4 centers × 3 categories = 12 rows."""
+    parser = ProcessingTimesParser()
+    latest = parser.get_latest()
+    assert len(latest) == 12  # 4 centers × 3 categories
+
+
+def test_processing_times_center_comparison():
+    """Center comparison for EB-1 returns ranked results."""
+    parser = ProcessingTimesParser()
+    comparison = parser.get_center_comparison("EB-1")
+    assert len(comparison) == 4
+    # Ranks should be 1-4
+    ranks = [r["rank"] for r in comparison]
+    assert sorted(ranks) == [1, 2, 3, 4]
+    # TSC is historically fastest, NBC slowest
+    assert comparison[0]["office_code"] == "TSC"
+    assert comparison[-1]["office_code"] == "NBC"
+
+
+def test_processing_times_filter_category():
+    """Filtering by category returns only that category."""
+    parser = ProcessingTimesParser()
+    eb1_only = parser.get_time_series(category="EB-1")
+    assert all(r["category"] == "EB-1" for r in eb1_only)
+    assert len(eb1_only) < len(parser.get_time_series())
+
+
+def test_processing_times_filter_center():
+    """Filtering by office_code returns only that center."""
+    parser = ProcessingTimesParser()
+    nsc_only = parser.get_time_series(office_code="NSC")
+    assert all(r["office_code"] == "NSC" for r in nsc_only)
+
+
+def test_processing_times_bottleneck_summary():
+    """Bottleneck summary has expected structure."""
+    parser = ProcessingTimesParser()
+    summary = parser.get_bottleneck_summary()
+    assert summary["data_points"] > 0
+    assert summary["months_of_data"] >= 12
+    assert summary["eb1_fastest_center"] in ("TSC", "NSC", "PSC", "NBC")
+    assert summary["eb1_slowest_center"] in ("TSC", "NSC", "PSC", "NBC")
+    assert summary["eb1_fastest_center"] != summary["eb1_slowest_center"]
+    assert summary["eb1_trend"] in ("improving", "worsening", "stable")
+    # Per-category breakdown
+    assert "EB-1" in summary["by_category"]
+    assert "EB-2" in summary["by_category"]
+    assert "EB-3" in summary["by_category"]
+    # EB-3 should be slower than EB-1
+    assert summary["by_category"]["EB-3"]["avg_midpoint_months"] > summary["by_category"]["EB-1"]["avg_midpoint_months"]
+
+
+def test_processing_times_trend_direction():
+    """Processing times are trending worsening (as built into seed data)."""
+    parser = ProcessingTimesParser()
+    summary = parser.get_bottleneck_summary()
+    # Seed data shows gradual increase from Jan 2024 to May 2025
+    assert summary["eb1_trend"] == "worsening"

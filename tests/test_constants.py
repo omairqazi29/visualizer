@@ -9,6 +9,8 @@ from src.constants import (
     DEPENDENT_MULTIPLIER,
     DEFAULT_INDIA_EB1_SUPPLY,
     ACTUAL_RESTRICTED_COUNTRIES,
+    EB45_DEPENDENT_MULTIPLIER,
+    get_data_driven_multipliers,
 )
 
 
@@ -44,6 +46,23 @@ def test_default_india_eb1_supply():
     # Researched value from FY2024 Report of the Visa Office (actual India EB-1 issuances: 6952)
     assert DEFAULT_INDIA_EB1_SUPPLY == 6952
     assert DEFAULT_INDIA_EB1_SUPPLY > 0
+
+
+def test_eb45_dependent_multiplier():
+    # Updated from 1.5 to 2.35 based on DHS Yearbook Table 7 5-year average
+    assert EB45_DEPENDENT_MULTIPLIER == 2.35
+
+
+def test_data_driven_multipliers():
+    """get_data_driven_multipliers returns multipliers from DHS Yearbook CSV."""
+    mults = get_data_driven_multipliers()
+    assert isinstance(mults, dict)
+    assert len(mults) == 5
+    for cat in ["EB1", "EB2", "EB3", "EB4", "EB5"]:
+        assert cat in mults
+        assert 1.0 < mults[cat] < 4.0, f"{cat} multiplier {mults[cat]} out of range"
+    # EB-1 should be ~2.5 from FY2023 data
+    assert 2.3 < mults["EB1"] < 2.6
 
 
 def test_actual_restricted_countries():

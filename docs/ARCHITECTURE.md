@@ -3,8 +3,8 @@
 ## Technology Stack (Current)
 - **Backend**: FastAPI + Python 3.11 + Pandas (data cleaning for DOS/USCIS Excel)
 - **Frontend**: Next.js 14 (App Router) + TypeScript + Tailwind + Recharts + shadcn/ui
-- **Key Modeling**: INA 201/203 limits, vertical spillovers (EB4/5 -> EB-1), 7% caps + 202(a)(5) surplus, category-specific dependent multipliers (DHS Yearbook Table 7: EB-1 2.5x, EB-2 2.0x, EB-3 2.1x, EB-4/5 1.5x — applied to I-140 pipeline only; I-485 inventory already includes dependents)
-- **Data**: Monthly DOS IV issuances (any in data/DOS/ via directory load), USCIS EB I-485 Inventory + I-140 pipeline via src/data_discovery (auto latest eb_inventory*.xlsx and *performance*.xlsx / eb_i140*.xlsx by filename date or mtime), NVC backlog (ARIVA + monthly IV backlog reports in data/NVC/). Drop-in support for new bulletins and quarterly releases.
+- **Key Modeling**: INA 201/203 limits, vertical spillovers (EB4/5 -> EB-1), 7% caps + 202(a)(5) surplus, data-driven category-specific dependent multipliers from DHS Yearbook Table 7 (auto-updated from `data/DHS_Yearbook/dhs_table7_eb_multipliers.csv`; FY2015–FY2023; applied to I-140 pipeline only; I-485 inventory already includes dependents)
+- **Data**: Monthly DOS IV issuances (any in data/DOS/ via directory load), USCIS EB I-485 Inventory + I-140 pipeline via src/data_discovery (auto latest eb_inventory*.xlsx and *performance*.xlsx / eb_i140*.xlsx by filename date or mtime), NVC backlog (ARIVA + monthly IV backlog reports in data/NVC/), DHS Yearbook Table 7 EB multipliers (data/DHS_Yearbook/). Drop-in support for new bulletins and quarterly releases.
 
 ## Research-Backed INA Fidelity Notes
 - FB spillover (201(c)): Prior FY unused family (226k floor) added to EB pool.
@@ -24,7 +24,8 @@
 - **BaseParser**: Header normalization (CHARGEABILITY_HEADERS), 'D'/<10 disclosure ->1 or mid.
 - **DOSParser**: Auto header detection, FB_CATEGORIES sum, monthly_distribution for burn-rate.
 - **InventoryParser** (revamped): Dynamic "Priority Date Year - XXXX" parsing for 2026+ reports; EB-1 filter handles full labels; no multiplier (I-485 already includes dependents per USCIS Q&A). Methods: `get_india_eb1_queue()`, `get_all_eb1_backlogs()`, `get_all_eb_backlogs()`.
-- **PipelineParser**: I-140 approved awaiting visas. Category-specific dependent multipliers (EB-1: 2.5x, EB-2: 2.0x, EB-3: 2.1x, EB-4/5: 1.5x). Methods: `get_india_eb1_backlog()`, `get_all_eb_pipeline()`.
+- **PipelineParser**: I-140 approved awaiting visas. Data-driven category-specific dependent multipliers from DHS Yearbook Table 7 (via `get_data_driven_multipliers()`). Methods: `get_india_eb1_backlog()`, `get_all_eb_pipeline()`.
+- **DhsYearbookParser**: DHS Yearbook Table 7 — computes principal-to-total multipliers by EB category from actual admissions data (FY2015–FY2023). Methods: `get_multipliers()`, `get_latest_multipliers()`, `get_historical_multipliers()`, `get_average_multipliers()`, `get_category_detail()`, `get_summary()`.
 - **NVCParser**: NVC (National Visa Center) backlog — the hidden pipeline stage between I-140 approval and consular interview. Reads pre-extracted CSV data from DOS ARIVA PDFs (data/NVC/). Covers consular processing (CP) cases ONLY — disjoint from I-485 inventory (AOS). Includes derivatives (no multiplier). Methods: `get_eb_totals()`, `get_india_eb_nvc()`, `get_india_eb1_nvc()`, `get_eb_by_country()`, `get_iv_backlog()`, `get_summary()`. Data: ARIVA Nov 2023 (260,660 EB worldwide; India 48,536 total, 2,426 EB-1). Monthly IV backlog report Sep 2024 (431k DQ cases, 385k pending scheduling).
 
 ### 2. Logic Engine (`src/engine`)

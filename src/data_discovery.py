@@ -212,6 +212,16 @@ def get_nvc_dir(data_dir: str = "data") -> str:
     return str(Path(data_dir) / "NVC")
 
 
+def get_processing_times_dir(data_dir: str = "data") -> str:
+    """Return path to USCIS Processing Times data directory."""
+    return str(Path(data_dir) / "USCIS_ProcessingTimes")
+
+
+def get_dhs_yearbook_dir(data_dir: str = "data") -> str:
+    """Return path to DHS Yearbook data directory (Table 7 EB multipliers)."""
+    return str(Path(data_dir) / "DHS_Yearbook")
+
+
 __all__ = [
     "MONTHS_MAP",
     "find_latest",
@@ -219,4 +229,6 @@ __all__ = [
     "get_latest_pipeline_path",
     "get_dos_dir",
     "get_nvc_dir",
+    "get_processing_times_dir",
+    "get_dhs_yearbook_dir",
 ]
