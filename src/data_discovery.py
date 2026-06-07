@@ -222,6 +222,11 @@ def get_dhs_yearbook_dir(data_dir: str = "data") -> str:
     return str(Path(data_dir) / "DHS_Yearbook")
 
 
+def get_dol_perm_dir(data_dir: str = "data") -> str:
+    """Return path to DOL PERM Labor Certification data directory."""
+    return str(Path(data_dir) / "DOL_PERM")
+
+
 __all__ = [
     "MONTHS_MAP",
     "find_latest",
@@ -231,4 +236,5 @@ __all__ = [
     "get_nvc_dir",
     "get_processing_times_dir",
     "get_dhs_yearbook_dir",
+    "get_dol_perm_dir",
 ]

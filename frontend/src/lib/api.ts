@@ -17,6 +17,10 @@ export const getMethodology = () =>
   api.get('/methodology').then(res => res.data);
 export const getI485Flow = () =>
   api.get('/i485-flow').then(res => res.data);
+export const getProcessingTimes = (category?: string, officeCode?: string) =>
+  api.get('/processing-times', { params: { category, office_code: officeCode } }).then(res => res.data);
+export const getPERMPipeline = () =>
+  api.get('/perm-pipeline').then(res => res.data);
 
 // Strongly typed API response shapes (mirrors backend Pydantic models)
 export interface WaterfallData {
@@ -107,6 +111,45 @@ export interface MethodologyData {
   last_verified: string;
 }
 
+export interface ProcessingTimePoint {
+  publication_date: string;
+  office_code: string;
+  office_name: string;
+  form_type: string;
+  category: string;
+  processing_time_min_months: number;
+  processing_time_max_months: number;
+  receipt_date_for_inquiry: string;
+}
+
+export interface ProcessingTimesData {
+  time_series: ProcessingTimePoint[];
+  latest: ProcessingTimePoint[];
+  summary: {
+    publication_date: string;
+    data_points: number;
+    months_of_data: number;
+    coverage: string;
+    centers: string[];
+    eb1_fastest_center: string;
+    eb1_fastest_center_name: string;
+    eb1_fastest_midpoint: number;
+    eb1_slowest_center: string;
+    eb1_slowest_center_name: string;
+    eb1_slowest_midpoint: number;
+    eb1_trend: string;
+    by_category: Record<string, {
+      avg_min_months: number;
+      avg_max_months: number;
+      avg_midpoint_months: number;
+      avg_spread_months: number;
+      centers_count: number;
+      fastest_center: string;
+      slowest_center: string;
+    }>;
+  };
+}
+
 export interface I485FlowPoint {
   period: string;
   year: number;
@@ -141,6 +184,72 @@ export interface I485FlowData {
     pending_trend_pct: number;
     data_points: number;
     coverage: string;
+    source: string;
+  };
+}
+
+export interface PERMFYData {
+  fiscal_year: number;
+  total: number;
+  india: number;
+  china: number;
+  row: number;
+  has_country_data: boolean;
+}
+
+export interface PERMCategoryData {
+  fiscal_year: number;
+  eb2: number;
+  eb3: number;
+  unknown: number;
+  total: number;
+}
+
+export interface PERMIndiaPipeline {
+  fiscal_year: number;
+  eb2: number;
+  eb3: number;
+  unknown: number;
+  total: number;
+}
+
+export interface PERMStatusData {
+  fiscal_year: number;
+  certified: number;
+  certified_expired: number;
+  denied: number;
+  withdrawn: number;
+  other: number;
+  total: number;
+  approval_rate: number;
+}
+
+export interface PERMTopCountry {
+  country: string;
+  total: number;
+  pct: number;
+}
+
+export interface PERMPipelineData {
+  by_fy: PERMFYData[];
+  by_category: PERMCategoryData[];
+  india_pipeline: PERMIndiaPipeline[];
+  status_breakdown: PERMStatusData[];
+  top_countries: PERMTopCountry[];
+  summary: {
+    total_cases: number;
+    total_certified: number;
+    total_india_certified: number;
+    fiscal_years: number[];
+    latest_fy: number | null;
+    india_latest: {
+      fiscal_year: number;
+      total: number;
+      eb2: number;
+      eb3: number;
+    } | Record<string, never>;
+    india_yoy_growth_pct: number | null;
+    data_points: number;
     source: string;
   };
 }

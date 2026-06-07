@@ -19,6 +19,7 @@ from src.parsers.processing_times_parser import ProcessingTimesParser
 from src.engine.demand import DemandModeler
 from src.engine.supply import SupplyCalculator
 from src.parsers.dhs_yearbook_parser import DhsYearbookParser
+from src.parsers.perm_parser import PERMParser
 from src.constants import ACTUAL_RESTRICTED_COUNTRIES, DEFAULT_INDIA_EB1_SUPPLY, FB_STATUTORY_LIMIT
 
 app = FastAPI(title="The Spillover Engine API")
@@ -541,6 +542,83 @@ async def get_processing_times(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class PERMFYData(BaseModel):
+    fiscal_year: int
+    total: int
+    india: int
+    china: int
+    row: int
+    has_country_data: bool
+
+
+class PERMCategoryData(BaseModel):
+    fiscal_year: int
+    eb2: int
+    eb3: int
+    unknown: int
+    total: int
+
+
+class PERMIndiaPipeline(BaseModel):
+    fiscal_year: int
+    eb2: int
+    eb3: int
+    unknown: int
+    total: int
+
+
+class PERMStatusData(BaseModel):
+    fiscal_year: int
+    certified: int
+    certified_expired: int
+    denied: int
+    withdrawn: int
+    other: int
+    total: int
+    approval_rate: float
+
+
+class PERMTopCountry(BaseModel):
+    country: str
+    total: int
+    pct: float
+
+
+class PERMPipelineResponse(BaseModel):
+    """DOL PERM Labor Certification pipeline — leading indicator of EB-2/EB-3 I-140 filings."""
+    by_fy: list[PERMFYData]
+    by_category: list[PERMCategoryData]
+    india_pipeline: list[PERMIndiaPipeline]
+    status_breakdown: list[PERMStatusData]
+    top_countries: list[PERMTopCountry]
+    summary: dict
+
+
+@app.get("/api/perm-pipeline", response_model=PERMPipelineResponse)
+async def get_perm_pipeline():
+    """Returns DOL PERM Labor Certification data — the upstream pipeline that
+    feeds into EB-2/EB-3 I-140 filings.
+
+    Each certified PERM is a ~12-24 month leading indicator of a future I-140
+    petition. By tracking PERM certifications by country and inferred EB category,
+    this models the "pipeline of future demand" entering the EB system.
+
+    Data source: DOL OFLC Performance Data (quarterly disclosure files).
+    """
+    try:
+        parser = PERMParser()
+        return PERMPipelineResponse(
+            by_fy=[PERMFYData(**d) for d in parser.get_certified_by_fy()],
+            by_category=[PERMCategoryData(**d) for d in parser.get_certified_by_category()],
+            india_pipeline=[PERMIndiaPipeline(**d) for d in parser.get_india_pipeline()],
+            status_breakdown=[PERMStatusData(**d) for d in parser.get_status_breakdown()],
+            top_countries=[PERMTopCountry(**d) for d in parser.get_top_countries()],
+            summary=parser.get_summary(),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class MethodologyResponse(BaseModel):
     restricted_countries: List[str]
     restricted_countries_count: int
@@ -619,6 +697,13 @@ async def get_methodology():
                 "url": "https://ohss.dhs.gov/topics/immigration/yearbook",
                 "coverage": "FY2015–FY2023",
                 "update_frequency": "Annual (released ~9 months after FY end)",
+            },
+            {
+                "name": "DOL PERM Labor Certification Data",
+                "description": "PERM disclosure data — certified labor certifications as a leading indicator of future EB-2/EB-3 I-140 filings. Includes country of citizenship and education level for EB category inference.",
+                "url": "https://www.dol.gov/agencies/eta/foreign-labor/performance",
+                "coverage": "FY2023–FY2026 Q2",
+                "update_frequency": "Quarterly",
             },
             {
                 "name": "NVC IV Backlog Report",
