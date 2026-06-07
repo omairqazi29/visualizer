@@ -100,3 +100,44 @@ class VisaBulletinParser:
             "latest_fad": gaps[-1]["fad"].isoformat(),
             "latest_dof": gaps[-1]["dof"].isoformat(),
         }
+
+    def get_current_status(self, priority_date: str) -> dict:
+        """Check current VB status for a given priority date.
+
+        Returns dict with:
+            bulletin_month: Latest bulletin month in data
+            current_fad: Current FAD cutoff (ISO date or None if Current)
+            current_dof: Current DOF cutoff (ISO date or None if Current)
+            fad_is_current: True if PD is before FAD (visa number available)
+            dof_is_current: True if PD is before DOF (can file I-485)
+            fad_remaining_months: Months of FAD advancement needed (0 if current)
+            dof_remaining_months: Months of DOF advancement needed (0 if current)
+        """
+        from datetime import date
+        pd_date = datetime.strptime(priority_date, "%Y-%m-%d").date() if isinstance(priority_date, str) else priority_date
+        history = self.get_history()
+        latest = history[-1]
+
+        fad = latest["fad"]
+        dof = latest["dof"]
+
+        fad_current = fad is None or pd_date < fad
+        dof_current = dof is None or pd_date < dof
+
+        fad_remaining = 0.0
+        if fad is not None and not fad_current:
+            fad_remaining = round((pd_date - fad).days / 30.44, 1)
+
+        dof_remaining = 0.0
+        if dof is not None and not dof_current:
+            dof_remaining = round((pd_date - dof).days / 30.44, 1)
+
+        return {
+            "bulletin_month": latest["bulletin_month"],
+            "current_fad": fad.isoformat() if fad else None,
+            "current_dof": dof.isoformat() if dof else None,
+            "fad_is_current": fad_current,
+            "dof_is_current": dof_current,
+            "fad_remaining_months": fad_remaining,
+            "dof_remaining_months": dof_remaining,
+        }

@@ -200,6 +200,33 @@ export default function PredictorPage() {
             </Card>
           </div>
 
+          {/* Current VB Status */}
+          {freezeResult.vb_bulletin_month && (
+            <Card className={freezeResult.vb_dof_is_current ? 'border-emerald-300 bg-emerald-50/60' : 'border-amber-200 bg-amber-50/40'}>
+              <CardContent className="pt-5 pb-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  Actual Visa Bulletin — {freezeResult.vb_bulletin_month}
+                </p>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-slate-500">Current FAD:</span>{' '}
+                    <span className="font-semibold">{freezeResult.vb_current_fad ? new Date(freezeResult.vb_current_fad).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : 'Current'}</span>
+                    {freezeResult.vb_fad_is_current
+                      ? <span className="ml-1.5 text-xs font-bold text-emerald-600">YOUR PD IS CURRENT</span>
+                      : <span className="ml-1.5 text-xs text-slate-400">({freezeResult.vb_fad_remaining_months} mo to go)</span>}
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Current DOF:</span>{' '}
+                    <span className="font-semibold">{freezeResult.vb_current_dof ? new Date(freezeResult.vb_current_dof).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : 'Current'}</span>
+                    {freezeResult.vb_dof_is_current
+                      ? <span className="ml-1.5 text-xs font-bold text-emerald-600">CAN FILE I-485</span>
+                      : <span className="ml-1.5 text-xs text-slate-400">({freezeResult.vb_dof_remaining_months} mo to go)</span>}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Delta Summary */}
           <Card className="border-emerald-200 bg-emerald-50/40">
             <CardContent className="pt-6">

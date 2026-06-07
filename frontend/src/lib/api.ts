@@ -67,6 +67,14 @@ export interface PredictData {
   dof_range_min: number;
   dof_range_max: number;
   dof_datapoints: number;
+  // Current VB status (actual, not estimated)
+  vb_bulletin_month: string | null;
+  vb_current_fad: string | null;
+  vb_current_dof: string | null;
+  vb_fad_is_current: boolean;
+  vb_dof_is_current: boolean;
+  vb_fad_remaining_months: number;
+  vb_dof_remaining_months: number;
 }
 
 export interface DataSource {

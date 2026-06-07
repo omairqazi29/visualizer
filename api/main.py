@@ -75,6 +75,14 @@ class PredictResponse(BaseModel):
     dof_range_min: float = 0
     dof_range_max: float = 0
     dof_datapoints: int = 0
+    # Current VB status (actual, not estimated)
+    vb_bulletin_month: str | None = None
+    vb_current_fad: str | None = None
+    vb_current_dof: str | None = None
+    vb_fad_is_current: bool = False
+    vb_dof_is_current: bool = False
+    vb_fad_remaining_months: float = 0
+    vb_dof_remaining_months: float = 0
 
 
 @app.get("/api/waterfall", response_model=WaterfallResponse)
@@ -226,7 +234,8 @@ async def predict_pd(
         )
         projection = modeler.project_clearance(backlog=backlog_ahead)
 
-        # DOF estimate from historical VB gap
+        # DOF estimate + current VB status from historical data
+        vb_status = {}
         try:
             vb = VisaBulletinParser()
             dof_lead = vb.get_dof_lead_months(recent_n=12)
@@ -234,6 +243,7 @@ async def predict_pd(
             clearance = projection["clearance_date"]
             dof_est = clearance - timedelta(days=int(gap * 30.44))
             dof_est_str = dof_est.strftime("%Y-%m-%d")
+            vb_status = vb.get_current_status(priority_date)
         except Exception:
             dof_lead = {"median_gap": 0, "min_gap": 0, "max_gap": 0, "n_datapoints": 0}
             dof_est_str = None
@@ -251,6 +261,13 @@ async def predict_pd(
             dof_range_min=dof_lead["min_gap"],
             dof_range_max=dof_lead["max_gap"],
             dof_datapoints=dof_lead["n_datapoints"],
+            vb_bulletin_month=vb_status.get("bulletin_month"),
+            vb_current_fad=vb_status.get("current_fad"),
+            vb_current_dof=vb_status.get("current_dof"),
+            vb_fad_is_current=vb_status.get("fad_is_current", False),
+            vb_dof_is_current=vb_status.get("dof_is_current", False),
+            vb_fad_remaining_months=vb_status.get("fad_remaining_months", 0),
+            vb_dof_remaining_months=vb_status.get("dof_remaining_months", 0),
         )
     except HTTPException:
         raise
