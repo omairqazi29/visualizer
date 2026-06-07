@@ -227,6 +227,24 @@ def get_dol_perm_dir(data_dir: str = "data") -> str:
     return str(Path(data_dir) / "DOL_PERM")
 
 
+def get_h1b_dir(data_dir: str = "data") -> str:
+    """Return path to H-1B cap registration and approval data directory."""
+    return str(Path(data_dir) / "H1B")
+
+
+def get_ceac_dir(data_dir: str = "data") -> str:
+    """Return path to CEAC consular scheduling data directory."""
+    return str(Path(data_dir) / "CEAC")
+
+
+def get_latest_i140_receipts_path(data_dir: str = "data") -> str:
+    """Convenience: latest i140_rec*.xlsx or the well-known fallback name."""
+    p = find_latest("i140_rec*.xlsx", data_dir)
+    if p is not None:
+        return str(p)
+    return str(Path(data_dir) / "i140_rec_by_class_country_fy2025_q4_v1.xlsx")
+
+
 __all__ = [
     "MONTHS_MAP",
     "find_latest",
@@ -237,4 +255,7 @@ __all__ = [
     "get_processing_times_dir",
     "get_dhs_yearbook_dir",
     "get_dol_perm_dir",
+    "get_h1b_dir",
+    "get_ceac_dir",
+    "get_latest_i140_receipts_path",
 ]

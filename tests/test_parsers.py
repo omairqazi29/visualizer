@@ -380,3 +380,99 @@ def test_processing_times_trend_direction():
     summary = parser.get_bottleneck_summary()
     # Seed data shows gradual increase from Jan 2024 to May 2025
     assert summary["eb1_trend"] == "worsening"
+
+
+# ────────────────────────────────────────────────────────────
+# I-140 Receipts (New Filings) parser tests
+# ────────────────────────────────────────────────────────────
+
+from src.parsers.i140_receipts_parser import I140ReceiptsParser
+
+
+def test_i140_receipts_all_countries():
+    """All countries receipts returns FY2014-2025 data."""
+    path = "data/i140_rec_by_class_country_fy2025_q4_v1.xlsx"
+    if not os.path.exists(path):
+        pytest.skip("I-140 receipts file not found")
+    parser = I140ReceiptsParser(path)
+    by_fy = parser.get_receipts_by_fy("All")
+    assert len(by_fy) >= 12  # FY2014-2025
+    # FY2025 total should be ~244,844
+    latest = by_fy[-1]
+    assert latest["fiscal_year"] == 2025
+    assert latest["receipts"] > 200000
+    # EB category breakdown should sum to less than total (EB4/5 excluded)
+    assert latest["eb1_receipts"] > 0
+    assert latest["eb2_receipts"] > 0
+    assert latest["eb3_receipts"] > 0
+
+
+def test_i140_receipts_india():
+    """India receipts shows correct India-specific data."""
+    path = "data/i140_rec_by_class_country_fy2025_q4_v1.xlsx"
+    if not os.path.exists(path):
+        pytest.skip("I-140 receipts file not found")
+    parser = I140ReceiptsParser(path)
+    india = parser.get_receipts_by_fy("India")
+    assert len(india) >= 12
+    latest = india[-1]
+    assert latest["fiscal_year"] == 2025
+    # India FY2025 total should be ~68,567
+    assert 60000 < latest["receipts"] < 80000
+    # India EB-2 dominates filings
+    assert latest["eb2_receipts"] > latest["eb1_receipts"]
+
+
+def test_i140_receipts_growth_rates():
+    """Growth rates compute correctly."""
+    parser = I140ReceiptsParser("data/i140_rec_by_class_country_fy2025_q4_v1.xlsx")
+    growth = parser.get_growth_rates("India")
+    assert len(growth) >= 12
+    # First entry has no prior → yoy_growth_pct is None
+    assert growth[0]["yoy_growth_pct"] is None
+    # Subsequent entries have growth rates
+    assert growth[1]["yoy_growth_pct"] is not None
+
+
+def test_i140_receipts_country_comparison():
+    """Country comparison returns all tracked countries."""
+    parser = I140ReceiptsParser("data/i140_rec_by_class_country_fy2025_q4_v1.xlsx")
+    comp = parser.get_country_comparison()
+    assert len(comp) >= 4  # India, China, Philippines, Brazil, Vietnam
+    countries = [c["country"] for c in comp]
+    assert "India" in countries
+    assert "China" in countries
+    # India should have largest share
+    assert comp[0]["country"] == "India"
+    # Shares should sum to less than 100% (ROW not listed)
+    total_share = sum(c["share_pct"] for c in comp)
+    assert total_share < 100
+
+
+def test_i140_receipts_india_queue_growth():
+    """India queue growth analysis returns expected metrics."""
+    parser = I140ReceiptsParser("data/i140_rec_by_class_country_fy2025_q4_v1.xlsx")
+    growth = parser.get_india_queue_growth()
+    assert growth["latest_fy"] == 2025
+    assert growth["latest_receipts"] > 0
+    assert growth["india_share_pct"] > 0
+    assert growth["cagr_5yr_pct"] is not None
+    assert growth["total_pending_all_fy"] > 0
+
+
+def test_i140_receipts_summary():
+    """Summary returns comprehensive data."""
+    parser = I140ReceiptsParser("data/i140_rec_by_class_country_fy2025_q4_v1.xlsx")
+    summary = parser.get_summary()
+    assert summary["latest_fy"] == 2025
+    assert summary["latest_total_receipts"] > 200000
+    assert "india_queue_growth" in summary
+    assert len(summary["top_countries"]) >= 4
+    assert summary["source"] == "USCIS I-140 Receipts by Classification and Country"
+
+
+def test_i140_receipts_auto_discovery():
+    """Auto-discovery finds the latest receipts file."""
+    parser = I140ReceiptsParser.latest()
+    by_fy = parser.get_receipts_by_fy("All")
+    assert len(by_fy) > 0

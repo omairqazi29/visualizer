@@ -21,6 +21,8 @@ export const getProcessingTimes = (category?: string, officeCode?: string) =>
   api.get('/processing-times', { params: { category, office_code: officeCode } }).then(res => res.data);
 export const getPERMPipeline = () =>
   api.get('/perm-pipeline').then(res => res.data);
+export const getH1BDemand = () =>
+  api.get('/h1b-demand').then(res => res.data);
 
 // Strongly typed API response shapes (mirrors backend Pydantic models)
 export interface WaterfallData {
@@ -40,6 +42,11 @@ export interface WaterfallData {
   eb1_savings: number;
   eb45_savings: number;
   eb23_savings: number;
+  // Per-country savings breakdown (empty objects under baseline)
+  fb_savings_by_country: Record<string, number>;
+  eb1_savings_by_country: Record<string, number>;
+  eb45_savings_by_country: Record<string, number>;
+  eb23_savings_by_country: Record<string, number>;
   // Data-driven share
   india_oversubscribed_share: number;
 }
@@ -249,6 +256,229 @@ export interface PERMPipelineData {
       eb3: number;
     } | Record<string, never>;
     india_yoy_growth_pct: number | null;
+    data_points: number;
+    source: string;
+  };
+}
+
+export interface H1BCapRegistration {
+  fiscal_year: number;
+  total_registrations: number;
+  eligible_registrations: number;
+  unique_beneficiaries: number;
+  multiple_registrations: number;
+  selected_registrations: number;
+  selection_rate: number;
+  multiple_reg_pct: number;
+}
+
+export interface H1BIndiaDemand {
+  fiscal_year: number;
+  india_approvals: number;
+  india_initial: number;
+  india_continuing: number;
+  india_share_pct: number;
+  total_approvals: number;
+  selected_registrations?: number;
+  selection_rate?: number;
+  total_registrations?: number;
+  unique_beneficiaries?: number;
+}
+
+export interface H1BTopCountry {
+  country: string;
+  approvals: number;
+  share_pct: number;
+}
+
+export interface H1BDemandData {
+  cap_registrations: H1BCapRegistration[];
+  india_demand: H1BIndiaDemand[];
+  top_countries: H1BTopCountry[];
+  summary: {
+    registration_years: number[];
+    approval_years: number[];
+    latest_reg_fy: number | null;
+    latest_total_registrations: number;
+    latest_selected: number;
+    latest_selection_rate: number;
+    latest_unique_beneficiaries: number;
+    latest_approval_fy: number | null;
+    latest_india_approvals: number;
+    latest_india_initial: number;
+    latest_india_share_pct: number;
+    latest_total_approvals: number;
+    india_yoy_growth_pct: number | null;
+    registration_yoy_growth_pct: number | null;
+    source: string;
+  };
+}
+
+// Legislation Tracker
+export interface LegislationBill {
+  id: string;
+  bill_number: string;
+  title: string;
+  short_title: string;
+  sponsor: string;
+  introduced: string;
+  status: string;
+  status_detail: string;
+  chamber: string;
+  direction: string;
+  likelihood: string;
+  categories_affected: string[];
+  scenario_id: string | null;
+  key_provisions: string[];
+  impact_summary: string;
+}
+
+export interface LegislationScenario {
+  scenario_id: string;
+  scenario_name: string;
+  clearance_date: string;
+  months_to_clear: number;
+  annual_supply: number;
+  inventory_total: number;
+  delta_months: number;
+  trajectory: TrajectoryPoint[];
+}
+
+export interface LegislationData {
+  bills: LegislationBill[];
+  scenarios: Record<string, LegislationScenario>;
+  baseline: {
+    clearance_date: string;
+    months_to_clear: number;
+    annual_supply: number;
+    inventory_total: number;
+    trajectory: TrajectoryPoint[];
+  };
+  last_updated: string;
+}
+
+export const getLegislation = () =>
+  api.get('/legislation').then(res => res.data);
+export const getCEACScheduling = () =>
+  api.get('/ceac-scheduling').then(res => res.data);
+export const getI140Receipts = () =>
+  api.get('/i140-receipts').then(res => res.data);
+
+// CEAC Scheduling
+export interface CEACIssuancePoint {
+  month: string;
+  eb1_issuances: number;
+  eb1_principal: number;
+}
+
+export interface CEACPostSummary {
+  post: string;
+  post_name: string;
+  total_eb1: number;
+  total_principal: number;
+  months_active: number;
+}
+
+export interface CEACFYData {
+  fiscal_year: number;
+  total_eb1: number;
+  principal_eb1: number;
+  india_eb1: number;
+  india_principal: number;
+}
+
+export interface CEACNVCWaitPoint {
+  date: string;
+  days: number;
+}
+
+export interface CEACSchedulingData {
+  india_monthly: CEACIssuancePoint[];
+  fiscal_year_data: CEACFYData[];
+  top_posts: CEACPostSummary[];
+  nvc_wait_times: Record<string, CEACNVCWaitPoint[]>;
+  nvc_latest: Record<string, number>;
+  data_range: {
+    start: string;
+    end: string;
+    records: number;
+    posts: number;
+  };
+  summary: {
+    data_range: { start: string; end: string; records: number; posts: number };
+    latest_complete_fy: {
+      fiscal_year: number;
+      total_eb1: number;
+      principal_eb1: number;
+      india_eb1: number;
+      india_principal: number;
+    };
+    fiscal_year_data: CEACFYData[];
+    top_posts_eb1: CEACPostSummary[];
+    nvc_wait_times: Record<string, number>;
+    india_posts: { slug: string; name: string }[];
+    source: string;
+    notes: Record<string, string>;
+  };
+}
+
+// I-140 Receipts (New Filings)
+export interface I140ReceiptFYData {
+  fiscal_year: number;
+  receipts: number;
+  approved: number;
+  denied: number;
+  pending: number;
+  approval_rate: number;
+  eb1_receipts: number;
+  eb2_receipts: number;
+  eb3_receipts: number;
+}
+
+export interface I140ReceiptGrowth {
+  fiscal_year: number;
+  receipts: number;
+  yoy_growth_pct: number | null;
+  eb1_growth_pct: number | null;
+  eb2_growth_pct: number | null;
+  eb3_growth_pct: number | null;
+}
+
+export interface I140ReceiptCountry {
+  country: string;
+  receipts: number;
+  eb1: number;
+  eb2: number;
+  eb3: number;
+  share_pct: number;
+}
+
+export interface I140ReceiptsData {
+  all_countries: I140ReceiptFYData[];
+  india: I140ReceiptFYData[];
+  growth_rates: I140ReceiptGrowth[];
+  india_growth_rates: I140ReceiptGrowth[];
+  country_comparison: I140ReceiptCountry[];
+  summary: {
+    fiscal_years: number[];
+    latest_fy: number;
+    latest_total_receipts: number;
+    latest_total_approved: number;
+    latest_total_pending: number;
+    latest_approval_rate: number;
+    india_queue_growth: {
+      latest_fy: number;
+      latest_receipts: number;
+      latest_eb1: number;
+      latest_eb2: number;
+      latest_eb3: number;
+      yoy_growth_pct: number | null;
+      india_share_pct: number;
+      cagr_5yr_pct: number;
+      total_pending_all_fy: number;
+      approval_rate: number;
+    };
+    top_countries: I140ReceiptCountry[];
     data_points: number;
     source: string;
   };

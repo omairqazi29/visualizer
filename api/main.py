@@ -17,9 +17,13 @@ from src.parsers.nvc_parser import NVCParser
 from src.parsers.i485_parser import I485FlowParser
 from src.parsers.processing_times_parser import ProcessingTimesParser
 from src.engine.demand import DemandModeler
+from src.engine.legislation import PENDING_BILLS, compute_legislation_scenarios
 from src.engine.supply import SupplyCalculator
 from src.parsers.dhs_yearbook_parser import DhsYearbookParser
 from src.parsers.perm_parser import PERMParser
+from src.parsers.h1b_parser import H1BParser
+from src.parsers.ceac_parser import CEACParser
+from src.parsers.i140_receipts_parser import I140ReceiptsParser
 from src.constants import ACTUAL_RESTRICTED_COUNTRIES, DEFAULT_INDIA_EB1_SUPPLY, FB_STATUTORY_LIMIT
 
 app = FastAPI(title="The Spillover Engine API")
@@ -52,6 +56,11 @@ class WaterfallResponse(BaseModel):
     eb1_savings: int
     eb45_savings: int
     eb23_savings: int
+    # Per-country savings breakdown (empty dicts under baseline)
+    fb_savings_by_country: dict[str, int]
+    eb1_savings_by_country: dict[str, int]
+    eb45_savings_by_country: dict[str, int]
+    eb23_savings_by_country: dict[str, int]
     # Data-driven share
     india_oversubscribed_share: float
 
@@ -122,6 +131,10 @@ async def get_waterfall_data(
             eb1_savings=breakdown.eb1_savings,
             eb45_savings=breakdown.eb45_savings,
             eb23_savings=breakdown.eb23_savings,
+            fb_savings_by_country=breakdown.fb_savings_by_country,
+            eb1_savings_by_country=breakdown.eb1_savings_by_country,
+            eb45_savings_by_country=breakdown.eb45_savings_by_country,
+            eb23_savings_by_country=breakdown.eb23_savings_by_country,
             india_oversubscribed_share=breakdown.india_oversubscribed_share,
         )
     except Exception as e:
@@ -619,6 +632,219 @@ async def get_perm_pipeline():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class H1BCapRegistration(BaseModel):
+    fiscal_year: int
+    total_registrations: int
+    eligible_registrations: int
+    unique_beneficiaries: int
+    multiple_registrations: int
+    selected_registrations: int
+    selection_rate: float
+    multiple_reg_pct: float
+
+
+class H1BApprovalByCountry(BaseModel):
+    fiscal_year: int
+    country_of_birth: str
+    approvals: int
+    initial_approvals: int
+    continuing_approvals: int
+    share_pct: float
+
+
+class H1BIndiaDemand(BaseModel):
+    fiscal_year: int
+    india_approvals: int
+    india_initial: int
+    india_continuing: int
+    india_share_pct: float
+    total_approvals: int
+    selected_registrations: int | None = None
+    selection_rate: float | None = None
+    total_registrations: int | None = None
+    unique_beneficiaries: int | None = None
+
+
+class H1BTopCountry(BaseModel):
+    country: str
+    approvals: int
+    share_pct: float
+
+
+class H1BDemandResponse(BaseModel):
+    """H-1B cap registration and approval data — future demand pressure indicator."""
+    cap_registrations: list[H1BCapRegistration]
+    india_demand: list[H1BIndiaDemand]
+    top_countries: list[H1BTopCountry]
+    summary: dict
+
+
+@app.get("/api/h1b-demand", response_model=H1BDemandResponse)
+async def get_h1b_demand():
+    """Returns H-1B cap registration and approval data — a leading indicator
+    of future I-140 filings and EB demand pressure.
+
+    Most India EB-1/2/3 cases flow through H-1B first. Cap registrations show
+    demand volume vs. available slots, while approval country-of-birth shares
+    show India's dominant position (~70%) in the H-1B pipeline.
+
+    Data sources:
+    - USCIS H-1B Electronic Registration Process (cap registrations, FY2021+)
+    - USCIS Characteristics of H-1B Specialty Occupation Workers (annual reports)
+    """
+    try:
+        parser = H1BParser()
+        return H1BDemandResponse(
+            cap_registrations=[H1BCapRegistration(**d) for d in parser.get_cap_registrations()],
+            india_demand=[H1BIndiaDemand(**d) for d in parser.get_india_demand_pressure()],
+            top_countries=[H1BTopCountry(**d) for d in parser.get_top_countries()],
+            summary=parser.get_summary(),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class LegislationResponse(BaseModel):
+    """Pending legislation bills and what-if scenario projections."""
+    bills: List[dict]
+    scenarios: dict
+    baseline: dict
+    last_updated: str
+
+
+@app.get("/api/legislation", response_model=LegislationResponse)
+async def get_legislation():
+    """Returns pending legislation data and what-if scenario projections.
+
+    Models how proposed immigration bills in the 119th Congress would affect
+    India EB-1 backlog clearance timelines.  Each bill's key provisions are
+    translated into supply/demand modifications and projected through the
+    DemandModeler.
+
+    Returns both the bills metadata (sponsors, status, provisions) and
+    computed scenario projections (clearance date, delta months, trajectory).
+    """
+    try:
+        # --- Demand side (same as /supply-demand) ---
+        inv_parser = InventoryParser.latest()
+        inv_stats = inv_parser.get_india_eb1_queue()
+
+        pipe_parser = PipelineParser.latest()
+        pipe_parser.load_data()
+        pipe_total = pipe_parser.get_india_eb1_backlog()
+
+        total_queue = int(inv_stats["total"] + pipe_total)
+
+        # --- Supply side ---
+        calc = SupplyCalculator()
+        breakdown = calc.get_supply_breakdown()
+        baseline_supply = breakdown.india_eb1_supply
+
+        monthly_dist = calc.dos_parser.get_monthly_distribution(
+            country="India", categories=["E11", "E12", "E13"]
+        )
+        fy_supply = calc.get_supply_by_fy()
+
+        # --- Compute legislation scenarios ---
+        result = compute_legislation_scenarios(
+            inventory_total=total_queue,
+            baseline_supply=baseline_supply,
+            fy_supply=fy_supply,
+            monthly_distribution=monthly_dist,
+        )
+
+        return LegislationResponse(
+            bills=PENDING_BILLS,
+            scenarios=result["scenarios"],
+            baseline=result["baseline"],
+            last_updated="2026-06",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class CEACIssuancePoint(BaseModel):
+    month: str
+    eb1_issuances: int
+    eb1_principal: int
+
+
+class CEACPostSummary(BaseModel):
+    post: str
+    post_name: str
+    total_eb1: int
+    total_principal: int
+    months_active: int
+
+
+class CEACFYData(BaseModel):
+    fiscal_year: int
+    total_eb1: int
+    principal_eb1: int
+    india_eb1: int
+    india_principal: int
+
+
+class CEACNVCWaitPoint(BaseModel):
+    date: str
+    days: int
+
+
+class CEACSchedulingResponse(BaseModel):
+    """CEAC consular interview scheduling data — real-time consular pipeline activity."""
+    india_monthly: list[CEACIssuancePoint]
+    fiscal_year_data: list[CEACFYData]
+    top_posts: list[CEACPostSummary]
+    nvc_wait_times: dict[str, list[CEACNVCWaitPoint]]
+    nvc_latest: dict[str, int]
+    data_range: dict
+    summary: dict
+
+
+@app.get("/api/ceac-scheduling", response_model=CEACSchedulingResponse)
+async def get_ceac_scheduling():
+    """Returns CEAC consular interview scheduling and issuance data.
+
+    Shows real-time consular pipeline activity scraped from DOS consulate data.
+    Validates DOS IV issuance projections by providing ground-truth
+    consulate-level issuance counts and backlog estimates.
+
+    Includes:
+    - India EB-1 monthly issuances across all 5 Indian consulates
+    - Global EB-1 issuances by fiscal year (for cross-referencing with DOS data)
+    - Top consulates by EB-1 issuance volume
+    - NVC case processing wait times (creation, review, inquiry queues)
+
+    Data source: visawhen.com (GitHub: underyx/visawhen) — automated scraper
+    pulling consulate-level data from DOS.
+    """
+    try:
+        parser = CEACParser()
+
+        india_monthly = parser.get_india_eb1_monthly_total()
+        fy_data = parser.get_global_eb1_by_fiscal_year()
+        top_posts = parser.get_top_posts_by_eb1(top_n=15)
+        nvc_wt = parser.get_nvc_wait_times()
+        nvc_latest = parser.get_nvc_latest()
+        data_range = parser.get_data_range()
+        summary = parser.get_summary()
+
+        return CEACSchedulingResponse(
+            india_monthly=[CEACIssuancePoint(**d) for d in india_monthly],
+            fiscal_year_data=[CEACFYData(**d) for d in fy_data],
+            top_posts=[CEACPostSummary(**d) for d in top_posts],
+            nvc_wait_times={
+                k: [CEACNVCWaitPoint(**p) for p in v]
+                for k, v in nvc_wt.items()
+            },
+            nvc_latest=nvc_latest,
+            data_range=data_range,
+            summary=summary,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class MethodologyResponse(BaseModel):
     restricted_countries: List[str]
     restricted_countries_count: int
@@ -664,6 +890,13 @@ async def get_methodology():
                 "update_frequency": "Quarterly",
             },
             {
+                "name": "USCIS I-140 Receipts (New Filings)",
+                "description": "New I-140 petitions filed by country and EB category. Models queue growth rate — how fast new EB petitions enter the system. Separate from approved/pipeline data.",
+                "url": "https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data",
+                "coverage": "FY2014–FY2025 (Q1-Q4)",
+                "update_frequency": "Quarterly",
+            },
+            {
                 "name": "Report of the Visa Office (FY2024)",
                 "description": "Annual India EB-1 issuances baseline (6,952 of 47,462 total)",
                 "url": "https://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics.html",
@@ -706,11 +939,25 @@ async def get_methodology():
                 "update_frequency": "Quarterly",
             },
             {
+                "name": "USCIS H-1B Cap Registration & Approval Data",
+                "description": "H-1B cap registrations, selections, and approvals by country of birth. Leading indicator of future I-140 filings — most India EB-1/2/3 flow through H-1B first.",
+                "url": "https://www.uscis.gov/working-in-the-united-states/temporary-workers/h-1b-specialty-occupations/h-1b-electronic-registration-process",
+                "coverage": "FY2019–FY2026 (registrations from FY2021; approvals FY2019+)",
+                "update_frequency": "Annual (Characteristics Report ~6 months after FY end)",
+            },
+            {
                 "name": "NVC IV Backlog Report",
                 "description": "Monthly report of documentarily complete cases ready for consular interview scheduling",
                 "url": "https://travel.state.gov/content/dam/visas/iv-backlog-report/IV%20Report%20-%20September%202024.pdf",
                 "coverage": "September 2024",
                 "update_frequency": "Monthly (discontinued after Sep 2024)",
+            },
+            {
+                "name": "CEAC Consular Scheduling Data",
+                "description": "Scraped consular appointment data showing real-time consular pipeline activity. Provides consulate-level EB issuance counts and backlog estimates, plus NVC wait times. Validates DOS IV issuance projections.",
+                "url": "https://github.com/underyx/visawhen",
+                "coverage": "Mar 2017 – Aug 2024 (backlogs); Nov 2020 – present (NVC wait times)",
+                "update_frequency": "Automated (daily via GitHub Actions)",
             },
         ],
         legal_status=[
@@ -828,6 +1075,73 @@ async def get_dependent_multipliers():
             average_multipliers_5yr=summary["average_multipliers_5yr"],
             historical=historical,
             notes=summary["notes"],
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class I140ReceiptFYData(BaseModel):
+    fiscal_year: int
+    receipts: int
+    approved: int
+    denied: int
+    pending: int
+    approval_rate: float
+    eb1_receipts: int
+    eb2_receipts: int
+    eb3_receipts: int
+
+
+class I140ReceiptGrowth(BaseModel):
+    fiscal_year: int
+    receipts: int
+    yoy_growth_pct: float | None
+    eb1_growth_pct: float | None
+    eb2_growth_pct: float | None
+    eb3_growth_pct: float | None
+
+
+class I140ReceiptCountry(BaseModel):
+    country: str
+    receipts: int
+    eb1: int
+    eb2: int
+    eb3: int
+    share_pct: float
+
+
+class I140ReceiptsResponse(BaseModel):
+    """I-140 Receipts (New Filings) — queue growth rate data."""
+    all_countries: list[I140ReceiptFYData]
+    india: list[I140ReceiptFYData]
+    growth_rates: list[I140ReceiptGrowth]
+    india_growth_rates: list[I140ReceiptGrowth]
+    country_comparison: list[I140ReceiptCountry]
+    summary: dict
+
+
+@app.get("/api/i140-receipts", response_model=I140ReceiptsResponse)
+async def get_i140_receipts():
+    """Returns I-140 receipt (new filing) data — separate from approved/pipeline.
+
+    Shows how fast new EB petitions are entering the system. This models
+    the queue growth rate: each receipt is a new I-140 petition filed with USCIS.
+
+    Key distinction from the pipeline endpoint (/api/inventory-context):
+    - Pipeline = approved I-140s waiting for visa numbers (existing queue)
+    - Receipts = NEW I-140s being filed (inflow rate / queue growth)
+
+    Data source: USCIS I-140 Receipts by Classification and Country (quarterly).
+    """
+    try:
+        parser = I140ReceiptsParser.latest()
+        return I140ReceiptsResponse(
+            all_countries=[I140ReceiptFYData(**d) for d in parser.get_receipts_by_fy("All")],
+            india=[I140ReceiptFYData(**d) for d in parser.get_receipts_by_fy("India")],
+            growth_rates=[I140ReceiptGrowth(**d) for d in parser.get_growth_rates("All")],
+            india_growth_rates=[I140ReceiptGrowth(**d) for d in parser.get_growth_rates("India")],
+            country_comparison=[I140ReceiptCountry(**d) for d in parser.get_country_comparison()],
+            summary=parser.get_summary(),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

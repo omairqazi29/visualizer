@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BarChart3, TrendingUp, ArrowLeftRight, Calculator, BookOpen, Clock, FileInput } from 'lucide-react';
+import { LayoutDashboard, BarChart3, TrendingUp, ArrowLeftRight, Calculator, BookOpen, Clock, FileInput, Users, Scale, Building2, FilePlus2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
@@ -8,9 +8,13 @@ const navigation = [
   { name: 'Waterfall Chart', href: '/waterfall', icon: BarChart3 },
   { name: 'Supply/Demand', href: '/supply-demand', icon: TrendingUp },
   { name: 'I-485 Flow', href: '/i485-flow', icon: ArrowLeftRight },
+  { name: 'I-140 Receipts', href: '/i140-receipts', icon: FilePlus2 },
   { name: 'PERM Pipeline', href: '/perm-pipeline', icon: FileInput },
+  { name: 'H-1B Demand', href: '/h1b-demand', icon: Users },
   { name: 'Processing Times', href: '/processing-times', icon: Clock },
+  { name: 'CEAC Scheduling', href: '/ceac-scheduling', icon: Building2 },
   { name: 'PD Predictor', icon: Calculator, href: '/predict' },
+  { name: 'Legislation', href: '/legislation', icon: Scale },
   { name: 'Methodology', icon: BookOpen, href: '/methodology' },
 ];
 
