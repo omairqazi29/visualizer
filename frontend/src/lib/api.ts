@@ -59,6 +59,7 @@ export interface TrajectoryPoint {
 export interface SupplyDemandData {
   inventory: Record<string, number>;
   pipeline_total: number;
+  nvc_backlog: Record<string, unknown> | null;
   total_queue: number;
   annual_eb1_supply: number;
   supply_by_fy: Record<string, number>;

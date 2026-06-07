@@ -19,6 +19,11 @@ except Exception:
     pytest.skip("TestClient unavailable due to starlette/httpx version skew", allow_module_level=True)
 
 
+@pytest.fixture
+def client():
+    return _client
+
+
 def test_waterfall_endpoint(client):
     response = client.get("/api/waterfall")
     assert response.status_code == 200

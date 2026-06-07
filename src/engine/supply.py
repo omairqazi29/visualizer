@@ -87,6 +87,12 @@ class SupplyBreakdown:
     eb45_savings: int               # EB4/5 from restricted (raw usage, for context)
     eb23_savings: int               # EB-2/3 from restricted (context, stays in EB-2/3)
 
+    # Per-country savings breakdown (empty dicts under baseline)
+    fb_savings_by_country: dict[str, int]
+    eb1_savings_by_country: dict[str, int]
+    eb45_savings_by_country: dict[str, int]
+    eb23_savings_by_country: dict[str, int]
+
     # Data-driven India share (computed from USCIS I-485 inventory)
     india_oversubscribed_share: float  # India EB-1 backlog / (India + China EB-1 backlogs)
 
@@ -141,21 +147,38 @@ class SupplyCalculator:
 
         apply_real_restrictions: 91-country real policy (Proclamation + DOS IV pause).
         apply_freeze: Hypothetical freeze on DEFAULT_RESTRICTED_COUNTRIES.
+
+        Note: This method uses only the LATEST fiscal year's DOS data for
+        usage and savings calculations.  Statutory limits (226K FB, 140K EB)
+        are annual, so mixing multiple FYs would inflate numbers.
+        For per-FY supply breakdowns, use get_supply_by_fy() instead.
         """
         self._ensure_dos_loaded()
         dos_parser = self.dos_parser
 
         eb_base = EB_BASE_LIMIT
 
-        # --- Raw usage from DOS data ---
-        total_fb_usage = dos_parser.get_total_fb_usage()
-        eb45_usage = int(dos_parser.df[dos_parser.df['visa_category'].isin(EB45_CATEGORIES)]['count'].sum())
+        # --- Scope to latest FY for annual statutory comparison ---
+        available_fys = dos_parser.get_available_fys()
+        if available_fys:
+            latest_fy = max(available_fys)
+            fy_df = self._filter_fy(dos_parser.df, latest_fy)
+        else:
+            fy_df = dos_parser.df
+
+        # --- Raw usage from latest FY DOS data ---
+        total_fb_usage = int(fy_df[fy_df['visa_category'].isin(DOSParser.FB_CATEGORIES)]['count'].sum())
+        eb45_usage = int(fy_df[fy_df['visa_category'].isin(EB45_CATEGORIES)]['count'].sum())
 
         # --- Savings from ALL categories ---
         fb_savings = 0
         eb1_savings = 0
         eb45_savings = 0
         eb23_savings = 0
+        fb_savings_by_country: dict[str, int] = {}
+        eb1_savings_by_country: dict[str, int] = {}
+        eb45_savings_by_country: dict[str, int] = {}
+        eb23_savings_by_country: dict[str, int] = {}
 
         if apply_real_restrictions:
             restricted = ACTUAL_RESTRICTED_COUNTRIES
@@ -167,18 +190,26 @@ class SupplyCalculator:
         if restricted:
             engine = RedistributionEngine(restricted)
 
-            fb_df = dos_parser.df[dos_parser.df['visa_category'].isin(DOSParser.FB_CATEGORIES)]
-            fb_savings = engine.calculate_savings(fb_df, engine.apply_freeze(fb_df))
+            fb_df = fy_df[fy_df['visa_category'].isin(DOSParser.FB_CATEGORIES)]
+            fb_frozen = engine.apply_freeze(fb_df)
+            fb_savings = engine.calculate_savings(fb_df, fb_frozen)
+            fb_savings_by_country = engine.calculate_savings_by_country(fb_df, fb_frozen)
 
-            eb1_df = dos_parser.df[dos_parser.df['visa_category'].isin(EB1_VISA_CATEGORIES)]
-            eb1_savings = engine.calculate_savings(eb1_df, engine.apply_freeze(eb1_df))
+            eb1_df = fy_df[fy_df['visa_category'].isin(EB1_VISA_CATEGORIES)]
+            eb1_frozen = engine.apply_freeze(eb1_df)
+            eb1_savings = engine.calculate_savings(eb1_df, eb1_frozen)
+            eb1_savings_by_country = engine.calculate_savings_by_country(eb1_df, eb1_frozen)
 
-            eb45_df = dos_parser.df[dos_parser.df['visa_category'].isin(EB45_CATEGORIES)]
-            eb45_savings = engine.calculate_savings(eb45_df, engine.apply_freeze(eb45_df))
+            eb45_df = fy_df[fy_df['visa_category'].isin(EB45_CATEGORIES)]
+            eb45_frozen = engine.apply_freeze(eb45_df)
+            eb45_savings = engine.calculate_savings(eb45_df, eb45_frozen)
+            eb45_savings_by_country = engine.calculate_savings_by_country(eb45_df, eb45_frozen)
 
             eb23_cats = EB2_CATEGORIES + EB3_CATEGORIES
-            eb23_df = dos_parser.df[dos_parser.df['visa_category'].isin(eb23_cats)]
-            eb23_savings = engine.calculate_savings(eb23_df, engine.apply_freeze(eb23_df))
+            eb23_df = fy_df[fy_df['visa_category'].isin(eb23_cats)]
+            eb23_frozen = engine.apply_freeze(eb23_df)
+            eb23_savings = engine.calculate_savings(eb23_df, eb23_frozen)
+            eb23_savings_by_country = engine.calculate_savings_by_country(eb23_df, eb23_frozen)
 
         # --- BASELINE cascade (no restrictions) ---
         fb_spill_base = max(0, FB_STATUTORY_LIMIT - total_fb_usage)
@@ -228,6 +259,10 @@ class SupplyCalculator:
             eb1_savings=eb1_savings,
             eb45_savings=eb45_savings,
             eb23_savings=eb23_savings,
+            fb_savings_by_country=fb_savings_by_country,
+            eb1_savings_by_country=eb1_savings_by_country,
+            eb45_savings_by_country=eb45_savings_by_country,
+            eb23_savings_by_country=eb23_savings_by_country,
             india_oversubscribed_share=india_share,
         )
 
@@ -266,13 +301,20 @@ class SupplyCalculator:
         else:
             restricted = None
 
-        # Pre-compute per-FY savings if restrictions active
+        # Restrictions took effect during FY2025 (Proclamation 10949, June 2025).
+        # Do not apply restrictions retroactively to earlier fiscal years —
+        # computing hypothetical savings on pre-restriction data is nonsensical.
+        _RESTRICTION_EFFECTIVE_FY = 2025
+
+        # Pre-compute per-FY savings if restrictions active (only FYs >= effective year)
         fy_fb_savings: dict[int, int] = {}
         fy_eb1_savings: dict[int, int] = {}
         fy_eb45_savings: dict[int, int] = {}
         if restricted:
             engine = RedistributionEngine(restricted)
             for fy in available_fys:
+                if fy < _RESTRICTION_EFFECTIVE_FY:
+                    continue
                 fy_df = self._filter_fy(dos.df, fy)
                 fb_df = fy_df[fy_df["visa_category"].isin(DOSParser.FB_CATEGORIES)]
                 fy_fb_savings[fy] = engine.calculate_savings(fb_df, engine.apply_freeze(fb_df))
@@ -283,6 +325,12 @@ class SupplyCalculator:
 
         result: dict[int, int] = {}
         for fy in available_fys:
+            # Pre-restriction FYs: use actual historical data (Report of the
+            # Visa Office) or baseline constant — never apply restrictions.
+            if fy < _RESTRICTION_EFFECTIVE_FY:
+                result[fy] = INDIA_EB1_HISTORICAL.get(fy, india_baseline)
+                continue
+
             fb_usage = fb_by_fy.get(fy, 0)
             eb45_usage = eb45_by_fy.get(fy, 0)
 

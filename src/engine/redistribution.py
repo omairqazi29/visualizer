@@ -141,6 +141,24 @@ class RedistributionEngine:
         frozen_total = frozen_df[count_col].sum()
         return int(original_total - frozen_total)
 
+    def calculate_savings_by_country(
+        self,
+        original_df: pd.DataFrame,
+        frozen_df: pd.DataFrame,
+        chargeability_col: str = 'chargeability',
+        count_col: str = 'count',
+    ) -> dict[str, int]:
+        """Per-country savings: only restricted countries that had nonzero usage.
+
+        Returns {country_name: savings} sorted descending, excluding zeros.
+        Country names are title-cased for display.
+        """
+        orig = original_df.groupby(chargeability_col)[count_col].sum()
+        frozen = frozen_df.groupby(chargeability_col)[count_col].sum()
+        diff = orig.subtract(frozen.reindex(orig.index, fill_value=0), fill_value=0)
+        positive = diff[diff > 0].astype(int).sort_values(ascending=False)
+        return {str(k).title(): int(v) for k, v in positive.items()}
+
     @staticmethod
     def get_default_restricted_list() -> Set[str]:
         """

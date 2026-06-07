@@ -309,6 +309,97 @@ export default function WaterfallPage() {
         </Card>
       </div>
 
+      {!isBaseline && (() => {
+        // Merge all per-country savings into a single table
+        const allCountries = new Set([
+          ...Object.keys(data.fb_savings_by_country || {}),
+          ...Object.keys(data.eb1_savings_by_country || {}),
+          ...Object.keys(data.eb45_savings_by_country || {}),
+          ...Object.keys(data.eb23_savings_by_country || {}),
+        ]);
+        const rows = Array.from(allCountries).map(c => ({
+          country: c,
+          fb: (data.fb_savings_by_country || {})[c] || 0,
+          eb1: (data.eb1_savings_by_country || {})[c] || 0,
+          eb45: (data.eb45_savings_by_country || {})[c] || 0,
+          eb23: (data.eb23_savings_by_country || {})[c] || 0,
+          total: ((data.fb_savings_by_country || {})[c] || 0) +
+                 ((data.eb1_savings_by_country || {})[c] || 0) +
+                 ((data.eb45_savings_by_country || {})[c] || 0) +
+                 ((data.eb23_savings_by_country || {})[c] || 0),
+        })).filter(r => r.total > 0).sort((a, b) => b.total - a.total);
+
+        if (rows.length === 0) return null;
+
+        const top10 = rows.slice(0, 10);
+        const remaining = rows.slice(10);
+        const remainingTotal = remaining.reduce((s, r) => s + r.total, 0);
+
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Country-Level DOS IV Savings Breakdown</CardTitle>
+              <CardDescription>
+                Per-country visa savings from the 91-country restrictions (Proclamation ban + DOS IV pause).
+                Shows which restricted countries contribute the most unused visas that spill over to India EB-1.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left">
+                      <th className="py-2 pr-4 font-semibold text-slate-700">Country</th>
+                      <th className="py-2 px-3 font-semibold text-slate-700 text-right">FB</th>
+                      <th className="py-2 px-3 font-semibold text-slate-700 text-right">EB-1</th>
+                      <th className="py-2 px-3 font-semibold text-slate-700 text-right">EB-4/5</th>
+                      <th className="py-2 px-3 font-semibold text-slate-700 text-right">EB-2/3</th>
+                      <th className="py-2 px-3 font-semibold text-slate-700 text-right">Total</th>
+                      <th className="py-2 pl-3 font-semibold text-slate-700 text-right">Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {top10.map((r, i) => (
+                      <tr key={r.country} className={`border-b border-slate-100 ${i === 0 ? 'bg-crimson-50/50' : ''}`}>
+                        <td className="py-1.5 pr-4 font-medium text-slate-800">{r.country}</td>
+                        <td className="py-1.5 px-3 text-right tabular-nums text-slate-600">{r.fb > 0 ? r.fb.toLocaleString() : '—'}</td>
+                        <td className="py-1.5 px-3 text-right tabular-nums text-slate-600">{r.eb1 > 0 ? r.eb1.toLocaleString() : '—'}</td>
+                        <td className="py-1.5 px-3 text-right tabular-nums text-slate-600">{r.eb45 > 0 ? r.eb45.toLocaleString() : '—'}</td>
+                        <td className="py-1.5 px-3 text-right tabular-nums text-slate-600">{r.eb23 > 0 ? r.eb23.toLocaleString() : '—'}</td>
+                        <td className="py-1.5 px-3 text-right tabular-nums font-semibold text-crimson-700">{r.total.toLocaleString()}</td>
+                        <td className="py-1.5 pl-3 text-right tabular-nums text-slate-500">{totalSavings > 0 ? `${((r.total / totalSavings) * 100).toFixed(1)}%` : '—'}</td>
+                      </tr>
+                    ))}
+                    {remaining.length > 0 && (
+                      <tr className="border-b border-slate-100 bg-slate-50/50">
+                        <td className="py-1.5 pr-4 font-medium text-slate-500 italic">Other {remaining.length} countries</td>
+                        <td className="py-1.5 px-3 text-right tabular-nums text-slate-400">{remaining.reduce((s, r) => s + r.fb, 0).toLocaleString()}</td>
+                        <td className="py-1.5 px-3 text-right tabular-nums text-slate-400">{remaining.reduce((s, r) => s + r.eb1, 0).toLocaleString()}</td>
+                        <td className="py-1.5 px-3 text-right tabular-nums text-slate-400">{remaining.reduce((s, r) => s + r.eb45, 0).toLocaleString()}</td>
+                        <td className="py-1.5 px-3 text-right tabular-nums text-slate-400">{remaining.reduce((s, r) => s + r.eb23, 0).toLocaleString()}</td>
+                        <td className="py-1.5 px-3 text-right tabular-nums font-semibold text-slate-500">{remainingTotal.toLocaleString()}</td>
+                        <td className="py-1.5 pl-3 text-right tabular-nums text-slate-400">{totalSavings > 0 ? `${((remainingTotal / totalSavings) * 100).toFixed(1)}%` : '—'}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-300">
+                      <td className="py-2 pr-4 font-bold text-slate-800">Total</td>
+                      <td className="py-2 px-3 text-right tabular-nums font-bold text-slate-700">{(data.fb_savings || 0).toLocaleString()}</td>
+                      <td className="py-2 px-3 text-right tabular-nums font-bold text-slate-700">{(data.eb1_savings || 0).toLocaleString()}</td>
+                      <td className="py-2 px-3 text-right tabular-nums font-bold text-slate-700">{(data.eb45_savings || 0).toLocaleString()}</td>
+                      <td className="py-2 px-3 text-right tabular-nums font-bold text-slate-700">{(data.eb23_savings || 0).toLocaleString()}</td>
+                      <td className="py-2 px-3 text-right tabular-nums font-bold text-crimson-700">{totalSavings.toLocaleString()}</td>
+                      <td className="py-2 pl-3 text-right tabular-nums font-bold text-slate-700">100%</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {!isBaseline && (
         <p className="text-xs text-slate-400 italic">
           <span className="font-semibold text-crimson-500">Red portions</span> show the restriction boost vs baseline.
