@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from src.parsers.inventory_parser import InventoryParser
 from src.parsers.pipeline_parser import PipelineParser
 from src.parsers.visa_bulletin_parser import VisaBulletinParser
+from src.parsers.nvc_parser import NVCParser
 from src.engine.demand import DemandModeler
 from src.engine.supply import SupplyCalculator
 from src.constants import ACTUAL_RESTRICTED_COUNTRIES, DEFAULT_INDIA_EB1_SUPPLY, FB_STATUTORY_LIMIT
@@ -54,6 +55,7 @@ class WaterfallResponse(BaseModel):
 class SupplyDemandResponse(BaseModel):
     inventory: dict
     pipeline_total: int
+    nvc_backlog: dict | None = None  # NVC consular processing pipeline
     total_queue: int
     annual_eb1_supply: int
     supply_by_fy: dict[str, int]  # {fy_year: india_eb1_supply}
@@ -161,12 +163,28 @@ async def get_supply_demand_data(
             apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions
         )
 
+        # NVC backlog (consular processing pipeline — disjoint from I-485 AOS)
+        nvc_data = None
+        try:
+            nvc = NVCParser()
+            india_nvc = nvc.get_india_eb_nvc()
+            nvc_data = {
+                "report_date": nvc.get_latest_report_date(),
+                "india_eb1_nvc": india_nvc.get("EB1", 0),
+                "india_eb_total": sum(india_nvc.values()),
+                "worldwide_eb_total": nvc.get_eb_total_worldwide(),
+                "india_by_category": india_nvc,
+            }
+        except Exception:
+            pass
+
         modeler = DemandModeler(total_queue, monthly_distribution=monthly_dist, fy_supply=fy_supply)
         projection = modeler.project_clearance()
 
         return SupplyDemandResponse(
             inventory={k: int(v) for k, v in inv_stats.items()},
             pipeline_total=int(pipe_total),
+            nvc_backlog=nvc_data,
             total_queue=int(total_queue),
             annual_eb1_supply=int(modeler.default_supply),
             supply_by_fy={str(k): v for k, v in fy_supply.items()},
@@ -282,13 +300,15 @@ async def predict_pd(
 
 
 class InventoryContextResponse(BaseModel):
-    """Full demand-side context from USCIS inventory + pipeline data."""
+    """Full demand-side context from USCIS inventory + pipeline + NVC data."""
     eb1_backlogs: dict[str, int]            # EB-1 I-485 pending by country (with dependents)
     india_all_eb_backlogs: dict[str, int]   # India all EB categories I-485 pending
     pipeline: dict[str, dict[str, int]]     # I-140 pipeline by country and category
+    nvc_backlog: dict | None = None         # NVC consular processing pipeline
     india_oversubscribed_share: float       # Computed share from inventory data
     inventory_date: str                     # "January 2026"
     pipeline_date: str                      # "September 2025"
+    nvc_report_date: str | None = None      # "November 2023"
 
 
 @app.get("/api/inventory-context", response_model=InventoryContextResponse)
@@ -311,13 +331,81 @@ async def get_inventory_context():
 
         india_share = SupplyCalculator.compute_india_share()
 
+        # NVC backlog (consular processing pipeline)
+        nvc_data = None
+        nvc_date = None
+        try:
+            nvc = NVCParser()
+            nvc_summary = nvc.get_summary()
+            nvc_data = {
+                "eb_totals_by_category": nvc_summary["eb_totals_by_category"],
+                "eb_total_worldwide": nvc_summary["eb_total_worldwide"],
+                "eb_by_country": nvc_summary["eb_by_country"],
+                "india_eb_by_category": nvc_summary["india_eb_by_category"],
+                "india_eb_total": nvc_summary["india_eb_total"],
+                "india_eb1_nvc": nvc_summary["india_eb1_nvc"],
+                "iv_backlog": nvc_summary["iv_backlog"],
+                "notes": nvc_summary["notes"],
+            }
+            nvc_date = nvc_summary["report_date"]
+        except Exception:
+            pass
+
         return InventoryContextResponse(
             eb1_backlogs=eb1_backlogs,
             india_all_eb_backlogs=india_all,
             pipeline=pipeline,
+            nvc_backlog=nvc_data,
             india_oversubscribed_share=round(india_share, 4),
             inventory_date="February 2026",
             pipeline_date="September 2025",
+            nvc_report_date=nvc_date,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class NVCBacklogResponse(BaseModel):
+    """NVC (National Visa Center) backlog data — consular processing pipeline."""
+    report_date: str
+    eb_totals_by_category: dict[str, int]
+    eb_total_worldwide: int
+    eb_by_country: dict[str, int]
+    india_eb_by_category: dict[str, int]
+    india_eb_total: int
+    india_eb1_nvc: int
+    iv_backlog: dict | None = None
+    yoy_comparison: dict[str, dict[str, int]] | None = None
+    notes: dict
+
+
+@app.get("/api/nvc-backlog", response_model=NVCBacklogResponse)
+async def get_nvc_backlog():
+    """Returns NVC backlog data — the hidden pipeline stage between I-140 approval
+    and consular interview.
+
+    This captures consular processing (CP) cases registered at the National Visa Center.
+    These are DISJOINT from I-485 inventory (AOS path). Together they represent
+    the complete demand picture. ~85% of EB immigrants go AOS; ~15% go CP via NVC.
+
+    Data source: DOS ARIVA (Annual Report of IV Applicants at the NVC).
+    """
+    try:
+        nvc = NVCParser()
+        summary = nvc.get_summary()
+        yoy = nvc.get_yoy_comparison()
+
+        return NVCBacklogResponse(
+            report_date=summary["report_date"],
+            eb_totals_by_category=summary["eb_totals_by_category"],
+            eb_total_worldwide=summary["eb_total_worldwide"],
+            eb_by_country=summary["eb_by_country"],
+            india_eb_by_category=summary["india_eb_by_category"],
+            india_eb_total=summary["india_eb_total"],
+            india_eb1_nvc=summary["india_eb1_nvc"],
+            iv_backlog=summary["iv_backlog"],
+            yoy_comparison=yoy,
+            notes=summary["notes"],
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -373,6 +461,20 @@ async def get_methodology():
                 "url": "https://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics.html",
                 "coverage": "FY2024",
                 "update_frequency": "Annual",
+            },
+            {
+                "name": "NVC Waiting List (ARIVA)",
+                "description": "Annual Report of IV Applicants Registered at the NVC — consular processing pipeline (disjoint from I-485 AOS). Includes derivatives.",
+                "url": "https://travel.state.gov/content/dam/visas/Statistics/Immigrant-Statistics/WaitingList/WaitingListItem_2023_vF.pdf",
+                "coverage": "November 2023",
+                "update_frequency": "Annual",
+            },
+            {
+                "name": "NVC IV Backlog Report",
+                "description": "Monthly report of documentarily complete cases ready for consular interview scheduling",
+                "url": "https://travel.state.gov/content/dam/visas/iv-backlog-report/IV%20Report%20-%20September%202024.pdf",
+                "coverage": "September 2024",
+                "update_frequency": "Monthly (discontinued after Sep 2024)",
             },
         ],
         legal_status=[

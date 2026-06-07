@@ -207,10 +207,16 @@ def get_dos_dir(data_dir: str = "data") -> str:
     return str(Path(data_dir) / "DOS")
 
 
+def get_nvc_dir(data_dir: str = "data") -> str:
+    """Return path to NVC data directory (ARIVA waiting list + IV backlog CSVs)."""
+    return str(Path(data_dir) / "NVC")
+
+
 __all__ = [
     "MONTHS_MAP",
     "find_latest",
     "get_latest_inventory_path",
     "get_latest_pipeline_path",
     "get_dos_dir",
+    "get_nvc_dir",
 ]

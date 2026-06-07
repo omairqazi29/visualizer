@@ -1,0 +1,54 @@
+report_date,category,country,applicants
+2022-11-01,E1,All Countries,8818
+2022-11-01,E2,All Countries,43962
+2022-11-01,E3_skilled,All Countries,41838
+2022-11-01,E3_other,All Countries,26729
+2022-11-01,E4,All Countries,1303
+2022-11-01,E5,All Countries,45498
+2023-11-01,E1,China - mainland born,9787
+2023-11-01,E1,India,2426
+2023-11-01,E1,Canada,872
+2023-11-01,E1,Brazil,840
+2023-11-01,E1,Russia,597
+2023-11-01,E1,Korea South,510
+2023-11-01,E1,Great Britain and Northern Ireland,434
+2023-11-01,E1,Iran,362
+2023-11-01,E1,Mexico,315
+2023-11-01,E1,Argentina,239
+2023-11-01,E1,All Others,4200
+2023-11-01,E1,All Countries,20582
+2023-11-01,E2,India,28921
+2023-11-01,E2,China - mainland born,13815
+2023-11-01,E2,Brazil,6024
+2023-11-01,E2,Korea South,4740
+2023-11-01,E2,Iran,3906
+2023-11-01,E2,All Others,18161
+2023-11-01,E2,All Countries,75567
+2023-11-01,E3_skilled,Philippines,29798
+2023-11-01,E3_skilled,India,15030
+2023-11-01,E3_skilled,Kenya,4955
+2023-11-01,E3_skilled,China - mainland born,3553
+2023-11-01,E3_skilled,Nigeria,3005
+2023-11-01,E3_skilled,All Others,21866
+2023-11-01,E3_skilled,All Countries,78207
+2023-11-01,E3_other,Mexico,8173
+2023-11-01,E3_other,Philippines,5892
+2023-11-01,E3_other,Vietnam,4911
+2023-11-01,E3_other,China - mainland born,4467
+2023-11-01,E3_other,Bangladesh,3064
+2023-11-01,E3_other,All Others,17963
+2023-11-01,E3_other,All Countries,44470
+2023-11-01,E4,India,316
+2023-11-01,E4,Nigeria,190
+2023-11-01,E4,Mexico,111
+2023-11-01,E4,Brazil,76
+2023-11-01,E4,Korea South,73
+2023-11-01,E4,All Others,1185
+2023-11-01,E4,All Countries,1951
+2023-11-01,E5,China - mainland born,33676
+2023-11-01,E5,India,1652
+2023-11-01,E5,Hong Kong S.A.R.,575
+2023-11-01,E5,Vietnam,571
+2023-11-01,E5,Korea South,517
+2023-11-01,E5,All Others,2892
+2023-11-01,E5,All Countries,39883

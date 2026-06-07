@@ -3,6 +3,7 @@ import pandas as pd
 from src.parsers.base import BaseParser
 from src.parsers.inventory_parser import InventoryParser
 from src.parsers.pipeline_parser import PipelineParser
+from src.parsers.nvc_parser import NVCParser
 import os
 
 def test_base_parser_normalization():
@@ -128,3 +129,74 @@ def test_pipeline_all_eb_pipeline():
     assert pipeline["China"]["EB1"] > 0
     # India EB2 pipeline is massive (346k primary * 2.0x EB-2 multiplier)
     assert pipeline["India"]["EB2"] > 600000
+
+
+# ────────────────────────────────────────────────────────────
+# NVC (National Visa Center) backlog parser tests
+# ────────────────────────────────────────────────────────────
+
+def test_nvc_parser_eb_totals():
+    """NVC EB totals by category match ARIVA Nov 2023 report."""
+    nvc_dir = "data/NVC"
+    if not os.path.exists(os.path.join(nvc_dir, "nvc_eb_waiting_list.csv")):
+        pytest.skip("NVC data not found")
+    parser = NVCParser(nvc_dir)
+    totals = parser.get_eb_totals()
+    assert "EB1" in totals
+    assert totals["EB1"] == 20582
+    assert totals["EB2"] == 75567
+    # Total worldwide EB at NVC
+    total = parser.get_eb_total_worldwide()
+    assert total == 260660
+
+
+def test_nvc_parser_india_eb():
+    """NVC India EB breakdown by category."""
+    parser = NVCParser("data/NVC")
+    india = parser.get_india_eb_nvc()
+    assert india["EB1"] == 2426
+    assert india["EB2"] == 28921
+    # India EB1 at NVC is the CP-only count (much smaller than I-485 EB1)
+    assert parser.get_india_eb1_nvc() == 2426
+
+
+def test_nvc_parser_eb_by_country():
+    """NVC EB totals by country."""
+    parser = NVCParser("data/NVC")
+    by_country = parser.get_eb_by_country()
+    assert "India" in by_country
+    assert by_country["India"] == 48536
+    assert by_country["China - mainland born"] == 65338
+    # China has more NVC EB cases than India (China uses more CP; India uses more AOS)
+    assert by_country["China - mainland born"] > by_country["India"]
+
+
+def test_nvc_parser_iv_backlog():
+    """Monthly IV backlog report data."""
+    parser = NVCParser("data/NVC")
+    backlog = parser.get_iv_backlog()
+    assert backlog["documentarily_complete"] == 431110
+    assert backlog["scheduled_interviews"] == 45310
+    assert backlog["pending_scheduling"] == 385800
+
+
+def test_nvc_parser_summary():
+    """get_summary returns comprehensive NVC data."""
+    parser = NVCParser("data/NVC")
+    summary = parser.get_summary()
+    assert summary["report_date"] == "2023-11-01"
+    assert summary["india_eb1_nvc"] == 2426
+    assert summary["eb_total_worldwide"] == 260660
+    assert "notes" in summary
+    assert summary["notes"]["includes_derivatives"] is True
+
+
+def test_nvc_parser_yoy_comparison():
+    """Year-over-year comparison includes both 2022 and 2023 data."""
+    parser = NVCParser("data/NVC")
+    yoy = parser.get_yoy_comparison()
+    assert "2022-11-01" in yoy
+    assert "2023-11-01" in yoy
+    # 2022 EB1 was 8818, 2023 was 20582 (+133%)
+    assert yoy["2022-11-01"]["EB1"] == 8818
+    assert yoy["2023-11-01"]["EB1"] == 20582
