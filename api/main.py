@@ -14,6 +14,7 @@ from src.parsers.inventory_parser import InventoryParser
 from src.parsers.pipeline_parser import PipelineParser
 from src.parsers.visa_bulletin_parser import VisaBulletinParser
 from src.parsers.nvc_parser import NVCParser
+from src.parsers.i485_parser import I485FlowParser
 from src.engine.demand import DemandModeler
 from src.engine.supply import SupplyCalculator
 from src.constants import ACTUAL_RESTRICTED_COUNTRIES, DEFAULT_INDIA_EB1_SUPPLY, FB_STATUTORY_LIMIT
@@ -411,6 +412,67 @@ async def get_nvc_backlog():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class I485FlowPoint(BaseModel):
+    period: str
+    year: int
+    month: int
+    source: str  # "monthly" or "quarterly"
+    months_covered: int
+    eb_receipts: int
+    eb_approvals: int
+    eb_denials: int
+    eb_pending: int
+    fb_receipts: int
+    fb_approvals: int
+    total_receipts: int
+    total_approvals: int
+    total_denials: int
+    total_pending: int
+    eb_net_flow: int
+    total_net_flow: int
+
+
+class I485FlowResponse(BaseModel):
+    monthly: list[I485FlowPoint]
+    quarterly: list[I485FlowPoint]
+    summary: dict
+
+
+@app.get("/api/i485-flow", response_model=I485FlowResponse)
+async def get_i485_flow():
+    """Returns monthly I-485 receipts vs. approvals data.
+
+    Shows inflow rate (new demand) vs. outflow (approvals) to model
+    whether the I-485 queue is growing or shrinking.
+
+    Data sources: USCIS monthly Congressional reports (CSV) and quarterly
+    I-485 performance data (XLSX) from data/USCIS_I485/.
+    """
+    try:
+        parser = I485FlowParser()
+        monthly_raw = parser.get_monthly_series()
+        quarterly_raw = parser.get_quarterly_series()
+        summary = parser.get_eb_summary()
+
+        # Strip 'categories' (detailed breakdown) from API response points
+        monthly = [
+            I485FlowPoint(**{k: v for k, v in d.items() if k in I485FlowPoint.model_fields})
+            for d in monthly_raw
+        ]
+        quarterly = [
+            I485FlowPoint(**{k: v for k, v in d.items() if k in I485FlowPoint.model_fields})
+            for d in quarterly_raw
+        ]
+
+        return I485FlowResponse(
+            monthly=monthly,
+            quarterly=quarterly,
+            summary=summary,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class MethodologyResponse(BaseModel):
     restricted_countries: List[str]
     restricted_countries_count: int
@@ -468,6 +530,13 @@ async def get_methodology():
                 "url": "https://travel.state.gov/content/dam/visas/Statistics/Immigrant-Statistics/WaitingList/WaitingListItem_2023_vF.pdf",
                 "coverage": "November 2023",
                 "update_frequency": "Annual",
+            },
+            {
+                "name": "USCIS I-485 Performance Data",
+                "description": "Monthly receipts, approvals, denials, and pending counts for I-485 by category",
+                "url": "https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data",
+                "coverage": "Jul 2024 – Feb 2026 (monthly) + FY2024–FY2025 (quarterly)",
+                "update_frequency": "Monthly (Congressional mandate)",
             },
             {
                 "name": "NVC IV Backlog Report",
