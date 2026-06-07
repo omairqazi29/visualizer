@@ -114,7 +114,7 @@ export default function PredictorPage() {
                   <div>
                     <p className="text-sm text-slate-500 font-medium">FAD Reaches Your PD</p>
                     <p className="text-2xl font-bold text-slate-700">
-                      {new Date(standardResult.projected_clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                      {new Date(standardResult.projected_clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })}
                     </p>
                   </div>
                 </div>
@@ -127,7 +127,7 @@ export default function PredictorPage() {
                     <div>
                       <p className="text-sm text-slate-500 font-medium">DOF Estimate <span className="text-xs text-slate-400">(file I-485)</span></p>
                       <p className="text-xl font-bold text-blue-700">
-                        {new Date(standardResult.dof_estimate_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                        {new Date(standardResult.dof_estimate_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })}
                       </p>
                     </div>
                   </div>
@@ -165,7 +165,7 @@ export default function PredictorPage() {
                   <div>
                     <p className="text-sm text-slate-500 font-medium">FAD Reaches Your PD</p>
                     <p className="text-2xl font-bold text-navy-900">
-                      {new Date(freezeResult.projected_clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                      {new Date(freezeResult.projected_clearance_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })}
                     </p>
                   </div>
                 </div>
@@ -178,7 +178,7 @@ export default function PredictorPage() {
                     <div>
                       <p className="text-sm text-slate-500 font-medium">DOF Estimate <span className="text-xs text-slate-400">(file I-485)</span></p>
                       <p className="text-xl font-bold text-blue-700">
-                        {new Date(freezeResult.dof_estimate_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                        {new Date(freezeResult.dof_estimate_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })}
                       </p>
                     </div>
                   </div>

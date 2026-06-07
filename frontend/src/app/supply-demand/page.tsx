@@ -49,7 +49,7 @@ export default function SupplyDemandPage() {
   // Combine trajectories for the chart
   const projection = standardData.trajectory.map((t, idx: number) => ({
     date: t.date,
-    dateLabel: new Date(t.date).toLocaleDateString(undefined, { month: 'short', year: '2-digit' }),
+    dateLabel: new Date(t.date).toLocaleDateString(undefined, { month: 'short', year: '2-digit', timeZone: 'UTC' }),
     standardBacklog: t.backlog,
     freezeBacklog: freezeData.trajectory[idx]?.backlog || 0
   }));
@@ -68,7 +68,7 @@ export default function SupplyDemandPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-400">
-              {new Date(standardData.clearance_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+              {new Date(standardData.clearance_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' })}
             </div>
           </CardContent>
         </Card>
@@ -78,7 +78,7 @@ export default function SupplyDemandPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-crimson-600">
-              {new Date(freezeData.clearance_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+              {new Date(freezeData.clearance_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' })}
             </div>
           </CardContent>
         </Card>
