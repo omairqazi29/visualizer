@@ -43,7 +43,7 @@ export default function PredictorPage() {
     <div className="space-y-6 max-w-5xl">
       <div>
         <h2 className="text-3xl font-bold tracking-tight text-navy-900">Personal PD Predictor</h2>
-        <p className="text-slate-500">Predicts when the <span className="font-semibold">Final Action Date (FAD)</span> reaches your priority date — i.e., when your visa number becomes available for approval. Compare baseline vs. current 91-country policy.</p>
+        <p className="text-slate-500">Predicts when the <span className="font-semibold">Final Action Date (FAD)</span> and <span className="font-semibold">Date of Filing (DOF)</span> reach your priority date. Compare baseline vs. current 91-country policy.</p>
       </div>
 
       <Card className="max-w-md">
@@ -106,7 +106,7 @@ export default function PredictorPage() {
                 </CardTitle>
                 <CardDescription>Standard INA flow — no administrative restrictions applied.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-4">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-slate-100 rounded-full text-slate-600">
                     <Calendar className="w-6 h-6" />
@@ -118,6 +118,20 @@ export default function PredictorPage() {
                     </p>
                   </div>
                 </div>
+
+                {standardResult.dof_estimate_date && (
+                  <div className="flex items-center gap-4 pl-1">
+                    <div className="p-2.5 bg-blue-50 rounded-full text-blue-500">
+                      <Calendar className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500 font-medium">DOF Estimate <span className="text-xs text-slate-400">(file I-485)</span></p>
+                      <p className="text-xl font-bold text-blue-700">
+                        {new Date(standardResult.dof_estimate_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                      </p>
+                    </div>
+                  </div>
+                )}
                 
                 <div className="p-4 rounded-lg bg-slate-50 border space-y-2">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Confidence</p>
@@ -143,7 +157,7 @@ export default function PredictorPage() {
                 </CardTitle>
                 <CardDescription>91-country restrictions (Proclamation ban + DOS IV pause) — savings from DOS data.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-4">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-crimson-50 rounded-full text-crimson-600">
                     <Calendar className="w-6 h-6" />
@@ -155,6 +169,20 @@ export default function PredictorPage() {
                     </p>
                   </div>
                 </div>
+
+                {freezeResult.dof_estimate_date && (
+                  <div className="flex items-center gap-4 pl-1">
+                    <div className="p-2.5 bg-blue-50 rounded-full text-blue-500">
+                      <Calendar className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500 font-medium">DOF Estimate <span className="text-xs text-slate-400">(file I-485)</span></p>
+                      <p className="text-xl font-bold text-blue-700">
+                        {new Date(freezeResult.dof_estimate_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="p-4 rounded-lg bg-crimson-50/50 border border-crimson-100 space-y-2">
                   <p className="text-xs font-bold uppercase tracking-wider text-crimson-600">Confidence</p>
@@ -189,11 +217,11 @@ export default function PredictorPage() {
 
           <p className="text-xs text-slate-400 italic">
             <span className="font-semibold text-slate-500">FAD vs DOF:</span>{' '}
-            This model predicts the <span className="font-medium">Final Action Date (FAD)</span> — the date
-            your visa number becomes available and your green card can be approved. The{' '}
-            <span className="font-medium">Date of Filing (DOF)</span>, which controls when you can
-            submit your I-485, typically advances faster and is not modeled here. Once your FAD is current,
-            you are eligible for final adjudication.
+            <span className="font-medium">FAD (Final Action Date)</span> = when your visa number is available and green card can be approved.{' '}
+            <span className="font-medium">DOF (Date of Filing)</span> = when you can submit I-485 and get EAD/AP.{' '}
+            DOF estimate is derived from {freezeResult.dof_datapoints} months of historical Visa Bulletin data — the median gap between
+            DOF and FAD was <span className="font-medium">{freezeResult.dof_lead_months} months</span> (range: {freezeResult.dof_range_min}–{freezeResult.dof_range_max} mo).
+            DOF is set at DOS discretion and can vary; this is an estimate, not a prediction.
           </p>
         </div>
       )}

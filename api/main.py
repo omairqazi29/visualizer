@@ -1,6 +1,6 @@
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
 
 # Add the project root to sys.path to import from src
@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from src.parsers.inventory_parser import InventoryParser
 from src.parsers.pipeline_parser import PipelineParser
+from src.parsers.visa_bulletin_parser import VisaBulletinParser
 from src.engine.demand import DemandModeler
 from src.engine.supply import SupplyCalculator
 from src.constants import ACTUAL_RESTRICTED_COUNTRIES, DEFAULT_INDIA_EB1_SUPPLY, FB_STATUTORY_LIMIT
@@ -68,6 +69,12 @@ class PredictResponse(BaseModel):
     projected_clearance_date: str
     months_to_clear: int
     trajectory: List[dict]
+    # DOF estimate (data-driven from VB history)
+    dof_estimate_date: str | None = None
+    dof_lead_months: float = 0
+    dof_range_min: float = 0
+    dof_range_max: float = 0
+    dof_datapoints: int = 0
 
 
 @app.get("/api/waterfall", response_model=WaterfallResponse)
@@ -219,6 +226,18 @@ async def predict_pd(
         )
         projection = modeler.project_clearance(backlog=backlog_ahead)
 
+        # DOF estimate from historical VB gap
+        try:
+            vb = VisaBulletinParser()
+            dof_lead = vb.get_dof_lead_months(recent_n=12)
+            gap = dof_lead["median_gap"]
+            clearance = projection["clearance_date"]
+            dof_est = clearance - timedelta(days=int(gap * 30.44))
+            dof_est_str = dof_est.strftime("%Y-%m-%d")
+        except Exception:
+            dof_lead = {"median_gap": 0, "min_gap": 0, "max_gap": 0, "n_datapoints": 0}
+            dof_est_str = None
+
         return PredictResponse(
             confidence_score=float(score),
             backlog_ahead=int(backlog_ahead),
@@ -227,6 +246,11 @@ async def predict_pd(
             projected_clearance_date=projection["clearance_date"].strftime("%Y-%m-%d"),
             months_to_clear=int(projection["months_to_clear"]),
             trajectory=projection["trajectory"],
+            dof_estimate_date=dof_est_str,
+            dof_lead_months=dof_lead["median_gap"],
+            dof_range_min=dof_lead["min_gap"],
+            dof_range_max=dof_lead["max_gap"],
+            dof_datapoints=dof_lead["n_datapoints"],
         )
     except HTTPException:
         raise

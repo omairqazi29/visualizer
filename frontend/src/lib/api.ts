@@ -61,6 +61,12 @@ export interface PredictData {
   projected_clearance_date: string;
   months_to_clear: number;
   trajectory: TrajectoryPoint[];
+  // DOF estimate (data-driven from VB history)
+  dof_estimate_date: string | null;
+  dof_lead_months: number;
+  dof_range_min: number;
+  dof_range_max: number;
+  dof_datapoints: number;
 }
 
 export interface DataSource {
