@@ -418,13 +418,17 @@ async def get_visa_bulletin_history(
         None,
         description="Filter by EB category (EB-1, EB-2, EB-3). Returns all if omitted.",
     ),
+    country: str = Query(
+        "India",
+        description="Country to query (India, China). Defaults to India.",
+    ),
 ):
     """Returns historical Visa Bulletin FAD/DOF data for India EB categories.
 
     Supports cross-category comparison for EB-1, EB-2, and EB-3.
     """
     try:
-        vb = VisaBulletinParser()
+        vb = VisaBulletinParser(country=country)
         if category:
             rows = vb.get_history(category=category)
         else:

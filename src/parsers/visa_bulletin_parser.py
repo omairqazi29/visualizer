@@ -17,19 +17,24 @@ import pandas as pd
 _DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "visa_bulletin")
 _DEFAULT_FILE = os.path.join(_DATA_DIR, "india_eb_history.csv")
 _LEGACY_FILE = os.path.join(_DATA_DIR, "india_eb1_history.csv")
+_CHINA_FILE = os.path.join(_DATA_DIR, "china_eb1_history.csv")
 
 
 class VisaBulletinParser:
     """Parses India EB Visa Bulletin history and computes DOF-FAD gap."""
 
-    def __init__(self, file_path: Optional[str] = None, category: str = "EB-1"):
+    def __init__(self, file_path: Optional[str] = None, category: str = "EB-1",
+                 country: str = "India"):
         if file_path:
             self.file_path = file_path
+        elif country == "China":
+            self.file_path = _CHINA_FILE
         elif os.path.exists(_DEFAULT_FILE):
             self.file_path = _DEFAULT_FILE
         else:
             self.file_path = _LEGACY_FILE
         self.category = category
+        self.country = country
         self._df: Optional[pd.DataFrame] = None
 
     def _load(self) -> pd.DataFrame:
