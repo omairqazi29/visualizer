@@ -56,6 +56,7 @@ class SupplyDemandResponse(BaseModel):
     pipeline_total: int
     total_queue: int
     annual_eb1_supply: int
+    supply_by_fy: dict[str, int]  # {fy_year: india_eb1_supply}
     clearance_date: str
     months_to_clear: int
     trajectory: List[dict]
@@ -155,14 +156,20 @@ async def get_supply_demand_data(
             country="India", categories=["E11", "E12", "E13"]
         )
 
-        modeler = DemandModeler(total_queue, int(india_eb1_supply), monthly_dist)
+        # Per-FY supply schedule
+        fy_supply = calc.get_supply_by_fy(
+            apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions
+        )
+
+        modeler = DemandModeler(total_queue, monthly_distribution=monthly_dist, fy_supply=fy_supply)
         projection = modeler.project_clearance()
 
         return SupplyDemandResponse(
             inventory={k: int(v) for k, v in inv_stats.items()},
             pipeline_total=int(pipe_total),
             total_queue=int(total_queue),
-            annual_eb1_supply=int(india_eb1_supply),
+            annual_eb1_supply=int(modeler.default_supply),
+            supply_by_fy={str(k): v for k, v in fy_supply.items()},
             clearance_date=projection["clearance_date"].strftime("%Y-%m-%d"),
             months_to_clear=int(projection["months_to_clear"]),
             trajectory=projection["trajectory"],
@@ -217,18 +224,17 @@ async def predict_pd(
             # overstated queue for pre-2024 PDs and reduced prediction accuracy.
             backlog_ahead = inv_ahead.get("mountain", inv_ahead["total"])
 
-        # Supply side via centralized calculator
+        # Supply side via centralized calculator (per-FY schedule)
         calc = SupplyCalculator()
-        breakdown = calc.get_supply_breakdown(
-            apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions
-        )
-        india_eb1_supply = breakdown.india_eb1_supply
-
         monthly_dist = calc.dos_parser.get_monthly_distribution(
             country="India", categories=["E11", "E12", "E13"]
         )
+        fy_supply = calc.get_supply_by_fy(
+            apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions
+        )
 
-        modeler = DemandModeler(total_queue, int(india_eb1_supply), monthly_dist)
+        modeler = DemandModeler(total_queue, monthly_distribution=monthly_dist, fy_supply=fy_supply)
+        india_eb1_supply = modeler.default_supply
         score = modeler.calculate_confidence_score(
             pd_dt, backlog_ahead=backlog_ahead, target_fy=2027
         )

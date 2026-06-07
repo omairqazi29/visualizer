@@ -94,6 +94,31 @@ export default function SupplyDemandPage() {
         </Card>
       </div>
 
+      {/* Per-FY Supply */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">India EB-1 Supply by Fiscal Year</CardTitle>
+          <CardDescription className="text-xs">Data-driven from DOS monthly issuance data. Future FYs use the latest available.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-6 text-sm">
+            {Object.entries(freezeData.supply_by_fy).map(([fy, supply]) => (
+              <div key={fy} className="flex items-baseline gap-1.5">
+                <span className="text-xs text-slate-400 font-medium">FY{fy}:</span>
+                <span className={`font-bold ${Number(supply) > 10000 ? 'text-crimson-600' : 'text-slate-600'}`}>
+                  {Number(supply).toLocaleString()}
+                </span>
+              </div>
+            ))}
+            <div className="flex items-baseline gap-1.5 text-slate-400">
+              <span className="text-xs font-medium">FY{Number(Object.keys(freezeData.supply_by_fy).sort().pop()) + 1}+:</span>
+              <span className="font-bold">{freezeData.annual_eb1_supply.toLocaleString()}</span>
+              <span className="text-xs">(projected)</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="p-6">
         <CardHeader>
           <CardTitle>The Restriction Delta</CardTitle>

@@ -135,3 +135,33 @@ class DOSParser(BaseParser):
         """
         usage = self.get_total_fb_usage()
         return max(0, statutory_limit - usage)
+
+    @staticmethod
+    def _assign_fy(month: int, year: int) -> int:
+        """Map calendar month/year to fiscal year (Oct–Sep → FY)."""
+        return year + 1 if month >= 10 else year
+
+    def get_usage_by_fy(self, categories: list[str]) -> dict[int, int]:
+        """Return total issuances for given visa categories grouped by FY.
+
+        A record in Oct–Dec belongs to the *next* calendar year's FY
+        (e.g., Oct 2024 → FY2025).  Returns {fy_year: total_count}.
+        """
+        if self.df is None or "visa_category" not in self.df.columns:
+            return {}
+        df = self.df[self.df["visa_category"].isin(categories)].copy()
+        if df.empty or "report_month" not in df.columns:
+            return {}
+        df["fy"] = df.apply(lambda r: self._assign_fy(int(r["report_month"]), int(r["report_year"])), axis=1)
+        return df.groupby("fy")["count"].sum().astype(int).to_dict()
+
+    def get_fb_usage_by_fy(self) -> dict[int, int]:
+        """Return total FB issuances grouped by fiscal year."""
+        return self.get_usage_by_fy(self.FB_CATEGORIES)
+
+    def get_available_fys(self) -> list[int]:
+        """Return sorted list of fiscal years present in the data."""
+        if self.df is None or "report_month" not in self.df.columns:
+            return []
+        fys = self.df.apply(lambda r: self._assign_fy(int(r["report_month"]), int(r["report_year"])), axis=1)
+        return sorted(fys.unique().tolist())

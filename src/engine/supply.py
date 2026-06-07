@@ -38,6 +38,12 @@ from ..constants import (
 )
 from .redistribution import RedistributionEngine
 
+# Historical India EB-1 actuals from Report of the Visa Office (annual).
+# Used as baseline supply for FYs where we don't have monthly DOS data.
+INDIA_EB1_HISTORICAL: dict[int, int] = {
+    2024: 6_952,   # FY2024 Report of the Visa Office
+}
+
 # EB-1 visa category codes (DOS consular IV symbols).
 EB1_VISA_CATEGORIES: list[str] = ['E11', 'E12', 'E13', 'E1', 'IB1', 'IB2']
 
@@ -213,3 +219,100 @@ class SupplyCalculator:
             eb23_savings=eb23_savings,
             india_oversubscribed_share=india_share,
         )
+
+    def get_supply_by_fy(
+        self, apply_freeze: bool = False, apply_real_restrictions: bool = False
+    ) -> dict[int, int]:
+        """Compute India EB-1 supply per fiscal year from available DOS data.
+
+        Runs the full INA cascade per FY using actual FB/EB usage data.
+        For FYs without DOS data, uses INDIA_EB1_HISTORICAL if available,
+        otherwise falls back to the latest computed FY.
+
+        Returns {fy_year: india_eb1_supply}.
+        """
+        self._ensure_dos_loaded()
+        dos = self.dos_parser
+
+        # Determine which FYs have data
+        available_fys = dos.get_available_fys()
+        if not available_fys:
+            breakdown = self.get_supply_breakdown(apply_freeze, apply_real_restrictions)
+            return {2025: breakdown.india_eb1_supply}
+
+        # Per-FY FB and EB4/5 usage
+        fb_by_fy = dos.get_fb_usage_by_fy()
+        eb45_by_fy = dos.get_usage_by_fy(EB45_CATEGORIES)
+
+        india_share = self.compute_india_share()
+        india_baseline = DEFAULT_INDIA_EB1_SUPPLY
+
+        # Determine restricted set
+        if apply_real_restrictions:
+            restricted = ACTUAL_RESTRICTED_COUNTRIES
+        elif apply_freeze:
+            restricted = RedistributionEngine.get_default_restricted_list()
+        else:
+            restricted = None
+
+        # Pre-compute per-FY savings if restrictions active
+        fy_fb_savings: dict[int, int] = {}
+        fy_eb1_savings: dict[int, int] = {}
+        fy_eb45_savings: dict[int, int] = {}
+        if restricted:
+            engine = RedistributionEngine(restricted)
+            for fy in available_fys:
+                fy_df = self._filter_fy(dos.df, fy)
+                fb_df = fy_df[fy_df["visa_category"].isin(DOSParser.FB_CATEGORIES)]
+                fy_fb_savings[fy] = engine.calculate_savings(fb_df, engine.apply_freeze(fb_df))
+                eb1_df = fy_df[fy_df["visa_category"].isin(EB1_VISA_CATEGORIES)]
+                fy_eb1_savings[fy] = engine.calculate_savings(eb1_df, engine.apply_freeze(eb1_df))
+                eb45_df = fy_df[fy_df["visa_category"].isin(EB45_CATEGORIES)]
+                fy_eb45_savings[fy] = engine.calculate_savings(eb45_df, engine.apply_freeze(eb45_df))
+
+        result: dict[int, int] = {}
+        for fy in available_fys:
+            fb_usage = fb_by_fy.get(fy, 0)
+            eb45_usage = eb45_by_fy.get(fy, 0)
+
+            # Baseline cascade
+            fb_spill_base = max(0, FB_STATUTORY_LIMIT - fb_usage)
+            pool_base = EB_BASE_LIMIT + fb_spill_base
+            eb1_base = int(pool_base * EB1_STATUTORY_SHARE)
+            eb45_alloc_base = int(pool_base * EB45_STATUTORY_SHARE)
+            eb45_spill_base = max(0, eb45_alloc_base - eb45_usage)
+            total_eb1_base = eb1_base + eb45_spill_base
+
+            if restricted:
+                fb_sav = fy_fb_savings.get(fy, 0)
+                eb1_sav = fy_eb1_savings.get(fy, 0)
+                eb45_sav = fy_eb45_savings.get(fy, 0)
+
+                fb_spill = fb_spill_base + fb_sav
+                pool = EB_BASE_LIMIT + fb_spill
+                eb1_from_pool = int(pool * EB1_STATUTORY_SHARE)
+                eb45_alloc = int(pool * EB45_STATUTORY_SHARE)
+                eb45_spill = max(0, eb45_alloc - (eb45_usage - eb45_sav))
+                total_eb1 = eb1_from_pool + eb45_spill
+                additional = total_eb1 - total_eb1_base
+                india_eb1 = india_baseline + eb1_sav + int(additional * india_share)
+            else:
+                india_eb1 = india_baseline
+
+            result[fy] = india_eb1
+
+        # Include known historical FYs not in DOS data
+        for fy, supply in INDIA_EB1_HISTORICAL.items():
+            if fy not in result:
+                result[fy] = supply
+
+        return dict(sorted(result.items()))
+
+    @staticmethod
+    def _filter_fy(df: pd.DataFrame, fy: int) -> pd.DataFrame:
+        """Filter DataFrame rows belonging to a specific fiscal year."""
+        mask = df.apply(
+            lambda r: DOSParser._assign_fy(int(r["report_month"]), int(r["report_year"])) == fy,
+            axis=1,
+        )
+        return df[mask]

@@ -70,7 +70,7 @@ export default function Methodology() {
             <div className="p-3 rounded-lg bg-slate-50 border">
               <div className="text-xs text-slate-500 uppercase tracking-wider">India EB-1 Baseline</div>
               <div className="text-xl font-bold text-navy-900">{data.india_eb1_baseline.toLocaleString()}</div>
-              <div className="text-xs text-slate-400">FY2024 actuals</div>
+              <div className="text-xs text-slate-400">FY2024 actuals (per-FY from DOS data)</div>
             </div>
             <div className="p-3 rounded-lg bg-slate-50 border">
               <div className="text-xs text-slate-500 uppercase tracking-wider">EB-1 Dep. Mult.</div>

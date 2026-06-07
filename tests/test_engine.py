@@ -123,6 +123,50 @@ def test_compute_india_share_data_driven():
     assert 0.75 < share < 0.95
 
 
+def test_demand_modeler_per_fy_supply():
+    """DemandModeler uses different supply per fiscal year when fy_supply provided."""
+    dist = {m: 1 / 12 for m in range(1, 13)}
+    # FY2026 = low supply (6952), FY2027 = high supply (45000)
+    fy_schedule = {2026: 6952, 2027: 45000}
+    modeler = DemandModeler(
+        inventory_total=50000, monthly_distribution=dist, fy_supply=fy_schedule
+    )
+    # default_supply should be the latest FY
+    assert modeler.default_supply == 45000
+
+    # Start in Oct 2025 (= FY2026).  FY2026 supply is only 6952.
+    start = datetime(2025, 10, 1)
+    proj = modeler.project_clearance(start_date=start)
+
+    # After 12 months (end of FY2026), backlog should drop by ~6952 (not 45000)
+    fy2026_end = proj["trajectory"][12]["backlog"]
+    assert 42000 < fy2026_end < 44000  # ~50000 - 6952 ≈ 43048
+
+    # After FY2027 kicks in (high supply), clearance should come fast
+    assert proj["months_to_clear"] < 25  # much less than 50000/6952 ≈ 86 months
+
+
+def test_supply_by_fy_returns_per_fy_dict():
+    """SupplyCalculator.get_supply_by_fy returns per-FY supply from DOS data."""
+    from src.engine.supply import SupplyCalculator
+    calc = SupplyCalculator()
+    fy_base = calc.get_supply_by_fy(apply_real_restrictions=False)
+    fy_policy = calc.get_supply_by_fy(apply_real_restrictions=True)
+
+    # Should have at least FY2024 (historical) and FY2025 (from DOS data)
+    assert 2024 in fy_base
+    assert 2025 in fy_base
+
+    # Baseline: FY2024 and FY2025 should both be ~6952 (no restrictions)
+    assert fy_base[2024] == 6952
+    assert 5000 < fy_base[2025] < 10000
+
+    # Current policy: FY2025 should be much higher due to restrictions
+    assert fy_policy[2025] > 30000
+    # FY2024 should still be baseline (historical, pre-restriction)
+    assert fy_policy[2024] == 6952
+
+
 def test_predict_accuracy_for_2023_pd_uses_mountain_backlog():
     """For PD 2023-04-01 (near current May 2026 FAD 01APR23), backlog_ahead must use mountain (cutoff filter) not full total.
     This + researched supply makes projections data-driven vs real Visa Bulletin observations.

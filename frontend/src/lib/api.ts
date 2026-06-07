@@ -48,6 +48,7 @@ export interface SupplyDemandData {
   pipeline_total: number;
   total_queue: number;
   annual_eb1_supply: number;
+  supply_by_fy: Record<string, number>;
   clearance_date: string;
   months_to_clear: number;
   trajectory: TrajectoryPoint[];

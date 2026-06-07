@@ -29,12 +29,13 @@
 ### 2. Logic Engine (`src/engine`)
 - **SupplyCalculator**: Waterfall = EB140k + FB_spill + EB45_spill + freeze_savings. Computes india_eb1_supply.
 - **RedistributionEngine**: Freeze zeroing + distribute_spillover (7% cap then surplus bypass INA 202(a)(5)).
-- **DemandModeler** (enhanced): Blends historical % with uniform for high-supply (freeze) scenarios; FY Oct reset.
+- **DemandModeler** (enhanced): Per-FY supply schedule from DOS data (varies by fiscal year); blends historical % with uniform for high-supply scenarios; FY Oct reset with supply lookup.
 
 ## Data Flow (Revamped)
 1. DOS dir (all files) + Inventory/Pipeline via `InventoryParser.latest()` / `PipelineParser.latest()` (backed by `src/data_discovery.find_latest` + date/mtime sort) -> Parsers (robust load + normalize)
 2. SupplyCalculator.get_supply_breakdown(...) -> Breakdown
-3. DemandModeler (...) -> projection + confidence
+3. SupplyCalculator.get_supply_by_fy(...) -> {FY: India EB-1 supply}
+4. DemandModeler (fy_supply=...) -> projection + confidence
 4. FastAPI endpoints (/waterfall, /supply-demand, /predict) using Parser.latest() -> Typed Next.js UI
 
 See INA_MODEL.md (to be added) for equations. New data: drop files in data/ ; validated via `python -m src.scripts.update_data`.
