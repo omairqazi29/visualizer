@@ -399,6 +399,56 @@ async def get_methodology():
     )
 
 
+class VBHistoryRow(BaseModel):
+    bulletin_month: str
+    category: str
+    fad: str | None
+    dof: str | None
+
+
+class VBHistoryResponse(BaseModel):
+    categories: List[str]
+    total_rows: int
+    history: List[VBHistoryRow]
+
+
+@app.get("/api/visa-bulletin-history", response_model=VBHistoryResponse)
+async def get_visa_bulletin_history(
+    category: str = Query(
+        None,
+        description="Filter by EB category (EB-1, EB-2, EB-3). Returns all if omitted.",
+    ),
+):
+    """Returns historical Visa Bulletin FAD/DOF data for India EB categories.
+
+    Supports cross-category comparison for EB-1, EB-2, and EB-3.
+    """
+    try:
+        vb = VisaBulletinParser()
+        if category:
+            rows = vb.get_history(category=category)
+        else:
+            rows = vb.get_all_categories_history()
+
+        history = []
+        for r in rows:
+            history.append(VBHistoryRow(
+                bulletin_month=r["bulletin_month"],
+                category=r["category"],
+                fad=r["fad"].isoformat() if r["fad"] else None,
+                dof=r["dof"].isoformat() if r["dof"] else None,
+            ))
+
+        categories = sorted(set(r.category for r in history))
+        return VBHistoryResponse(
+            categories=categories,
+            total_rows=len(history),
+            history=history,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
 
