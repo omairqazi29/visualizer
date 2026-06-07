@@ -38,10 +38,21 @@ from ..constants import (
 )
 from .redistribution import RedistributionEngine
 
-# Historical India EB-1 actuals from Report of the Visa Office (annual).
+# Historical India EB-1 actuals from Report of the Visa Office, Table V Part 2
+# (travel.state.gov). Total EB-1 charged to India: principals + derivatives,
+# consular IV issuances + USCIS adjustments of status.
 # Used as baseline supply for FYs where we don't have monthly DOS data.
 INDIA_EB1_HISTORICAL: dict[int, int] = {
-    2024: 6_952,   # FY2024 Report of the Visa Office
+    2015: 12_253,  # FY2015 Report of the Visa Office
+    2016: 10_985,  # FY2016 Report of the Visa Office
+    2017: 13_082,  # FY2017 Report of the Visa Office
+    2018: 10_967,  # FY2018 Report of the Visa Office (cited in CRS R47164)
+    2019: 9_008,   # FY2019 Report of the Visa Office (cited in CRS R47164)
+    2020: 17_014,  # FY2020 — COVID FB spillover began inflating EB ceiling
+    2021: 30_825,  # FY2021 — peak year, ~262k total EB ceiling from FB underuse
+    2022: 21_437,  # FY2022 — still elevated (~280k EB), FB resuming
+    2023: 16_604,  # FY2023 — EB ceiling ~197k, India EB-1 retrogressed mid-year
+    2024: 6_952,   # FY2024 — EB ceiling back to ~140k baseline
 }
 
 # EB-1 visa category codes (DOS consular IV symbols).
