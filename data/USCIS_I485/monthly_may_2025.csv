@@ -1,0 +1,31 @@
+﻿Report to Congress,,,,,,,
+Number of Service-Wide Forms,,,,,,,
+"By Month, Form Status, and Processing Time",,,,,,,
+For the Month of May 2025,,,,,,,
+Form Number,Description,Forms Received,Approvals,Denials,Pending,Pending Over 6 Months,Avg. Processing Time
+I-130,Petition for Alien Relative,"83,758","78,368","12,951","2,416,102","1,916,571",15.4
+I-360,"Petition for Amerasian, Widow(er), or Special Immigrant","10,319","5,410",671,"214,343","168,362",8.6
+I-485,Application to Register Permanent Residence or Adjust Status (Asylum),"6,236",899,113,"82,549","46,589",16.8
+I-485,Application to Register Permanent Residence or Adjust Status (Cuban),"23,881","3,376",226,"267,090","136,077",9.5
+I-485,Application to Register Permanent Residence or Adjust Status (Employment),"6,563","8,040","1,091","180,445","141,810",11.1
+I-485,Application to Register Permanent Residence or Adjust Status (Family),"45,424","44,518","5,985","597,695","367,356",9.9
+I-485,Application to Register Permanent Residence or Adjust Status (Other),"1,540","1,877",262,"55,222","46,639",22.2
+I-485,Application to Register Permanent Residence or Adjust Status (Refugee),"8,382",699,107,"62,934","22,554",12.5
+I-751,Petition to Remove Conditions on Residence,"12,597","5,237",259,"251,159","170,202",22.1
+I-765,Application for Employment Authorization,"395,958","311,684","78,588","1,753,599","506,084",2.6
+N-400,Application for Naturalization,"84,238","82,102","7,488","530,238","118,829",6.1
+Notes,,,,,,,
+"1) ""Forms Received"" are the number of new applications or petitions received and entered into a case-tracking system during the reporting period.",,,,,,,
+"2) ""Approvals"" are the number of applications or petitions approved during the reporting period.",,,,,,,
+"3) ""Denials"" are the number of applications or petitions that were denied during the reporting period.",,,,,,,
+"4) ""Pending"" is the number of applications or petitions awaiting a decision as of the end of the reporting period. Some actions taken on cases are not reflected in this report such as administrative closures and transfers between offices; thus, the total pending counts cannot be calculated using data from previous reporting periods.",,,,,,,
+"5) ""Pending Over Six Months"" is the number of applications pending a decision more than six months after receipt, as of the end of the reporting period.",,,,,,,
+"6) ""Avg. Processing Time"" is the number of months it took for an application, petition, or request to be processed from receipt to completion; the average processing time is calculated using all applications and petitions completed in the reporting period and may differ from processing times reported on other USCIS.gov webpages. ",,,,,,,
+"7) This report is produced in response to direction set forth in the Consolidated Appropriations Act, 2022, Joint Explanatory Statement (H. R. 2471 / P.L. 117-103).",,,,,,,
+"8) Some applications or petitions approved, denied, or pending a decision may have been received in previous reporting periods.",,,,,,,
+9) The report reflects the most up-to-date estimate available at the time the database is queried and may differ from other published reports.,,,,,,,
+"10) Forms received, completed (approved and denied), and pending counts may differ from counts reported in previously published reports due to processing delays and the time at which the data are queried, system updates, and post-adjudicative outcomes.",,,,,,,
+"11) For a complete list of USCIS forms and descriptions, visit https://www.uscis.gov/forms.",,,,,,,
+"12) In March 2025, USCIS issued a Federal Register notice for termination of parole for Cubans, Haitians, Nicaragua, and Venezuelans. As part of this termination process, USCIS issued notices to aliens with an approved Employment Authorization Document (EADs  ) based on their parole (category (c)(11)). This action reverted previously approved (c)(11) EADs to a pending status. In April 2025, a stay was issued (Svitlana Doe, et al., v. Noem, et. al., No. 25-cv-10495 (D. Mass. Apr. 14, 2025)) , which temporarily halted the implementation of those actions. As a result, the pending (c)(11) EADs were reverted back to an approved status. These actions resulted in significant changes in pending and completed (c)(11) EADs. This report reflects operational activity during a specific time period only.         ",,,,,,,
+Source:,,,,,,,
+"ELIS, CLAIMS3, queried June 2025",,,,,,,

@@ -15,6 +15,8 @@ export const predictPD = (priorityDate: string, applyFreeze: boolean = false, ap
   api.get('/predict', { params: { priority_date: priorityDate, apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data);
 export const getMethodology = () =>
   api.get('/methodology').then(res => res.data);
+export const getI485Flow = () =>
+  api.get('/i485-flow').then(res => res.data);
 
 // Strongly typed API response shapes (mirrors backend Pydantic models)
 export interface WaterfallData {
@@ -103,4 +105,42 @@ export interface MethodologyData {
   data_sources: DataSource[];
   legal_status: LegalStatus[];
   last_verified: string;
+}
+
+export interface I485FlowPoint {
+  period: string;
+  year: number;
+  month: number;
+  source: string;
+  months_covered: number;
+  eb_receipts: number;
+  eb_approvals: number;
+  eb_denials: number;
+  eb_pending: number;
+  fb_receipts: number;
+  fb_approvals: number;
+  total_receipts: number;
+  total_approvals: number;
+  total_denials: number;
+  total_pending: number;
+  eb_net_flow: number;
+  total_net_flow: number;
+}
+
+export interface I485FlowData {
+  monthly: I485FlowPoint[];
+  quarterly: I485FlowPoint[];
+  summary: {
+    latest_period: string;
+    latest_eb_pending: number;
+    latest_total_pending: number;
+    avg_monthly_eb_receipts: number;
+    avg_monthly_eb_approvals: number;
+    avg_monthly_eb_net_flow: number;
+    queue_trend: string;
+    pending_trend_pct: number;
+    data_points: number;
+    coverage: string;
+    source: string;
+  };
 }

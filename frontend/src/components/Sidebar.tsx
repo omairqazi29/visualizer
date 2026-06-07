@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BarChart3, TrendingUp, Calculator, BookOpen } from 'lucide-react';
+import { LayoutDashboard, BarChart3, TrendingUp, ArrowLeftRight, Calculator, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
   { name: 'Overview', href: '/', icon: LayoutDashboard },
   { name: 'Waterfall Chart', href: '/waterfall', icon: BarChart3 },
   { name: 'Supply/Demand', href: '/supply-demand', icon: TrendingUp },
+  { name: 'I-485 Flow', href: '/i485-flow', icon: ArrowLeftRight },
   { name: 'PD Predictor', icon: Calculator, href: '/predict' },
   { name: 'Methodology', icon: BookOpen, href: '/methodology' },
 ];
