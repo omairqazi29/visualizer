@@ -58,11 +58,6 @@ export default function I485FlowPage() {
     label: formatPeriod(point.year, point.month),
   }));
 
-  const totalChart = data.monthly.map((point) => ({
-    ...point,
-    label: formatPeriod(point.year, point.month),
-  }));
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -208,7 +203,7 @@ export default function I485FlowPage() {
         <CardContent>
           <div className="h-[380px] mt-4">
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-              <ComposedChart data={totalChart}>
+              <ComposedChart data={monthlyChart}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="label" minTickGap={30} />
                 <YAxis tickFormatter={(val) => `${(Number(val) / 1000).toFixed(0)}k`} />

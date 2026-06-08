@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getI140Receipts, I140ReceiptsData } from '@/lib/api';
 import {
-  BarChart, Bar, LineChart, Line,
+  BarChart, Bar, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell, ComposedChart, Area,
 } from 'recharts';

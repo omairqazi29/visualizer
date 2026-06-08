@@ -704,9 +704,28 @@ async def get_h1b_demand():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class LegislationBillModel(BaseModel):
+    """Schema for a single pending legislation bill."""
+    id: str
+    bill_number: str
+    title: str
+    short_title: str
+    sponsor: str
+    introduced: str
+    status: str
+    status_detail: str
+    chamber: str
+    direction: str
+    likelihood: str
+    categories_affected: List[str]
+    scenario_id: str | None = None
+    key_provisions: List[str]
+    impact_summary: str
+
+
 class LegislationResponse(BaseModel):
     """Pending legislation bills and what-if scenario projections."""
-    bills: List[dict]
+    bills: List[LegislationBillModel]
     scenarios: dict
     baseline: dict
     last_updated: str
@@ -757,7 +776,7 @@ async def get_legislation():
             bills=PENDING_BILLS,
             scenarios=result["scenarios"],
             baseline=result["baseline"],
-            last_updated="2026-06",
+            last_updated="2026-06-01",
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -980,7 +999,7 @@ async def get_methodology():
                 "model_impact": "None. Model uses DOS consular IV data (ground truth). Ruling affects USCIS domestic processing, a separate pathway not measured by DOS.",
             },
         ],
-        last_verified="2026-06",
+        last_verified="2026-06-01",
     )
 
 

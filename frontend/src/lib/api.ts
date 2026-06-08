@@ -15,6 +15,14 @@ export const predictPD = (priorityDate: string, applyFreeze: boolean = false, ap
   api.get('/predict', { params: { priority_date: priorityDate, apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data);
 export const getMethodology = () =>
   api.get('/methodology').then(res => res.data);
+export const getInventoryContext = () =>
+  api.get('/inventory-context').then(res => res.data);
+export const getNVCBacklog = () =>
+  api.get('/nvc-backlog').then(res => res.data);
+export const getVisaBulletinHistory = (category?: string, country?: string) =>
+  api.get('/visa-bulletin-history', { params: { category, country } }).then(res => res.data);
+export const getDependentMultipliers = () =>
+  api.get('/dependent-multipliers').then(res => res.data);
 export const getI485Flow = () =>
   api.get('/i485-flow').then(res => res.data);
 export const getProcessingTimes = (category?: string, officeCode?: string) =>
