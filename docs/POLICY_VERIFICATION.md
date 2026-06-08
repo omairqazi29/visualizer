@@ -19,7 +19,7 @@ Check whenever any of these occur:
 | DOS Monthly IV Issuances | travel.state.gov → Visa Statistics → Monthly IV Issuances | Monthly (~2-3 mo lag) | `data/DOS/*.xlsx` — consular visa issuances by country & category. Ground truth for FB usage, EB4/5 usage, restriction savings |
 | USCIS EB I-485 Inventory | uscis.gov → Tools → Reports & Studies | Quarterly | `data/eb_inventory_*.xlsx` — pending I-485 cases by country, category, PD year. Drives demand/queue size |
 | USCIS I-140 Performance | uscis.gov → Tools → Reports & Studies | Quarterly | `data/eb_i140_*performance*.xlsx` or `data/*performance*.xlsx` — approved I-140s awaiting visa numbers. Pipeline component of demand |
-| Visa Bulletin | travel.state.gov → Visa Bulletin | Monthly | Sanity-check for India EB-1 FAD. Not directly ingested but used to validate projections |
+| Visa Bulletin | travel.state.gov → Visa Bulletin | Monthly | `data/visa_bulletin/india_eb_history.csv` — historical FAD/DOF dates for India EB-1/EB-2/EB-3 (Oct 2015–present). Fed into `VBPredictor` for month-by-month forecast. Also used by `VisaBulletinParser` to compute DOF-FAD gap for PD Predictor. **Must be updated monthly** with new bulletin dates. |
 | Presidential Proclamations | whitehouse.gov → Presidential Actions | As issued | Part of `ACTUAL_RESTRICTED_COUNTRIES` — 39 countries with entry suspension |
 | DOS IV Pause (Public Charge) | travel.state.gov → Visa News → "IV Processing Updates..." | Indefinite (eff. Jan 21, 2026) | Part of `ACTUAL_RESTRICTED_COUNTRIES` — 75 countries with consular IV issuance paused |
 | Report of the Visa Office | travel.state.gov → Annual Reports | Annual (~6 mo lag) | `DEFAULT_INDIA_EB1_SUPPLY` in `src/constants.py` — India's baseline EB-1 annual issuances |
@@ -105,7 +105,19 @@ python3 -m pytest tests/ -v
 
 Auto-discovery (`src/data_discovery.py`) picks the latest file by parsed date or mtime.
 
-### 5. Update Baseline Supply (Annual)
+### 5. Update Visa Bulletin History (Monthly)
+
+When a new Visa Bulletin is posted on travel.state.gov:
+
+1. Look up India EB-1, EB-2, and EB-3 Final Action Dates and Dates for Filing
+2. Append 3 new rows (one per category) to `data/visa_bulletin/india_eb_history.csv`
+3. Append the EB-1 row to `data/visa_bulletin/india_eb1_history.csv`
+4. Format: `YYYY-MM,EB-X,India,YYYY-MM-DD,YYYY-MM-DD,travel.state.gov` (use "C" if Current)
+5. Run tests: `python3 -m pytest tests/test_vb_predictor.py -v`
+
+This feeds the VB Forecast (`/vb-forecast`) and improves the PD Predictor DOF estimates.
+
+### 6. Update Baseline Supply (Annual)
 
 When a new Report of the Visa Office is published (e.g., FY2025):
 
@@ -114,7 +126,7 @@ When a new Report of the Visa Office is published (e.g., FY2025):
 3. Update the comment with the source and value
 4. Run tests
 
-### 6. Cross-Verify Projections
+### 7. Cross-Verify Projections
 
 After any data update, sanity-check against the current Visa Bulletin:
 
@@ -133,11 +145,13 @@ After any data update, sanity-check against the current Visa Bulletin:
 | Baseline supply (new FY data) | `src/constants.py` | `test_constants.py`, `test_engine.py` |
 | Court ruling on entry bans or IV pause | `src/constants.py` (countries), `api/main.py`, docs | `test_constants.py`, `test_engine.py` |
 | Court ruling on USCIS holds only | docs only (no model impact) | — |
+| New Visa Bulletin (monthly) | `data/visa_bulletin/india_eb_history.csv`, `india_eb1_history.csv` | `test_vb_predictor.py` |
 
 ## Changelog
 
 | Date | Event | Model Impact | Updated By |
 |---|---|---|---|
+| Jun 2026 | Added Visa Bulletin Predictor. Extended VB history from Oct 2022 to Oct 2015 (387 rows, EB-1/EB-2/EB-3). New `VBPredictor` engine, `/api/vb-forecast` endpoint, `/vb-forecast` frontend page. 87+ EB-1 data points for advancement analysis. | New VB forecast capability — month-by-month FAD/DOF prediction with confidence bands | AI-assisted |
 | Jun 2026 | Added DOS 75-country IV pause to model. ACTUAL_RESTRICTED_COUNTRIES now union of 39-country Proclamation ban + 75-country IV pause = **91 countries**. Major additions: Brazil, Pakistan, Bangladesh, Egypt, Ethiopia, Colombia, Ghana, Iraq, Jamaica, Nepal, Russia, etc. | Significantly increased restriction savings — these are major IV consumers whose consular issuance is now paused | AI-assisted |
 | Jun 5, 2026 | Dorcas v. USCIS — USCIS adjudicative hold vacated nationwide | None (DOS consular data unaffected; domestic I-485 processing is separate pathway) | AI-assisted |
 | Jun 2026 | Expanded Proclamation countries from 18 to 39 (full scope of Proclamations 10949/10998) | Moderate increase in savings | AI-assisted |

@@ -11,8 +11,16 @@ A modern web application to visualize and predict the impact of U.S. Immigrant V
 - **Waterfall Visualization**: INA-compliant path from FB/EB limits to India EB-1 supply (with/without Restriction Scenario).
 - **Current Policy Mode**: 91-country real restrictions (39-country Proclamation ban + 75-country DOS IV pause). India/China excluded.
 - **Maximum Scenario**: Additional hypothetical freeze on top-consuming countries (Philippines, Mexico, etc.) beyond real restrictions.
-- **Inventory + Pipeline**: Auto-discovered latest USCIS EB I-485 + I-140 files (drop new eb_inventory_*.xlsx or performance data into data/ — no code change), 2.2x dependents.
-- **PD Predictor**: FY2027 confidence with high-supply blend + backlog_ahead by PD year.
+- **Inventory + Pipeline**: Auto-discovered latest USCIS EB I-485 + I-140 files (drop new eb_inventory_*.xlsx or performance data into data/ — no code change), data-driven dependent multipliers from DHS Yearbook Table 7.
+- **PD Predictor**: FY2027 confidence with per-FY supply schedule + backlog_ahead by PD year.
+- **VB Forecast**: Month-by-month Visa Bulletin FAD/DOF forecast with confidence bands. Uses 87+ months of historical advancement data, seasonal patterns, and supply-adjusted scaling. Supports EB-1/EB-2/EB-3 with restriction toggle.
+- **Legislation Tracker**: Pending immigration bills with what-if scenario projections on backlog clearance.
+- **I-485 Flow**: Monthly receipts vs. approvals — tracks whether the I-485 queue is growing or shrinking.
+- **I-140 Receipts**: New I-140 filings by country and EB category — models queue growth rate.
+- **PERM Pipeline**: DOL Labor Certification data — leading indicator of EB-2/EB-3 I-140 filings.
+- **H-1B Demand**: Cap registrations and approvals by country — future demand pressure indicator.
+- **Processing Times**: USCIS adjudication speed by service center for EB I-485.
+- **CEAC Scheduling**: Real-time consular pipeline activity and NVC wait times.
 
 ## INA 201/203 Spillover Flow (Restriction Mode)
 

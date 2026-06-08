@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BarChart3, TrendingUp, ArrowLeftRight, Calculator, BookOpen, Clock, FileInput, Users, Scale, Building2, FilePlus2 } from 'lucide-react';
+import { LayoutDashboard, BarChart3, TrendingUp, ArrowLeftRight, Calculator, BookOpen, Clock, FileInput, Users, Scale, Building2, FilePlus2, LineChart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
@@ -14,6 +14,7 @@ const navigation = [
   { name: 'Processing Times', href: '/processing-times', icon: Clock },
   { name: 'CEAC Scheduling', href: '/ceac-scheduling', icon: Building2 },
   { name: 'PD Predictor', icon: Calculator, href: '/predict' },
+  { name: 'VB Forecast', href: '/vb-forecast', icon: LineChart },
   { name: 'Legislation', href: '/legislation', icon: Scale },
   { name: 'Methodology', icon: BookOpen, href: '/methodology' },
 ];

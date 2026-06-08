@@ -4,7 +4,7 @@
 - **Backend**: FastAPI + Python 3.11 + Pandas (data cleaning for DOS/USCIS Excel)
 - **Frontend**: Next.js 14 (App Router) + TypeScript + Tailwind + Recharts + shadcn/ui
 - **Key Modeling**: INA 201/203 limits, vertical spillovers (EB4/5 -> EB-1), 7% caps + 202(a)(5) surplus, data-driven category-specific dependent multipliers from DHS Yearbook Table 7 (auto-updated from `data/DHS_Yearbook/dhs_table7_eb_multipliers.csv`; FY2015–FY2023; applied to I-140 pipeline only; I-485 inventory already includes dependents)
-- **Data**: Monthly DOS IV issuances (any in data/DOS/ via directory load), USCIS EB I-485 Inventory + I-140 pipeline via src/data_discovery (auto latest eb_inventory*.xlsx and *performance*.xlsx / eb_i140*.xlsx by filename date or mtime), NVC backlog (ARIVA + monthly IV backlog reports in data/NVC/), DHS Yearbook Table 7 EB multipliers (data/DHS_Yearbook/). Drop-in support for new bulletins and quarterly releases.
+- **Data**: Monthly DOS IV issuances (any in data/DOS/ via directory load), USCIS EB I-485 Inventory + I-140 pipeline via src/data_discovery (auto latest eb_inventory*.xlsx and *performance*.xlsx / eb_i140*.xlsx by filename date or mtime), NVC backlog (ARIVA + monthly IV backlog reports in data/NVC/), DHS Yearbook Table 7 EB multipliers (data/DHS_Yearbook/), Visa Bulletin history (data/visa_bulletin/ — India EB-1/EB-2/EB-3 FAD+DOF from Oct 2015, ~130 months), DOL PERM (data/DOL_PERM/), H-1B (data/H1B/), CEAC (data/CEAC/), I-485 flow (data/USCIS_I485/), processing times (data/USCIS_ProcessingTimes/). Drop-in support for new bulletins and quarterly releases.
 
 ## Research-Backed INA Fidelity Notes
 - FB spillover (201(c)): Prior FY unused family (226k floor) added to EB pool.
@@ -27,24 +27,36 @@
 - **PipelineParser**: I-140 approved awaiting visas. Data-driven category-specific dependent multipliers from DHS Yearbook Table 7 (via `get_data_driven_multipliers()`). Methods: `get_india_eb1_backlog()`, `get_all_eb_pipeline()`.
 - **DhsYearbookParser**: DHS Yearbook Table 7 — computes principal-to-total multipliers by EB category from actual admissions data (FY2015–FY2023). Methods: `get_multipliers()`, `get_latest_multipliers()`, `get_historical_multipliers()`, `get_average_multipliers()`, `get_category_detail()`, `get_summary()`.
 - **NVCParser**: NVC (National Visa Center) backlog — the hidden pipeline stage between I-140 approval and consular interview. Reads pre-extracted CSV data from DOS ARIVA PDFs (data/NVC/). Covers consular processing (CP) cases ONLY — disjoint from I-485 inventory (AOS). Includes derivatives (no multiplier). Methods: `get_eb_totals()`, `get_india_eb_nvc()`, `get_india_eb1_nvc()`, `get_eb_by_country()`, `get_iv_backlog()`, `get_summary()`. Data: ARIVA Nov 2023 (260,660 EB worldwide; India 48,536 total, 2,426 EB-1). Monthly IV backlog report Sep 2024 (431k DQ cases, 385k pending scheduling).
+- **VisaBulletinParser**: Historical India EB FAD/DOF data from `data/visa_bulletin/india_eb_history.csv` (Oct 2015–present, EB-1/EB-2/EB-3). Computes DOF-FAD gap statistics, current VB status for a given PD. Methods: `get_history()`, `get_all_categories_history()`, `compute_gaps()`, `get_dof_lead_months()`, `get_current_status()`.
+- **I485FlowParser**: Monthly I-485 receipts vs. approvals from USCIS Congressional reports + quarterly performance data.
+- **ProcessingTimesParser**: USCIS processing times by service center for EB I-485.
+- **PERMParser**: DOL PERM Labor Certification data — leading indicator of EB-2/EB-3 I-140 filings.
+- **H1BParser**: H-1B cap registration and approval data by country.
+- **CEACParser**: Consular interview scheduling and issuance data from visawhen.com.
+- **I140ReceiptsParser**: New I-140 petition filings by country and EB category.
 
 ### 2. Logic Engine (`src/engine`)
 - **SupplyCalculator**: Waterfall = EB140k + FB_spill + EB45_spill + freeze_savings. Computes india_eb1_supply.
 - **RedistributionEngine**: Freeze zeroing + distribute_spillover (7% cap then surplus bypass INA 202(a)(5)).
 - **DemandModeler** (enhanced): Per-FY supply schedule from DOS data (varies by fiscal year); blends historical % with uniform for high-supply scenarios; FY Oct reset with supply lookup.
+- **VBPredictor**: Forecasts future Visa Bulletin FAD/DOF dates month-by-month. Decomposes historical VB movement into advancement rates and seasonal patterns (fiscal month). Blended forecast: 70% recent-12 avg + 30% seasonal, with supply-adjusted scaling and sqrt-widening confidence bands. Uses `VisaBulletinParser` for historical data and `VisaBulletinParser.get_dof_lead_months()` for DOF estimation. Methods: `get_advancement_rates()`, `get_seasonal_pattern()`, `get_advancement_stats()`, `forecast()`.
 
 ## Data Flow (Revamped)
 1. DOS dir (all files) + Inventory/Pipeline via `InventoryParser.latest()` / `PipelineParser.latest()` (backed by `src/data_discovery.find_latest` + date/mtime sort) + NVC via `NVCParser("data/NVC")` -> Parsers (robust load + normalize)
 2. SupplyCalculator.get_supply_breakdown(...) -> Breakdown
 3. SupplyCalculator.get_supply_by_fy(...) -> {FY: India EB-1 supply}
 4. DemandModeler (fy_supply=...) -> projection + confidence
-4. FastAPI endpoints (/waterfall, /supply-demand, /predict, /nvc-backlog) using Parser.latest() + NVCParser -> Typed Next.js UI
+5. VBPredictor.forecast() -> month-by-month FAD/DOF forecast with confidence bands
+6. FastAPI endpoints (/waterfall, /supply-demand, /predict, /vb-forecast, /nvc-backlog, /i485-flow, /processing-times, /perm-pipeline, /h1b-demand, /ceac-scheduling, /legislation, /i140-receipts, /inventory-context, /methodology) using Parser.latest() + NVCParser -> Typed Next.js UI
 
 See INA_MODEL.md (to be added) for equations. New data: drop files in data/ ; validated via `python -m src.scripts.update_data`.
 
 ## Files of Interest
 - api/main.py (endpoints + Pydantic)
-- src/engine/supply.py (central math)
-- frontend/src/app/{waterfall,supply-demand,predict}/page.tsx
+- src/engine/supply.py (central INA supply math)
+- src/engine/vb_predictor.py (Visa Bulletin forecast engine)
+- src/engine/demand.py (backlog clearance projection)
+- src/engine/legislation.py (pending bills + what-if scenarios)
+- frontend/src/app/{waterfall,supply-demand,predict,vb-forecast,legislation,...}/page.tsx
 
 (Previously documented Streamlit/Plotly version superseded by Next.js revamp.)

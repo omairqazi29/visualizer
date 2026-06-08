@@ -8,13 +8,16 @@ Key design decisions:
   - EB4/5 allocation uses the AUGMENTED pool (base + FB spillover), not just
     the base 140k. Per INA 203(b), each category gets its % of "worldwide level"
     which includes FB spillover per INA 201(d).
-  - India does NOT get 100% of total EB-1. India gets its baseline (FY2024
-    actual 6,952) plus a share of additional EB-1 from restrictions.
-  - India's share of additional EB-1 = INDIA_OVERSUBSCRIBED_SHARE (default 80%),
-    based on relative I-485 backlogs vs China (the other oversubscribed country).
+  - India does NOT get 100% of total EB-1. India EB-1 is computed by subtracting
+    data-driven non-India demand (from DHS Yearbook) from total EB-1 supply.
+    Non-India demand is stable at ~40k/year (FY2023-2024 avg from DHS Table 7).
+  - EB-4/5 spillover uses TOTAL usage (consular + AOS) from DHS Yearbook, not
+    DOS consular-only data. AOS is unaffected by travel bans (Dorcas ruling
+    vacated USCIS adjudicative hold). Only consular savings from restricted
+    countries reduce effective EB-4/5 usage.
   - DOS monthly data only captures consular IV issuances, NOT domestic AOS.
-    EBs are AOS-heavy, so EB savings from restrictions are correctly small.
-    The restrictions only block consular IVs (AOS hold vacated by Dorcas).
+    FB is consular-heavy so FB savings are reliable. EB savings are small
+    because EBs are AOS-heavy (correctly captured).
 """
 
 from dataclasses import dataclass
@@ -55,6 +58,40 @@ INDIA_EB1_HISTORICAL: dict[int, int] = {
     2024: 6_952,   # FY2024 — EB ceiling back to ~140k baseline
 }
 
+# ---------------------------------------------------------------------------
+# DHS Yearbook Table 7: TOTAL EB-4/5 LPR usage (consular + AOS combined)
+# Source: DHS Yearbook of Immigration Statistics, Table 7 —
+# "Persons Obtaining LPR Status by Type and Detailed Class of Admission"
+# The DOS monthly data only captures consular IVs; AOS is the majority of
+# EB-4/5 and is UNAFFECTED by travel bans (Dorcas v. USCIS vacated hold).
+# ---------------------------------------------------------------------------
+EB45_TOTAL_HISTORICAL: dict[int, int] = {
+    2021: 17_954,  # EB-4: 15,315 + EB-5: 2,639
+    2022: 28_408,  # EB-4: 20,526 + EB-5: 7,882
+    2023: 26_530,  # EB-4: 14,600 + EB-5: 11,930
+}
+
+# EB-4/5 AOS-only portion from DHS Yearbook Table 7.
+# Travel bans only block consular processing; AOS continues unaffected.
+EB45_AOS_HISTORICAL: dict[int, int] = {
+    2022: 20_896,  # EB-4 AOS: 16,900 + EB-5 AOS: 3,996
+    2023: 14_460,  # EB-4 AOS: 12,980 + EB-5 AOS: 1,480
+}
+
+# ---------------------------------------------------------------------------
+# Non-India EB-1 annual demand from DHS Yearbook Table 7 / Visa Office Report.
+# Computed as: total worldwide EB-1 − India EB-1 (from INDIA_EB1_HISTORICAL).
+# Remarkably stable at ~40k in baseline years (FY2023-2024).
+# Lower in FY2021-2022 because India consumed more during COVID spillover.
+# Used to compute India share: India EB-1 = total_eb1 − non_india_demand.
+# ---------------------------------------------------------------------------
+NON_INDIA_EB1_DEMAND: dict[int, int] = {
+    2021: 30_626,  # 61,451 − 30,825  (COVID spillover, India near-current)
+    2022: 31_996,  # 53,433 − 21,437  (elevated EB ceiling)
+    2023: 40_536,  # 57,140 − 16,604  (baseline EB ceiling)
+    2024: 40_510,  # 47,462 − 6,952   (baseline, India retrogressed)
+}
+
 # EB-1 visa category codes (DOS consular IV symbols).
 EB1_VISA_CATEGORIES: list[str] = ['E11', 'E12', 'E13', 'E1', 'IB1', 'IB2']
 
@@ -93,8 +130,10 @@ class SupplyBreakdown:
     eb45_savings_by_country: dict[str, int]
     eb23_savings_by_country: dict[str, int]
 
-    # Data-driven India share (computed from USCIS I-485 inventory)
-    india_oversubscribed_share: float  # India EB-1 backlog / (India + China EB-1 backlogs)
+    # Data-driven inputs (from DHS Yearbook / I-485 inventory)
+    india_oversubscribed_share: float  # Informational: India/(India+China) from I-485 inventory
+    non_india_eb1_demand: int          # DHS-derived non-India annual EB-1 consumption
+    eb45_total_usage: int              # DHS Yearbook total EB-4/5 (consular + AOS)
 
 
 class SupplyCalculator:
@@ -124,6 +163,9 @@ class SupplyCalculator:
         Uses the USCIS EB I-485 inventory to get India and China EB-1 pending
         counts (with dependents). India's share = India / (India + China).
         Falls back to the hardcoded INDIA_OVERSUBSCRIBED_SHARE if data unavailable.
+
+        NOTE: This is now informational only. The supply model uses
+        non-India demand subtraction (from DHS Yearbook) instead.
         """
         try:
             inv = InventoryParser.latest()
@@ -135,6 +177,43 @@ class SupplyCalculator:
             return india / (india + china)
         except Exception:
             return INDIA_OVERSUBSCRIBED_SHARE
+
+    @staticmethod
+    def _get_eb45_total_baseline() -> int:
+        """Total EB-4/5 annual usage (consular + AOS) from latest DHS Yearbook.
+
+        DOS data is consular-only; AOS is the majority of EB-4/5.
+        Using consular alone massively understates real usage and
+        inflates the EB-4/5 → EB-1 spillover.
+        """
+        if EB45_TOTAL_HISTORICAL:
+            return EB45_TOTAL_HISTORICAL[max(EB45_TOTAL_HISTORICAL)]
+        return 26_530  # FY2023 fallback
+
+    @staticmethod
+    def _get_eb45_aos_baseline() -> int:
+        """EB-4/5 AOS-only usage — unaffected by consular restrictions.
+
+        Travel bans and IV pauses only block consular processing.
+        AOS continues (Dorcas v. USCIS vacated adjudicative hold).
+        """
+        if EB45_AOS_HISTORICAL:
+            return EB45_AOS_HISTORICAL[max(EB45_AOS_HISTORICAL)]
+        return 14_460  # FY2023 fallback
+
+    @staticmethod
+    def _get_non_india_eb1_demand() -> int:
+        """Data-driven non-India EB-1 annual demand from DHS Yearbook.
+
+        Uses average of most recent baseline FYs (2023-2024) where EB
+        ceiling was normal (~140k) and India was retrogressed.
+        Non-India demand is stable at ~40k: ROW is always Current,
+        China is small (~5k backlog), Mexico/Philippines negligible.
+        """
+        recent = {k: v for k, v in NON_INDIA_EB1_DEMAND.items() if k >= 2023}
+        if recent:
+            return int(sum(recent.values()) / len(recent))
+        return 40_510  # FY2024 fallback
 
     def get_supply_breakdown(self, apply_freeze: bool = False, apply_real_restrictions: bool = False) -> SupplyBreakdown:
         """Compute the full INA cascade: Total EB → EB-1 → India EB-1.
@@ -168,7 +247,10 @@ class SupplyCalculator:
 
         # --- Raw usage from latest FY DOS data ---
         total_fb_usage = int(fy_df[fy_df['visa_category'].isin(DOSParser.FB_CATEGORIES)]['count'].sum())
-        eb45_usage = int(fy_df[fy_df['visa_category'].isin(EB45_CATEGORIES)]['count'].sum())
+        # EB-4/5: DOS is consular-only; use DHS Yearbook for TOTAL (consular+AOS)
+        eb45_consular = int(fy_df[fy_df['visa_category'].isin(EB45_CATEGORIES)]['count'].sum())
+        eb45_total_baseline = self._get_eb45_total_baseline()
+        eb45_aos = self._get_eb45_aos_baseline()
 
         # --- Savings from ALL categories ---
         fb_savings = 0
@@ -215,8 +297,9 @@ class SupplyCalculator:
         fb_spill_base = max(0, FB_STATUTORY_LIMIT - total_fb_usage)
         pool_base = eb_base + fb_spill_base
         eb1_from_pool_base = int(pool_base * EB1_STATUTORY_SHARE)
+        # EB-4/5 spillover uses TOTAL usage (DHS Yearbook), not consular-only
         eb45_alloc_base = int(pool_base * EB45_STATUTORY_SHARE)
-        eb45_spill_base = max(0, eb45_alloc_base - eb45_usage)
+        eb45_spill_base = max(0, eb45_alloc_base - eb45_total_baseline)
         total_eb1_base = eb1_from_pool_base + eb45_spill_base
 
         # --- CURRENT cascade (with restrictions if active) ---
@@ -224,22 +307,26 @@ class SupplyCalculator:
         fb_spill_current = fb_spill_base + fb_savings
         pool_current = eb_base + fb_spill_current
         eb1_from_pool = int(pool_current * EB1_STATUTORY_SHARE)
-        # EB4/5 allocation from AUGMENTED pool, usage reduced by savings
+        # EB-4/5: restrictions only block CONSULAR; AOS continues unaffected.
+        # Effective usage = AOS (unchanged) + remaining consular after savings.
         eb45_alloc = int(pool_current * EB45_STATUTORY_SHARE)
-        eb45_usage_effective = eb45_usage - eb45_savings
-        eb45_spillover = max(0, eb45_alloc - eb45_usage_effective)
+        eb45_consular_effective = max(0, eb45_consular - eb45_savings)
+        eb45_total_effective = eb45_aos + eb45_consular_effective
+        eb45_spillover = max(0, eb45_alloc - eb45_total_effective)
         total_eb1 = eb1_from_pool + eb45_spillover
 
         # --- India EB-1 ---
         india_baseline = DEFAULT_INDIA_EB1_SUPPLY  # 6,952 (FY2024 comprehensive)
-        india_share = self.compute_india_share()
+        india_share = self.compute_india_share()  # informational
+        non_india_demand = self._get_non_india_eb1_demand()
 
         if restricted:
-            # Additional EB-1 supply from cascade change (NOT raw savings)
-            additional_eb1 = total_eb1 - total_eb1_base
-            # India absorbs freed EB-1 from restricted countries (most oversubscribed)
-            # india_share computed from actual I-485 backlogs (India vs China).
-            india_eb1 = india_baseline + eb1_savings + int(additional_eb1 * india_share)
+            # Data-driven: India = total EB-1 − non-India demand.
+            # Non-India demand from DHS Yearbook (stable ~40k in FY2023-2024).
+            # eb1_savings reduce non-India demand (restricted countries' consular
+            # EB-1 usage is zeroed, freeing those numbers).
+            non_india_effective = non_india_demand - eb1_savings
+            india_eb1 = max(india_baseline, total_eb1 - non_india_effective)
         else:
             india_eb1 = india_baseline
 
@@ -264,6 +351,8 @@ class SupplyCalculator:
             eb45_savings_by_country=eb45_savings_by_country,
             eb23_savings_by_country=eb23_savings_by_country,
             india_oversubscribed_share=india_share,
+            non_india_eb1_demand=non_india_demand,
+            eb45_total_usage=eb45_total_baseline,
         )
 
     def get_supply_by_fy(
@@ -286,12 +375,14 @@ class SupplyCalculator:
             breakdown = self.get_supply_breakdown(apply_freeze, apply_real_restrictions)
             return {2025: breakdown.india_eb1_supply}
 
-        # Per-FY FB and EB4/5 usage
+        # Per-FY FB and EB4/5 consular usage (DOS data)
         fb_by_fy = dos.get_fb_usage_by_fy()
-        eb45_by_fy = dos.get_usage_by_fy(EB45_CATEGORIES)
+        eb45_consular_by_fy = dos.get_usage_by_fy(EB45_CATEGORIES)
 
-        india_share = self.compute_india_share()
         india_baseline = DEFAULT_INDIA_EB1_SUPPLY
+        non_india_demand = self._get_non_india_eb1_demand()
+        eb45_total_baseline = self._get_eb45_total_baseline()
+        eb45_aos = self._get_eb45_aos_baseline()
 
         # Determine restricted set
         if apply_real_restrictions:
@@ -332,14 +423,14 @@ class SupplyCalculator:
                 continue
 
             fb_usage = fb_by_fy.get(fy, 0)
-            eb45_usage = eb45_by_fy.get(fy, 0)
+            eb45_consular = eb45_consular_by_fy.get(fy, 0)
 
-            # Baseline cascade
+            # Baseline cascade (EB-4/5 uses DHS Yearbook total, not consular)
             fb_spill_base = max(0, FB_STATUTORY_LIMIT - fb_usage)
             pool_base = EB_BASE_LIMIT + fb_spill_base
             eb1_base = int(pool_base * EB1_STATUTORY_SHARE)
             eb45_alloc_base = int(pool_base * EB45_STATUTORY_SHARE)
-            eb45_spill_base = max(0, eb45_alloc_base - eb45_usage)
+            eb45_spill_base = max(0, eb45_alloc_base - eb45_total_baseline)
             total_eb1_base = eb1_base + eb45_spill_base
 
             if restricted:
@@ -351,10 +442,13 @@ class SupplyCalculator:
                 pool = EB_BASE_LIMIT + fb_spill
                 eb1_from_pool = int(pool * EB1_STATUTORY_SHARE)
                 eb45_alloc = int(pool * EB45_STATUTORY_SHARE)
-                eb45_spill = max(0, eb45_alloc - (eb45_usage - eb45_sav))
+                # Restrictions only reduce consular; AOS unaffected
+                eb45_effective = eb45_aos + max(0, eb45_consular - eb45_sav)
+                eb45_spill = max(0, eb45_alloc - eb45_effective)
                 total_eb1 = eb1_from_pool + eb45_spill
-                additional = total_eb1 - total_eb1_base
-                india_eb1 = india_baseline + eb1_sav + int(additional * india_share)
+                # India = total − non-India demand (data-driven subtraction)
+                non_india_eff = non_india_demand - eb1_sav
+                india_eb1 = max(india_baseline, total_eb1 - non_india_eff)
             else:
                 india_eb1 = india_baseline
 

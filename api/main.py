@@ -19,6 +19,7 @@ from src.parsers.processing_times_parser import ProcessingTimesParser
 from src.engine.demand import DemandModeler
 from src.engine.legislation import PENDING_BILLS, compute_legislation_scenarios
 from src.engine.supply import SupplyCalculator
+from src.engine.vb_predictor import VBPredictor
 from src.parsers.dhs_yearbook_parser import DhsYearbookParser
 from src.parsers.perm_parser import PERMParser
 from src.parsers.h1b_parser import H1BParser
@@ -61,8 +62,10 @@ class WaterfallResponse(BaseModel):
     eb1_savings_by_country: dict[str, int]
     eb45_savings_by_country: dict[str, int]
     eb23_savings_by_country: dict[str, int]
-    # Data-driven share
+    # Data-driven inputs
     india_oversubscribed_share: float
+    non_india_eb1_demand: int = 0
+    eb45_total_usage: int = 0
 
 
 class SupplyDemandResponse(BaseModel):
@@ -136,6 +139,8 @@ async def get_waterfall_data(
             eb45_savings_by_country=breakdown.eb45_savings_by_country,
             eb23_savings_by_country=breakdown.eb23_savings_by_country,
             india_oversubscribed_share=breakdown.india_oversubscribed_share,
+            non_india_eb1_demand=breakdown.non_india_eb1_demand,
+            eb45_total_usage=breakdown.eb45_total_usage,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1161,6 +1166,77 @@ async def get_i140_receipts():
             india_growth_rates=[I140ReceiptGrowth(**d) for d in parser.get_growth_rates("India")],
             country_comparison=[I140ReceiptCountry(**d) for d in parser.get_country_comparison()],
             summary=parser.get_summary(),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class VBForecastPoint(BaseModel):
+    bulletin_month: str
+    predicted_fad: str
+    predicted_dof: str | None = None
+    fad_confidence_low: str
+    fad_confidence_high: str
+
+
+class VBForecastResponse(BaseModel):
+    category: str
+    country: str
+    forecast: list[VBForecastPoint]
+    historical: list[dict]    # Recent 12 months of actual VB data for chart context
+    latest_actual: dict
+    stats: dict
+    supply_factor: float
+    dof_gap_months: float
+    methodology: str
+
+
+@app.get("/api/vb-forecast", response_model=VBForecastResponse)
+async def get_vb_forecast(
+    category: str = Query("EB-1", description="EB category: EB-1, EB-2, or EB-3"),
+    months_ahead: int = Query(24, description="Months to forecast (1-60)", ge=1, le=60),
+    apply_real_restrictions: bool = Query(False, description="Use restriction-boosted supply for forecast scaling"),
+):
+    """Returns Visa Bulletin Final Action Date / Date of Filing forecasts.
+
+    Uses historical VB advancement patterns to project future FAD/DOF movement
+    with confidence bands that widen over time.  Optionally scales advancement
+    rates using the restriction-boosted India EB-1 supply from the INA cascade.
+    """
+    try:
+        predictor = VBPredictor(category=category)
+
+        supply = None
+        if apply_real_restrictions:
+            calc = SupplyCalculator()
+            breakdown = calc.get_supply_breakdown(apply_real_restrictions=True)
+            supply = breakdown.india_eb1_supply
+
+        result = predictor.forecast(months_ahead=months_ahead, annual_supply=supply)
+
+        # Recent 12 months of actual history for chart context
+        full_history = predictor.vb.get_history(category=category)
+        recent_history = full_history[-12:]
+        historical = [
+            {
+                "bulletin_month": r["bulletin_month"],
+                "category": r.get("category", category),
+                "fad": r["fad"].isoformat() if r["fad"] else None,
+                "dof": r["dof"].isoformat() if r["dof"] else None,
+            }
+            for r in recent_history
+        ]
+
+        return VBForecastResponse(
+            category=category,
+            country="India",
+            forecast=[VBForecastPoint(**pt) for pt in result["forecast"]],
+            historical=historical,
+            latest_actual=result["latest_actual"],
+            stats=result["stats"],
+            supply_factor=result["supply_factor"],
+            dof_gap_months=result["dof_gap_months"],
+            methodology=result["methodology"],
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

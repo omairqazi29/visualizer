@@ -373,6 +373,47 @@ export const getCEACScheduling = () =>
 export const getI140Receipts = () =>
   api.get('/i140-receipts').then(res => res.data);
 
+// VB Forecast
+export interface VBForecastPoint {
+  bulletin_month: string;
+  predicted_fad: string;
+  predicted_dof: string | null;
+  fad_confidence_low: string;
+  fad_confidence_high: string;
+}
+
+export interface VBForecastData {
+  category: string;
+  country: string;
+  forecast: VBForecastPoint[];
+  historical: Array<{
+    bulletin_month: string;
+    category: string;
+    fad: string | null;
+    dof: string | null;
+  }>;
+  latest_actual: {
+    bulletin_month: string;
+    fad: string;
+    dof?: string;
+  };
+  stats: {
+    recent_avg: number;
+    recent_median: number;
+    recent_stdev: number;
+    overall_avg: number;
+    seasonal_pattern: Record<string, number>;
+    n_datapoints: number;
+    retrogression_count: number;
+  };
+  supply_factor: number;
+  dof_gap_months: number;
+  methodology: string;
+}
+
+export const getVBForecast = (category: string = 'EB-1', monthsAhead: number = 24, applyRealRestrictions: boolean = false) =>
+  api.get('/vb-forecast', { params: { category, months_ahead: monthsAhead, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data);
+
 // CEAC Scheduling
 export interface CEACIssuancePoint {
   month: string;

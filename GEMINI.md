@@ -7,8 +7,9 @@
 
 ## Architecture & Data
 - **Python/Pandas**: Mandatory for data processing to handle messy government Excel/CSV headers and 'D' disclosure strings.
-- **Dependent Multiplier**: Always use a 2.2x multiplier for dependents on all primary I-140 and I-485 counts.
-- **INA Logic**: Adhere to INA 201/203 spillover flow and the '75-Country Freeze' redistribution logic as defined in the core engine.
+- **Dependent Multiplier**: Use data-driven category-specific multipliers from DHS Yearbook Table 7 (`get_data_driven_multipliers()`) for I-140 pipeline. I-485 inventory already includes dependents (no multiplier needed).
+- **INA Logic**: Adhere to INA 201/203 spillover flow and the restriction redistribution logic as defined in the core engine.
+- **VB Predictor**: The `VBPredictor` engine forecasts future Visa Bulletin dates using historical advancement rates + seasonal patterns. It's separate from `DemandModeler` (which does backlog burn-down). Both are in `src/engine/`.
 
 ## Policy & Data Verification (IMPORTANT)
 When asked to update numbers, verify policies, or respond to legal/policy changes:
