@@ -7,30 +7,53 @@ const api = axios.create({
   baseURL,
 });
 
-export const getWaterfallData = (applyFreeze: boolean = false, applyRealRestrictions: boolean = false) => 
-  api.get('/waterfall', { params: { apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data);
-export const getSupplyDemandData = (applyFreeze: boolean = false, applyRealRestrictions: boolean = false) => 
-  api.get('/supply-demand', { params: { apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data);
-export const predictPD = (priorityDate: string, applyFreeze: boolean = false, applyRealRestrictions: boolean = false) => 
-  api.get('/predict', { params: { priority_date: priorityDate, apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data);
+// ---------------------------------------------------------------------------
+// In-memory request cache — deduplicates in-flight requests and caches results
+// for the lifetime of the session. Backend data is static (government files),
+// so there's no need for TTL or invalidation.
+// ---------------------------------------------------------------------------
+const _cache = new Map<string, Promise<unknown>>();
+
+function cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const existing = _cache.get(key);
+  if (existing) return existing as Promise<T>;
+  const promise = fn().catch((err: unknown) => {
+    _cache.delete(key); // don't cache failures
+    throw err;
+  });
+  _cache.set(key, promise);
+  return promise;
+}
+
+export const getWaterfallData = (applyFreeze: boolean = false, applyRealRestrictions: boolean = false) =>
+  cached(`waterfall:${applyFreeze}:${applyRealRestrictions}`, () =>
+    api.get('/waterfall', { params: { apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data));
+export const getSupplyDemandData = (applyFreeze: boolean = false, applyRealRestrictions: boolean = false) =>
+  cached(`supply-demand:${applyFreeze}:${applyRealRestrictions}`, () =>
+    api.get('/supply-demand', { params: { apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data));
+export const predictPD = (priorityDate: string, applyFreeze: boolean = false, applyRealRestrictions: boolean = false) =>
+  cached(`predict:${priorityDate}:${applyFreeze}:${applyRealRestrictions}`, () =>
+    api.get('/predict', { params: { priority_date: priorityDate, apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data));
 export const getMethodology = () =>
-  api.get('/methodology').then(res => res.data);
+  cached('methodology', () => api.get('/methodology').then(res => res.data));
 export const getInventoryContext = () =>
-  api.get('/inventory-context').then(res => res.data);
+  cached('inventory-context', () => api.get('/inventory-context').then(res => res.data));
 export const getNVCBacklog = () =>
-  api.get('/nvc-backlog').then(res => res.data);
+  cached('nvc-backlog', () => api.get('/nvc-backlog').then(res => res.data));
 export const getVisaBulletinHistory = (category?: string, country?: string) =>
-  api.get('/visa-bulletin-history', { params: { category, country } }).then(res => res.data);
+  cached(`vb-history:${category}:${country}`, () =>
+    api.get('/visa-bulletin-history', { params: { category, country } }).then(res => res.data));
 export const getDependentMultipliers = () =>
-  api.get('/dependent-multipliers').then(res => res.data);
+  cached('dependent-multipliers', () => api.get('/dependent-multipliers').then(res => res.data));
 export const getI485Flow = () =>
-  api.get('/i485-flow').then(res => res.data);
+  cached('i485-flow', () => api.get('/i485-flow').then(res => res.data));
 export const getProcessingTimes = (category?: string, officeCode?: string) =>
-  api.get('/processing-times', { params: { category, office_code: officeCode } }).then(res => res.data);
+  cached(`processing-times:${category}:${officeCode}`, () =>
+    api.get('/processing-times', { params: { category, office_code: officeCode } }).then(res => res.data));
 export const getPERMPipeline = () =>
-  api.get('/perm-pipeline').then(res => res.data);
+  cached('perm-pipeline', () => api.get('/perm-pipeline').then(res => res.data));
 export const getH1BDemand = () =>
-  api.get('/h1b-demand').then(res => res.data);
+  cached('h1b-demand', () => api.get('/h1b-demand').then(res => res.data));
 
 // Strongly typed API response shapes (mirrors backend Pydantic models)
 export interface WaterfallData {
@@ -55,8 +78,10 @@ export interface WaterfallData {
   eb1_savings_by_country: Record<string, number>;
   eb45_savings_by_country: Record<string, number>;
   eb23_savings_by_country: Record<string, number>;
-  // Data-driven share
+  // Data-driven inputs
   india_oversubscribed_share: number;
+  non_india_eb1_demand: number;
+  eb45_total_usage: number;
 }
 
 export interface TrajectoryPoint {
@@ -367,11 +392,11 @@ export interface LegislationData {
 }
 
 export const getLegislation = () =>
-  api.get('/legislation').then(res => res.data);
+  cached('legislation', () => api.get('/legislation').then(res => res.data));
 export const getCEACScheduling = () =>
-  api.get('/ceac-scheduling').then(res => res.data);
+  cached('ceac-scheduling', () => api.get('/ceac-scheduling').then(res => res.data));
 export const getI140Receipts = () =>
-  api.get('/i140-receipts').then(res => res.data);
+  cached('i140-receipts', () => api.get('/i140-receipts').then(res => res.data));
 
 // VB Forecast
 export interface VBForecastPoint {
@@ -412,7 +437,30 @@ export interface VBForecastData {
 }
 
 export const getVBForecast = (category: string = 'EB-1', monthsAhead: number = 24, applyRealRestrictions: boolean = false) =>
-  api.get('/vb-forecast', { params: { category, months_ahead: monthsAhead, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data);
+  cached(`vb-forecast:${category}:${monthsAhead}:${applyRealRestrictions}`, () =>
+    api.get('/vb-forecast', { params: { category, months_ahead: monthsAhead, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data));
+
+// ---------------------------------------------------------------------------
+// Prefetch all endpoints at app startup — fire in parallel, results cached
+// for instant page navigation. User-driven params (predictPD with custom
+// dates) aren't prefetched but get cached on first call.
+// ---------------------------------------------------------------------------
+export function prefetchAll() {
+  getWaterfallData(false, false);
+  getWaterfallData(false, true);
+  getSupplyDemandData(false, false);
+  getSupplyDemandData(false, true);
+  getMethodology();
+  getDependentMultipliers();
+  getI485Flow();
+  getProcessingTimes();
+  getPERMPipeline();
+  getH1BDemand();
+  getLegislation();
+  getCEACScheduling();
+  getI140Receipts();
+  getVBForecast('EB-1', 24, false);
+}
 
 // CEAC Scheduling
 export interface CEACIssuancePoint {
