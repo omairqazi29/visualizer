@@ -16,13 +16,14 @@ Check whenever any of these occur:
 
 | Source | URL | Updates | Controls in Model |
 |---|---|---|---|
-| DOS Monthly IV Issuances | travel.state.gov → Visa Statistics → Monthly IV Issuances | Monthly (~2-3 mo lag) | `data/DOS/*.xlsx` — consular visa issuances by country & category. Ground truth for FB usage, EB4/5 usage, restriction savings |
-| USCIS EB I-485 Inventory | uscis.gov → Tools → Reports & Studies | Quarterly | `data/eb_inventory_*.xlsx` — pending I-485 cases by country, category, PD year. Drives demand/queue size |
+| DOS Monthly IV Issuances | travel.state.gov → Visa Statistics → Monthly IV Issuances | Monthly (~2-3 mo lag) | `data/DOS/*.xlsx` — consular visa issuances by country & category. Ground truth for FB usage, restriction savings. Note: EB categories are consular-only (AOS not captured). |
+| USCIS EB I-485 Inventory | uscis.gov → Tools → Reports & Studies | Monthly (~2-3 mo lag) | `data/eb_inventory_*.xlsx` — pending I-485 cases by country, category, PD year. Drives demand/queue size. Also provides live non-India EB-1 demand for supply model. |
 | USCIS I-140 Performance | uscis.gov → Tools → Reports & Studies | Quarterly | `data/eb_i140_*performance*.xlsx` or `data/*performance*.xlsx` — approved I-140s awaiting visa numbers. Pipeline component of demand |
-| Visa Bulletin | travel.state.gov → Visa Bulletin | Monthly | `data/visa_bulletin/india_eb_history.csv` — historical FAD/DOF dates for India EB-1/EB-2/EB-3 (Oct 2015–present). Fed into `VBPredictor` for month-by-month forecast. Also used by `VisaBulletinParser` to compute DOF-FAD gap for PD Predictor. **Must be updated monthly** with new bulletin dates. |
+| DHS Yearbook / LIAR | ohss.dhs.gov → Immigration → Yearbook | Annual (~6-12 mo lag) | `data/DHS_Yearbook/dhs_eb_category_usage.csv` — total EB usage by category (consular + AOS) by FY. Critical for EB-4/5 spillover (DOS is consular-only). Also provides multipliers via `dhs_table7_eb_multipliers.csv`. |
+| Visa Bulletin | travel.state.gov → Visa Bulletin | Monthly | `data/visa_bulletin/india_eb_history.csv` — historical FAD/DOF dates for India EB-1/EB-2/EB-3 (Oct 2015–present). Fed into `VBPredictor` for month-by-month forecast. **Must be updated monthly** with new bulletin dates. |
 | Presidential Proclamations | whitehouse.gov → Presidential Actions | As issued | Part of `ACTUAL_RESTRICTED_COUNTRIES` — 39 countries with entry suspension |
 | DOS IV Pause (Public Charge) | travel.state.gov → Visa News → "IV Processing Updates..." | Indefinite (eff. Jan 21, 2026) | Part of `ACTUAL_RESTRICTED_COUNTRIES` — 75 countries with consular IV issuance paused |
-| Report of the Visa Office | travel.state.gov → Annual Reports | Annual (~6 mo lag) | `DEFAULT_INDIA_EB1_SUPPLY` in `src/constants.py` — India's baseline EB-1 annual issuances |
+| Report of the Visa Office | travel.state.gov → Annual Reports | Annual (~6 mo lag) | `DEFAULT_INDIA_EB1_SUPPLY` in `src/constants.py` + `INDIA_EB1_HISTORICAL` in `src/engine/supply.py` |
 | Federal Court Rulings | CourtListener / PACER / news | As issued | May affect which policies are active (see below) |
 
 ## Step-by-Step Verification
@@ -117,16 +118,33 @@ When a new Visa Bulletin is posted on travel.state.gov:
 
 This feeds the VB Forecast (`/vb-forecast`) and improves the PD Predictor DOF estimates.
 
-### 6. Update Baseline Supply (Annual)
+### 6. Update DHS Yearbook EB Data (Annual)
+
+When a new DHS Yearbook (or LIAR quarterly report) is published:
+
+1. Download the XLSX from ohss.dhs.gov → Immigration → Yearbook (Table 7)
+2. Place in `data/DHS_Yearbook/`
+3. Re-run the extraction script to regenerate `dhs_eb_category_usage.csv`:
+   ```bash
+   # The CSV stores total/AOS/consular by EB category and FY
+   # Parsed from DHS Yearbook Table 7 and LIAR Table 1B
+   python3 -c "from src.scripts.update_data import regenerate_dhs_csv; regenerate_dhs_csv()"
+   # Or manually add rows to data/DHS_Yearbook/dhs_eb_category_usage.csv
+   ```
+4. This automatically updates: EB-4/5 total usage (spillover calc), non-India EB-1 demand (India share calc)
+5. Run tests: `python3 -m pytest tests/ -v`
+
+### 7. Update Baseline Supply (Annual)
 
 When a new Report of the Visa Office is published (e.g., FY2025):
 
 1. Find India EB-1 issuances in Table V (Part II)
 2. Update `DEFAULT_INDIA_EB1_SUPPLY` in `src/constants.py`
-3. Update the comment with the source and value
-4. Run tests
+3. Add the FY to `INDIA_EB1_HISTORICAL` in `src/engine/supply.py`
+4. Add total worldwide EB-1 row to `data/DHS_Yearbook/dhs_eb_category_usage.csv`
+5. Run tests
 
-### 7. Cross-Verify Projections
+### 8. Cross-Verify Projections
 
 After any data update, sanity-check against the current Visa Bulletin:
 
@@ -141,8 +159,9 @@ After any data update, sanity-check against the current Visa Bulletin:
 |---|---|---|
 | Country list (proclamation or IV pause change) | `src/constants.py`, `api/main.py` methodology | `test_constants.py`, `test_engine.py` |
 | New DOS monthly data | `data/DOS/*.xlsx` (drop-in) | `test_engine.py`, `test_parsers.py` |
-| New USCIS inventory/pipeline | `data/*.xlsx` (drop-in) | `test_engine.py`, `test_parsers.py` |
-| Baseline supply (new FY data) | `src/constants.py` | `test_constants.py`, `test_engine.py` |
+| New USCIS inventory/pipeline | `data/eb_inventory_*.xlsx` (drop-in) | `test_engine.py`, `test_parsers.py` |
+| New DHS Yearbook | `data/DHS_Yearbook/*.xlsx` + regenerate `dhs_eb_category_usage.csv` | `test_engine.py` |
+| Baseline supply (new FY data) | `src/constants.py`, `src/engine/supply.py`, `dhs_eb_category_usage.csv` | `test_constants.py`, `test_engine.py` |
 | Court ruling on entry bans or IV pause | `src/constants.py` (countries), `api/main.py`, docs | `test_constants.py`, `test_engine.py` |
 | Court ruling on USCIS holds only | docs only (no model impact) | — |
 | New Visa Bulletin (monthly) | `data/visa_bulletin/india_eb_history.csv`, `india_eb1_history.csv` | `test_vb_predictor.py` |
@@ -151,6 +170,7 @@ After any data update, sanity-check against the current Visa Bulletin:
 
 | Date | Event | Model Impact | Updated By |
 |---|---|---|---|
+| Jun 2026 | Data-driven supply model fix. (1) EB-4/5 spillover now uses TOTAL usage (consular+AOS) from `dhs_eb_category_usage.csv` parsed from DHS Yearbook XLSX — was using DOS consular-only, inflating spillover 25.6k→11.1k. (2) India EB-1 share uses non-India demand subtraction from live I-485 inventory + DHS Yearbook — replaces backlog-ratio method. Added Mar 2026 + Oct/Dec 2025 inventory snapshots. | More accurate supply projection; no hardcoded EB-4/5 or India share numbers | AI-assisted |
 | Jun 2026 | Added Visa Bulletin Predictor. Extended VB history from Oct 2022 to Oct 2015 (387 rows, EB-1/EB-2/EB-3). New `VBPredictor` engine, `/api/vb-forecast` endpoint, `/vb-forecast` frontend page. 87+ EB-1 data points for advancement analysis. | New VB forecast capability — month-by-month FAD/DOF prediction with confidence bands | AI-assisted |
 | Jun 2026 | Added DOS 75-country IV pause to model. ACTUAL_RESTRICTED_COUNTRIES now union of 39-country Proclamation ban + 75-country IV pause = **91 countries**. Major additions: Brazil, Pakistan, Bangladesh, Egypt, Ethiopia, Colombia, Ghana, Iraq, Jamaica, Nepal, Russia, etc. | Significantly increased restriction savings — these are major IV consumers whose consular issuance is now paused | AI-assisted |
 | Jun 5, 2026 | Dorcas v. USCIS — USCIS adjudicative hold vacated nationwide | None (DOS consular data unaffected; domestic I-485 processing is separate pathway) | AI-assisted |

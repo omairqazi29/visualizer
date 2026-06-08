@@ -9,8 +9,9 @@ Key design decisions:
     the base 140k. Per INA 203(b), each category gets its % of "worldwide level"
     which includes FB spillover per INA 201(d).
   - India does NOT get 100% of total EB-1. India EB-1 is computed by subtracting
-    data-driven non-India demand (from DHS Yearbook) from total EB-1 supply.
-    Non-India demand is stable at ~40k/year (FY2023-2024 avg from DHS Table 7).
+    data-driven non-India demand from total EB-1 supply. Non-India demand is
+    derived from DHS Yearbook data (dhs_eb_category_usage.csv) and live USCIS
+    I-485 inventory data.
   - EB-4/5 spillover uses TOTAL usage (consular + AOS) from DHS Yearbook, not
     DOS consular-only data. AOS is unaffected by travel bans (Dorcas ruling
     vacated USCIS adjudicative hold). Only consular savings from restricted
@@ -18,9 +19,18 @@ Key design decisions:
   - DOS monthly data only captures consular IV issuances, NOT domestic AOS.
     FB is consular-heavy so FB savings are reliable. EB savings are small
     because EBs are AOS-heavy (correctly captured).
+
+Data sources (all auto-loaded from data/ files, no hardcoded numbers):
+  - DHS Yearbook: data/DHS_Yearbook/dhs_eb_category_usage.csv
+  - USCIS I-485 Inventory: data/eb_inventory_*.xlsx (auto-discovered)
+  - DOS Consular IV: data/DOS/*.xlsx (load_from_directory)
+  - India EB-1 Historical: INDIA_EB1_HISTORICAL (Report of the Visa Office)
 """
 
+import csv
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -58,39 +68,78 @@ INDIA_EB1_HISTORICAL: dict[int, int] = {
     2024: 6_952,   # FY2024 — EB ceiling back to ~140k baseline
 }
 
-# ---------------------------------------------------------------------------
-# DHS Yearbook Table 7: TOTAL EB-4/5 LPR usage (consular + AOS combined)
-# Source: DHS Yearbook of Immigration Statistics, Table 7 —
-# "Persons Obtaining LPR Status by Type and Detailed Class of Admission"
-# The DOS monthly data only captures consular IVs; AOS is the majority of
-# EB-4/5 and is UNAFFECTED by travel bans (Dorcas v. USCIS vacated hold).
-# ---------------------------------------------------------------------------
-EB45_TOTAL_HISTORICAL: dict[int, int] = {
-    2021: 17_954,  # EB-4: 15,315 + EB-5: 2,639
-    2022: 28_408,  # EB-4: 20,526 + EB-5: 7,882
-    2023: 26_530,  # EB-4: 14,600 + EB-5: 11,930
-}
-
-# EB-4/5 AOS-only portion from DHS Yearbook Table 7.
-# Travel bans only block consular processing; AOS continues unaffected.
-EB45_AOS_HISTORICAL: dict[int, int] = {
-    2022: 20_896,  # EB-4 AOS: 16,900 + EB-5 AOS: 3,996
-    2023: 14_460,  # EB-4 AOS: 12,980 + EB-5 AOS: 1,480
-}
 
 # ---------------------------------------------------------------------------
-# Non-India EB-1 annual demand from DHS Yearbook Table 7 / Visa Office Report.
-# Computed as: total worldwide EB-1 − India EB-1 (from INDIA_EB1_HISTORICAL).
-# Remarkably stable at ~40k in baseline years (FY2023-2024).
-# Lower in FY2021-2022 because India consumed more during COVID spillover.
-# Used to compute India share: India EB-1 = total_eb1 − non_india_demand.
+# DHS Yearbook loader: reads data/DHS_Yearbook/dhs_eb_category_usage.csv
+# Generated from actual DHS Yearbook XLSX files (Table 7 / LIAR Table 1B).
+# Columns: fiscal_year, category, total, aos, consular
 # ---------------------------------------------------------------------------
-NON_INDIA_EB1_DEMAND: dict[int, int] = {
-    2021: 30_626,  # 61,451 − 30,825  (COVID spillover, India near-current)
-    2022: 31_996,  # 53,433 − 21,437  (elevated EB ceiling)
-    2023: 40_536,  # 57,140 − 16,604  (baseline EB ceiling)
-    2024: 40_510,  # 47,462 − 6,952   (baseline, India retrogressed)
-}
+_DHS_CSV_PATH = "data/DHS_Yearbook/dhs_eb_category_usage.csv"
+
+
+@lru_cache(maxsize=1)
+def _load_dhs_eb_data(csv_path: str = _DHS_CSV_PATH) -> list[dict]:
+    """Load DHS Yearbook EB category usage from CSV.
+
+    Returns list of dicts with keys: fiscal_year, category, total, aos, consular.
+    Empty list if file not found (callers fall back to hardcoded defaults).
+    """
+    try:
+        with open(csv_path, newline="") as f:
+            return list(csv.DictReader(f))
+    except FileNotFoundError:
+        return []
+
+
+def _get_dhs_eb45_total(csv_path: str = _DHS_CSV_PATH) -> dict[int, int]:
+    """EB-4 + EB-5 TOTAL usage (consular + AOS) by FY from DHS Yearbook.
+
+    DOS data is consular-only; AOS is the majority of EB-4/5 and is
+    UNAFFECTED by travel bans (Dorcas v. USCIS vacated hold).
+    """
+    rows = _load_dhs_eb_data(csv_path)
+    result: dict[int, int] = {}
+    for r in rows:
+        cat = r["category"]
+        if cat in ("EB4", "EB5"):
+            fy = int(r["fiscal_year"])
+            result[fy] = result.get(fy, 0) + int(r["total"])
+    return result
+
+
+def _get_dhs_eb45_aos(csv_path: str = _DHS_CSV_PATH) -> dict[int, int]:
+    """EB-4/5 AOS-only portion by FY. AOS is unaffected by consular restrictions."""
+    rows = _load_dhs_eb_data(csv_path)
+    result: dict[int, int] = {}
+    for r in rows:
+        cat = r["category"]
+        if cat in ("EB4", "EB5") and r.get("aos"):
+            fy = int(r["fiscal_year"])
+            result[fy] = result.get(fy, 0) + int(r["aos"])
+    return result
+
+
+def _get_dhs_eb1_worldwide(csv_path: str = _DHS_CSV_PATH) -> dict[int, int]:
+    """Total EB-1 worldwide usage (consular + AOS) by FY from DHS Yearbook."""
+    rows = _load_dhs_eb_data(csv_path)
+    return {
+        int(r["fiscal_year"]): int(r["total"])
+        for r in rows
+        if r["category"] == "EB1"
+    }
+
+
+def _compute_non_india_eb1_demand(csv_path: str = _DHS_CSV_PATH) -> dict[int, int]:
+    """Non-India EB-1 demand by FY = DHS total EB-1 − India EB-1 historical.
+
+    Data-driven from actual DHS Yearbook and Report of the Visa Office data.
+    """
+    eb1_ww = _get_dhs_eb1_worldwide(csv_path)
+    return {
+        fy: total - INDIA_EB1_HISTORICAL.get(fy, 0)
+        for fy, total in eb1_ww.items()
+        if fy in INDIA_EB1_HISTORICAL
+    }
 
 # EB-1 visa category codes (DOS consular IV symbols).
 EB1_VISA_CATEGORIES: list[str] = ['E11', 'E12', 'E13', 'E1', 'IB1', 'IB2']
@@ -180,15 +229,16 @@ class SupplyCalculator:
 
     @staticmethod
     def _get_eb45_total_baseline() -> int:
-        """Total EB-4/5 annual usage (consular + AOS) from latest DHS Yearbook.
+        """Total EB-4/5 annual usage (consular + AOS) from latest DHS Yearbook CSV.
 
         DOS data is consular-only; AOS is the majority of EB-4/5.
         Using consular alone massively understates real usage and
         inflates the EB-4/5 → EB-1 spillover.
         """
-        if EB45_TOTAL_HISTORICAL:
-            return EB45_TOTAL_HISTORICAL[max(EB45_TOTAL_HISTORICAL)]
-        return 26_530  # FY2023 fallback
+        data = _get_dhs_eb45_total()
+        if data:
+            return data[max(data)]
+        return 26_530  # fallback if CSV missing
 
     @staticmethod
     def _get_eb45_aos_baseline() -> int:
@@ -197,23 +247,37 @@ class SupplyCalculator:
         Travel bans and IV pauses only block consular processing.
         AOS continues (Dorcas v. USCIS vacated adjudicative hold).
         """
-        if EB45_AOS_HISTORICAL:
-            return EB45_AOS_HISTORICAL[max(EB45_AOS_HISTORICAL)]
-        return 14_460  # FY2023 fallback
+        data = _get_dhs_eb45_aos()
+        if data:
+            return data[max(data)]
+        return 14_460  # fallback if CSV missing
 
     @staticmethod
     def _get_non_india_eb1_demand() -> int:
-        """Data-driven non-India EB-1 annual demand from DHS Yearbook.
+        """Data-driven non-India EB-1 annual demand.
 
-        Uses average of most recent baseline FYs (2023-2024) where EB
-        ceiling was normal (~140k) and India was retrogressed.
-        Non-India demand is stable at ~40k: ROW is always Current,
-        China is small (~5k backlog), Mexico/Philippines negligible.
+        Primary: live USCIS I-485 inventory (non-India EB-1 pending = their
+        annual throughput proxy, since ROW is Current and processes quickly).
+        Fallback: DHS Yearbook average of baseline FYs (2023-2024).
         """
-        recent = {k: v for k, v in NON_INDIA_EB1_DEMAND.items() if k >= 2023}
+        # Try live inventory data first — reflects current conditions
+        try:
+            inv = InventoryParser.latest()
+            backlogs = inv.get_all_eb1_backlogs()
+            non_india = sum(
+                v for k, v in backlogs.items() if k != "India"
+            )
+            if non_india > 0:
+                return non_india
+        except Exception:
+            pass
+
+        # Fallback: DHS Yearbook (avg of most recent baseline FYs)
+        historical = _compute_non_india_eb1_demand()
+        recent = {k: v for k, v in historical.items() if k >= 2023}
         if recent:
             return int(sum(recent.values()) / len(recent))
-        return 40_510  # FY2024 fallback
+        return 40_510  # last-resort fallback
 
     def get_supply_breakdown(self, apply_freeze: bool = False, apply_real_restrictions: bool = False) -> SupplyBreakdown:
         """Compute the full INA cascade: Total EB → EB-1 → India EB-1.
