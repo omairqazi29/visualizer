@@ -16,7 +16,7 @@ The supply model in `src/engine/supply.py` is the **single source of truth** for
 
 ### Rules
 1. **No hardcoded supply numbers** in frontend pages, API endpoints, or docs. All supply data flows: `supply.py` → FastAPI endpoints (`api/main.py`) → `frontend/src/lib/api.ts` → page components.
-2. **EB-4/5 spillover** uses TOTAL usage (consular + AOS) from `data/DHS_Yearbook/dhs_eb_category_usage.csv`. Never use DOS consular-only data for this — AOS is the majority of EB-4/5 and is unaffected by travel bans.
+2. **EB-4/5 spillover** uses TOTAL usage (consular + AOS) from `data/DHS_Yearbook/dhs_eb_category_usage.csv`. Never use DOS consular-only data for this — AOS is the majority of EB-4/5 and is unaffected by travel bans. **SIV categories** (SQ/SI/SD/SE/SK/SR/SU/SW) are excluded from restriction savings — they are congressionally mandated (Afghan Allies Protection Act) and exempt from executive restrictions.
 3. **India EB-1 share** uses demand subtraction: `total_eb1 − non_india_demand`. Non-India demand comes from live USCIS I-485 inventory (primary) or DHS Yearbook average (fallback). Never use a hardcoded percentage/ratio.
 4. **Historical data** (e.g., `INDIA_EB1_HISTORICAL`) comes from Report of the Visa Office — acceptable as a dict since it's immutable published data. But anything derivable from data files in `data/` must be computed, not hardcoded.
 5. **Fallback constants** (e.g., `40_510` for non-India demand) are last-resort values only, used when all data files are missing. They must be clearly commented as fallbacks.

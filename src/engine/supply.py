@@ -16,6 +16,10 @@ Key design decisions:
     DOS consular-only data. AOS is unaffected by travel bans (Dorcas ruling
     vacated USCIS adjudicative hold). Only consular savings from restricted
     countries reduce effective EB-4/5 usage.
+  - SIV categories (SQ/SI/SD/SE/SK/SR/SU/SW) are EXCLUDED from EB-4/5
+    restriction savings. Afghan/Iraqi SIVs are congressionally mandated under
+    the Afghan Allies Protection Act and exempt from Proclamation entry bans
+    and public charge IV pauses. DOS data confirms continued issuance.
   - DOS monthly data only captures consular IV issuances, NOT domestic AOS.
     FB is consular-heavy so FB savings are reliable. EB savings are small
     because EBs are AOS-heavy (correctly captured).
@@ -46,6 +50,7 @@ from ..constants import (
     DEFAULT_INDIA_EB1_SUPPLY,
     INDIA_OVERSUBSCRIBED_SHARE,
     EB45_CATEGORIES,
+    EB45_NON_SIV_CATEGORIES,
     EB2_CATEGORIES,
     EB3_CATEGORIES,
 )
@@ -346,10 +351,12 @@ class SupplyCalculator:
             eb1_savings = engine.calculate_savings(eb1_df, eb1_frozen)
             eb1_savings_by_country = engine.calculate_savings_by_country(eb1_df, eb1_frozen)
 
-            eb45_df = fy_df[fy_df['visa_category'].isin(EB45_CATEGORIES)]
-            eb45_frozen = engine.apply_freeze(eb45_df)
-            eb45_savings = engine.calculate_savings(eb45_df, eb45_frozen)
-            eb45_savings_by_country = engine.calculate_savings_by_country(eb45_df, eb45_frozen)
+            # EB-4/5 savings: exclude SIV categories (congressionally mandated,
+            # exempt from executive restrictions — continue being issued).
+            eb45_nonsiv_df = fy_df[fy_df['visa_category'].isin(EB45_NON_SIV_CATEGORIES)]
+            eb45_nonsiv_frozen = engine.apply_freeze(eb45_nonsiv_df)
+            eb45_savings = engine.calculate_savings(eb45_nonsiv_df, eb45_nonsiv_frozen)
+            eb45_savings_by_country = engine.calculate_savings_by_country(eb45_nonsiv_df, eb45_nonsiv_frozen)
 
             eb23_cats = EB2_CATEGORIES + EB3_CATEGORIES
             eb23_df = fy_df[fy_df['visa_category'].isin(eb23_cats)]
@@ -475,8 +482,9 @@ class SupplyCalculator:
                 fy_fb_savings[fy] = engine.calculate_savings(fb_df, engine.apply_freeze(fb_df))
                 eb1_df = fy_df[fy_df["visa_category"].isin(EB1_VISA_CATEGORIES)]
                 fy_eb1_savings[fy] = engine.calculate_savings(eb1_df, engine.apply_freeze(eb1_df))
-                eb45_df = fy_df[fy_df["visa_category"].isin(EB45_CATEGORIES)]
-                fy_eb45_savings[fy] = engine.calculate_savings(eb45_df, engine.apply_freeze(eb45_df))
+                # Exclude SIV from EB-4/5 savings (exempt from restrictions)
+                eb45_nonsiv = fy_df[fy_df["visa_category"].isin(EB45_NON_SIV_CATEGORIES)]
+                fy_eb45_savings[fy] = engine.calculate_savings(eb45_nonsiv, engine.apply_freeze(eb45_nonsiv))
 
         result: dict[int, int] = {}
         for fy in available_fys:

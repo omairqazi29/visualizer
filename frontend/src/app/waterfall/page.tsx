@@ -219,7 +219,7 @@ export default function WaterfallPage() {
               <CardDescription>
                 {isBaseline
                   ? 'Standard INA flow: EB base + FB spillover \u2192 28.6% to EB-1 \u2192 India gets its share.'
-                  : `Restricted countries\u2019 unused FB/EB visas expand the pool. India gets ${Math.round((data.india_oversubscribed_share || 0.84) * 100)}% of additional EB-1 (shared with China).`}
+                  : `Restricted countries\u2019 unused FB/EB visas expand the pool. India EB-1 = total supply \u2212 non-India demand (${(data.non_india_eb1_demand || 0).toLocaleString()} from live inventory).`}
               </CardDescription>
             </div>
             {!isBaseline && (
@@ -280,7 +280,7 @@ export default function WaterfallPage() {
             <div className="text-2xl font-bold text-navy-900">{(data.india_eb1_supply || 0).toLocaleString()}</div>
             <p className="text-xs text-slate-500 mt-1">
               {isBaseline
-                ? `FY2024 actual (consular + AOS). India is ~${Math.round(((data.india_eb1_baseline || 6952) / (bl.total_eb1 || 47462)) * 100)}% of EB-1.`
+                ? `FY2024 actual (consular + AOS). India is ~${Math.round(((data.india_eb1_baseline || 0) / (bl.total_eb1 || 1)) * 100)}% of EB-1.`
                 : <>Baseline {(data.india_eb1_baseline || 0).toLocaleString()} + <span className="text-crimson-600 font-semibold">+{indiaAdditional.toLocaleString()}</span> from restrictions</>}
             </p>
           </CardContent>
@@ -291,7 +291,7 @@ export default function WaterfallPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-navy-900">{(data.non_india_eb1 || 0).toLocaleString()}</div>
-            <p className="text-xs text-slate-500 mt-1">China + Rest of World (includes ~{Math.round((1 - (data.india_oversubscribed_share || 0.84)) * 100)}% of additional to China)</p>
+            <p className="text-xs text-slate-500 mt-1">ROW ({Math.round(((data.non_india_eb1_demand || 0) - 5000) / 1000)}k) + China (~5k) + others. From live I-485 inventory.</p>
           </CardContent>
         </Card>
         <Card>
@@ -404,7 +404,7 @@ export default function WaterfallPage() {
         <p className="text-xs text-slate-400 italic">
           <span className="font-semibold text-crimson-500">Red portions</span> show the restriction boost vs baseline.
           DOS monthly data captures consular IV issuances only (not domestic AOS). EB categories are AOS-heavy, so direct EB savings are small.
-          The main India EB-1 benefit comes through FB savings (consular-heavy) expanding the total EB pool. India receives {Math.round((data.india_oversubscribed_share || 0.84) * 100)}% of additional EB-1 based on relative I-485 backlogs (computed from USCIS inventory data).
+          The main India EB-1 benefit comes through FB savings (consular-heavy) expanding the total EB pool. India EB-1 = total EB-1 minus non-India demand ({(data.non_india_eb1_demand || 0).toLocaleString()} from live I-485 inventory). EB-4/5 savings exclude SIV categories (Afghan/Iraqi Special Immigrant Visas) — congressionally mandated and exempt from executive restrictions. EB-4/5 total usage ({(data.eb45_total_usage || 0).toLocaleString()} from DHS Yearbook, consular+AOS) exceeds allocation even under restrictions, so no spillover to EB-1.
         </p>
       )}
     </div>

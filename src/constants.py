@@ -220,6 +220,16 @@ EB45_CATEGORIES: list[str] = [
     "T5",
 ]
 
+# Special Immigrant Visa (SIV) categories — congressionally mandated programs
+# exempt from executive restrictions (Proclamation entry bans, DOS IV pauses).
+# Afghan Allies Protection Act (SQ), Iraqi/Afghan SIV (SI), and related (SD/SE/SK/SR/SU/SW).
+# These continue being issued regardless of restrictions — must NOT be zeroed
+# when computing EB-4/5 savings from restricted countries.
+SIV_CATEGORIES: list[str] = ["SD", "SE", "SI1", "SI2", "SI3", "SK", "SQ1", "SQ2", "SQ3", "SR", "SU", "SW"]
+
+# Non-SIV EB-4/5 = regular EB-5 investor visas (subject to restrictions).
+EB45_NON_SIV_CATEGORIES: list[str] = [c for c in EB45_CATEGORIES if c not in SIV_CATEGORIES]
+
 
 @lru_cache(maxsize=1)
 def get_data_driven_multipliers(csv_path: str = "data/DHS_Yearbook/dhs_table7_eb_multipliers.csv") -> dict[str, float]:
@@ -269,6 +279,8 @@ __all__ = [
     "EB2_CATEGORIES",
     "EB3_CATEGORIES",
     "EB45_CATEGORIES",
+    "SIV_CATEGORIES",
+    "EB45_NON_SIV_CATEGORIES",
     "INDIA_OVERSUBSCRIBED_SHARE",
     "EB1_DEPENDENT_MULTIPLIER",
     "EB2_DEPENDENT_MULTIPLIER",
