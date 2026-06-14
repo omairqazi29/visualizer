@@ -205,3 +205,109 @@ class InventoryParser(BaseParser):
             "valley": valley,
             "total": total,
         }
+
+    # ──────────────────────────────────────────────
+    # Cumulative demand for FAD solving
+    # ──────────────────────────────────────────────
+
+    # Month name → number mapping for PD Month rows
+    _MONTH_NUMBERS: dict[str, int] = {
+        "January": 1, "February": 2, "March": 3, "April": 4,
+        "May": 5, "June": 6, "July": 7, "August": 8,
+        "September": 9, "October": 10, "November": 11, "December": 12,
+    }
+
+    def get_cumulative_demand(
+        self,
+        cutoff_year: int,
+        cutoff_month: int,
+        category: str = "EB1",
+        sheet_key: str | None = None,
+    ) -> int:
+        """Sum all pending I-485s with priority date strictly before cutoff.
+
+        Uses the PD Year columns and PD Month rows to compute cumulative
+        demand.  For years < cutoff_year, ALL months are included.  For the
+        cutoff year, only months < cutoff_month are included.  "Prior Years"
+        column always counts (pre-dates any cutoff year in the data range).
+
+        Includes BOTH "Available" and "Awaiting Availability" visa status rows.
+        NO multiplier applied — I-485 inventory already includes dependents.
+
+        Args:
+            cutoff_year:  The year component of the cutoff date.
+            cutoff_month: The month component (1-12).  Only PD months
+                          *strictly less than* this value are included for
+                          the cutoff year.
+            category:     EB category key from _CATEGORY_FILTERS (default "EB1").
+            sheet_key:    Override _SHEET_MAP key.  If None, auto-selects:
+                          "India_EB1" for EB1/EW3/EB4/EB5, "India_EB23" for
+                          EB2/EB3.
+
+        Returns:
+            Total pending I-485 count with PD before the cutoff.
+        """
+        # Resolve sheet
+        if sheet_key is None:
+            if category in ("EB2", "EB3"):
+                sheet_key = "India_EB23"
+            else:
+                sheet_key = "India_EB1"
+        sheet_name = _SHEET_MAP[sheet_key]
+
+        df = self._load_sheet(sheet_name)
+        pref_col = self._find_pref_col(df)
+        cat_substr = _CATEGORY_FILTERS.get(category, category)
+
+        # Filter to matching category rows (both visa statuses)
+        mask = df[pref_col].astype(str).str.contains(cat_substr, case=False, na=False)
+        filtered = df[mask]
+
+        if filtered.empty:
+            return 0
+
+        # Identify year columns
+        year_cols = [
+            c for c in df.columns
+            if "Priority Date Year" in str(c) or "Prior Years" in str(c)
+        ]
+
+        # Identify month column
+        month_col: str | None = None
+        for c in df.columns:
+            if "month" in str(c).lower() and "priority" in str(c).lower():
+                month_col = c
+                break
+        if month_col is None:
+            # Fallback: use the legacy whole-year sum (no month granularity)
+            return self._sum_category(sheet_name, cat_substr)
+
+        total = 0
+
+        for col in year_cols:
+            col_str = str(col)
+
+            if "Prior Years" in col_str:
+                # Prior Years always before any cutoff — include all rows
+                total += int(filtered[col].apply(_parse_val).sum())
+                continue
+
+            # Extract year from column header ("Priority Date Year - 2022")
+            try:
+                col_year = int(col_str.split("-")[-1].strip())
+            except (ValueError, IndexError):
+                continue
+
+            if col_year < cutoff_year:
+                # Entire year is before cutoff — include all months
+                total += int(filtered[col].apply(_parse_val).sum())
+            elif col_year == cutoff_year:
+                # Only include months strictly before cutoff_month
+                for idx, row in filtered.iterrows():
+                    month_name = str(row[month_col]).strip()
+                    month_num = self._MONTH_NUMBERS.get(month_name, 0)
+                    if 0 < month_num < cutoff_month:
+                        total += _parse_val(row[col])
+            # col_year > cutoff_year: skip entirely
+
+        return total
