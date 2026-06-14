@@ -26,6 +26,17 @@ Check whenever any of these occur:
 | Report of the Visa Office | travel.state.gov → Annual Reports | Annual (~6 mo lag) | `DEFAULT_INDIA_EB1_SUPPLY` in `src/constants.py` + `INDIA_EB1_HISTORICAL` in `src/engine/supply.py` |
 | Federal Court Rulings | CourtListener / PACER / news | As issued | May affect which policies are active (see below) |
 
+**Contextual/Indicator Data Sources** (not core supply model — these provide demand-side context and pipeline visibility):
+
+| Source | Parser | API Endpoint | Role |
+|---|---|---|---|
+| DOL PERM Disclosure Data | `PERMParser` | `/api/perm-pipeline` | Leading indicator of EB-2/EB-3 I-140 filings (~12-24 month lead) |
+| H-1B Cap Registration + Approvals | `H1BParser` | `/api/h1b-demand` | Future I-140 filing pressure — most India EB flows through H-1B first |
+| CEAC Consular Scheduling | `CEACParser` | `/api/ceac-scheduling` | Real-time consular pipeline activity; validates DOS IV issuance projections |
+| I-140 Receipts (New Filings) | `I140ReceiptsParser` | `/api/i140-receipts` | Queue growth rate — new I-140 petitions entering the system |
+| USCIS Processing Times | `ProcessingTimesParser` | `/api/processing-times` | Domestic adjudication bottlenecks by service center for EB I-485 |
+| USCIS I-485 Monthly Flow | `I485FlowParser` | `/api/i485-flow` | Inflow (receipts) vs. outflow (approvals) — is the I-485 queue growing or shrinking? |
+
 ## Step-by-Step Verification
 
 ### 1. Check Country Restriction List

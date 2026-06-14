@@ -26,6 +26,42 @@ from src.parsers.h1b_parser import H1BParser
 from src.parsers.ceac_parser import CEACParser
 from src.parsers.i140_receipts_parser import I140ReceiptsParser
 from src.constants import ACTUAL_RESTRICTED_COUNTRIES, DEFAULT_INDIA_EB1_SUPPLY, FB_STATUTORY_LIMIT
+from src.data_discovery import get_latest_inventory_path, get_latest_pipeline_path, _parse_date_from_filename, MONTHS_MAP
+
+# Reverse month lookup: number -> name (for human-readable date strings)
+_MONTH_NAMES = {v: k.capitalize() for k, v in MONTHS_MAP.items()}
+
+
+def _date_label_from_path(filepath: str) -> str | None:
+    """Extract 'Month YYYY' label from a data file path (e.g., 'February 2026').
+
+    Returns None if the filename doesn't contain a parseable date.
+    """
+    from pathlib import Path
+    parsed = _parse_date_from_filename(Path(filepath))
+    if parsed is None:
+        return None
+    year, month = parsed
+    month_name = _MONTH_NAMES.get(month)
+    if month_name:
+        return f"{month_name} {year}"
+    return f"{year}-{month:02d}"
+
+
+def _fy_quarter_label_from_path(filepath: str) -> str | None:
+    """Extract 'FYXXXX QN' label from a pipeline/performance data file path.
+
+    Returns None if no FY/quarter pattern is found.
+    """
+    import re
+    from pathlib import Path
+    name = Path(filepath).name.upper()
+    m = re.search(r"(?:FY)?(\d{4})[_-]?Q([1-4])", name)
+    if m:
+        return f"FY{m.group(1)} Q{m.group(2)}"
+    # Fall back to month-based label
+    return _date_label_from_path(filepath)
+
 
 app = FastAPI(title="The Spillover Engine API")
 
@@ -373,14 +409,18 @@ async def get_inventory_context():
         except Exception:
             pass
 
+        # Derive dates from auto-discovered file paths (not hardcoded)
+        inv_date = _date_label_from_path(get_latest_inventory_path()) or "Unknown"
+        pipe_date = _fy_quarter_label_from_path(get_latest_pipeline_path()) or "Unknown"
+
         return InventoryContextResponse(
             eb1_backlogs=eb1_backlogs,
             india_all_eb_backlogs=india_all,
             pipeline=pipeline,
             nvc_backlog=nvc_data,
             india_oversubscribed_share=round(india_share, 4),
-            inventory_date="February 2026",
-            pipeline_date="September 2025",
+            inventory_date=inv_date,
+            pipeline_date=pipe_date,
             nvc_report_date=nvc_date,
         )
     except Exception as e:
@@ -884,6 +924,10 @@ class MethodologyResponse(BaseModel):
 @app.get("/api/methodology", response_model=MethodologyResponse)
 async def get_methodology():
     """Returns model parameters, data sources, and legal status for transparency."""
+    # Derive coverage labels from auto-discovered file paths (not hardcoded)
+    inv_coverage = _date_label_from_path(get_latest_inventory_path()) or "Unknown"
+    pipe_coverage = _fy_quarter_label_from_path(get_latest_pipeline_path()) or "Unknown"
+
     return MethodologyResponse(
         restricted_countries=sorted(ACTUAL_RESTRICTED_COUNTRIES),
         restricted_countries_count=len(ACTUAL_RESTRICTED_COUNTRIES),
@@ -903,14 +947,14 @@ async def get_methodology():
                 "name": "USCIS EB I-485 Inventory",
                 "description": "Pending adjustment of status cases by country, category, PD year",
                 "url": "https://www.uscis.gov/tools/reports-and-studies",
-                "coverage": "February 2026",
+                "coverage": inv_coverage,
                 "update_frequency": "Quarterly",
             },
             {
                 "name": "USCIS I-140 Performance Data",
                 "description": "Approved I-140 petitions awaiting visa numbers (pipeline)",
                 "url": "https://www.uscis.gov/tools/reports-and-studies",
-                "coverage": "FY2025 Q4",
+                "coverage": pipe_coverage,
                 "update_frequency": "Quarterly",
             },
             {
