@@ -192,7 +192,7 @@ def test_dhs_yearbook_summary():
     """Summary returns comprehensive data."""
     parser = DhsYearbookParser()
     summary = parser.get_summary()
-    assert summary["latest_year"] == 2023
+    assert summary["latest_year"] == 2024
     assert len(summary["available_years"]) >= 9
     assert "notes" in summary
     assert summary["notes"]["source"] == "DHS Yearbook of Immigration Statistics, Table 7"

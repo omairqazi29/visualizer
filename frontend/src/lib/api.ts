@@ -54,6 +54,9 @@ export const getPERMPipeline = () =>
   cached('perm-pipeline', () => api.get('/perm-pipeline').then(res => res.data));
 export const getH1BDemand = () =>
   cached('h1b-demand', () => api.get('/h1b-demand').then(res => res.data));
+export const getOppenheimPrediction = (category?: string, monthsAhead?: number, materializationRate?: number, applyRealRestrictions?: boolean) =>
+  cached(`oppenheim:${category}:${monthsAhead}:${materializationRate}:${applyRealRestrictions}`, () =>
+    api.get('/oppenheim', { params: { category, months_ahead: monthsAhead, materialization_rate: materializationRate, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data));
 
 // Strongly typed API response shapes (mirrors backend Pydantic models)
 export interface WaterfallData {
@@ -580,4 +583,51 @@ export interface I140ReceiptsData {
     data_points: number;
     source: string;
   };
+}
+
+// Oppenheim FAD Solver (demand-supply equilibrium prediction)
+export interface OppenheimPredictionPoint {
+  bulletin_month: string;
+  predicted_fad: string | null;
+  is_current: boolean;
+  fad_low: string | null;
+  fad_high: string | null;
+  cumulative_demand: number;
+  target_monthly_supply: number;
+  materialization_rate: number;
+  fiscal_year: number;
+  remaining_annual_supply?: number;
+}
+
+export interface OppenheimData {
+  category: string;
+  country: string;
+  calibration: {
+    current_fad: string;
+    demand_at_fad: number;
+    total_demand: number;
+    annual_supply: number;
+    monthly_supply: number;
+    calibrated_rate: number;
+    current_rate: number;
+  };
+  next_fad: {
+    bulletin_month: string;
+    predicted_fad: string | null;
+    is_current: boolean;
+    fad_low: string | null;
+    fad_high: string | null;
+    cumulative_demand: number;
+    target_monthly_supply: number;
+    annual_supply: number;
+    materialization_rate: number;
+    fiscal_year: number;
+    current_fad: string | null;
+    latest_bulletin: string | null;
+    advancement_days: number | null;
+    total_demand: number;
+    methodology: string;
+  };
+  trajectory: OppenheimPredictionPoint[];
+  methodology: string;
 }

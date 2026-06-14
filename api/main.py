@@ -20,6 +20,7 @@ from src.engine.demand import DemandModeler
 from src.engine.legislation import PENDING_BILLS, compute_legislation_scenarios
 from src.engine.supply import SupplyCalculator
 from src.engine.vb_predictor import VBPredictor
+from src.engine.oppenheim import OppenheimSolver
 from src.parsers.dhs_yearbook_parser import DhsYearbookParser
 from src.parsers.perm_parser import PERMParser
 from src.parsers.h1b_parser import H1BParser
@@ -1281,6 +1282,78 @@ async def get_vb_forecast(
             supply_factor=result["supply_factor"],
             dof_gap_months=result["dof_gap_months"],
             methodology=result["methodology"],
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Oppenheim FAD Solver ──────────────────────────────
+
+
+class OppenheimPredictionPoint(BaseModel):
+    bulletin_month: str
+    predicted_fad: str | None
+    is_current: bool
+    fad_low: str | None
+    fad_high: str | None
+    cumulative_demand: int
+    target_monthly_supply: int
+    materialization_rate: float
+    fiscal_year: int
+    remaining_annual_supply: int | None = None
+
+
+class OppenheimResponse(BaseModel):
+    category: str
+    country: str
+    calibration: dict
+    next_fad: dict
+    trajectory: list[OppenheimPredictionPoint]
+    methodology: str
+
+
+@app.get("/api/oppenheim", response_model=OppenheimResponse)
+async def get_oppenheim_prediction(
+    category: str = Query("EB-1", description="EB category: EB-1, EB-2, or EB-3"),
+    months_ahead: int = Query(12, description="Months to forecast (1-36)", ge=1, le=36),
+    materialization_rate: float | None = Query(None, description="Override materialization rate (0.01-1.0). If omitted, auto-calibrates from current VB."),
+    apply_real_restrictions: bool = Query(True, description="Use restriction-boosted supply"),
+):
+    """Oppenheim-style FAD prediction via demand-supply equilibrium.
+
+    Unlike /api/vb-forecast (trend extrapolation), this endpoint models how
+    DOS actually sets the FAD: find the priority-date cutoff where pending
+    I-485 demand × materialization rate ≈ monthly visa supply target.
+
+    Auto-calibrates the materialization rate from the current Visa Bulletin
+    unless overridden.
+    """
+    try:
+        solver = OppenheimSolver(
+            category=category,
+            apply_real_restrictions=apply_real_restrictions,
+        )
+
+        # Calibrate against current VB
+        cal = solver.calibrate()
+
+        # Use calibrated rate unless overridden
+        rate = materialization_rate if materialization_rate is not None else cal.get("calibrated_rate", 0.65)
+        solver.materialization_rate = rate
+
+        # Predict next month
+        next_fad = solver.predict_next_fad()
+
+        # Predict trajectory
+        traj = solver.predict_trajectory(months_ahead=months_ahead)
+
+        return OppenheimResponse(
+            category=category,
+            country="India",
+            calibration=cal,
+            next_fad=next_fad,
+            trajectory=[OppenheimPredictionPoint(**pt) for pt in traj],
+            methodology=next_fad.get("methodology", ""),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

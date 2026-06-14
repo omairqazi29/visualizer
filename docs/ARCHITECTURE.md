@@ -40,6 +40,7 @@
 - **RedistributionEngine**: Freeze zeroing + distribute_spillover (7% cap then surplus bypass INA 202(a)(5)).
 - **DemandModeler** (enhanced): Per-FY supply schedule from DOS data (varies by fiscal year); blends historical % with uniform for high-supply scenarios (threshold: >15,000 annual supply → 60% historical distribution + 40% uniform; see `src/engine/demand.py` lines 48-55); FY Oct reset with supply lookup.
 - **VBPredictor**: Forecasts future Visa Bulletin FAD/DOF dates month-by-month. Decomposes historical VB movement into advancement rates and seasonal patterns (fiscal month). Blended forecast: 70% recent-12 avg + 30% seasonal, with supply-adjusted scaling and sqrt-widening confidence bands. Uses `VisaBulletinParser` for historical data and `VisaBulletinParser.get_dof_lead_months()` for DOF estimation. Methods: `get_advancement_rates()`, `get_seasonal_pattern()`, `get_advancement_stats()`, `forecast()`.
+- **OppenheimSolver**: Predicts FAD via demand-supply equilibrium — models how DOS actually sets the cutoff date. Algorithm: (1) compute annual India EB-1 supply from INA cascade (via `SupplyCalculator`), (2) divide by 12 for monthly target, (3) binary search over the I-485 inventory demand curve (`InventoryParser.get_cumulative_demand()`) to find the FAD where `demand_below_FAD × materialization_rate ≈ monthly_target`. Auto-calibrates the materialization rate from the current VB FAD. Bridges VBPredictor (trend-based) and DemandModeler (burn-down) with actual demand-aware date-setting logic. Methods: `calibrate()`, `predict_next_fad()`, `predict_trajectory()`.
 
 ## Data Flow (Revamped)
 1. DOS dir (all files) + Inventory/Pipeline via `InventoryParser.latest()` / `PipelineParser.latest()` (backed by `src/data_discovery.find_latest` + date/mtime sort) + NVC via `NVCParser("data/NVC")` -> Parsers (robust load + normalize)
@@ -47,14 +48,16 @@
 3. SupplyCalculator.get_supply_by_fy(...) -> {FY: India EB-1 supply}
 4. DemandModeler (fy_supply=...) -> projection + confidence
 5. VBPredictor.forecast() -> month-by-month FAD/DOF forecast with confidence bands
-6. FastAPI endpoints (/waterfall, /supply-demand, /predict, /vb-forecast, /nvc-backlog, /i485-flow, /processing-times, /perm-pipeline, /h1b-demand, /ceac-scheduling, /legislation, /i140-receipts, /inventory-context, /visa-bulletin-history, /dependent-multipliers, /methodology) using Parser.latest() + NVCParser -> Typed Next.js UI
+6. OppenheimSolver.calibrate() + predict_trajectory() -> demand-supply equilibrium FAD prediction
+7. FastAPI endpoints (/waterfall, /supply-demand, /predict, /vb-forecast, /oppenheim, /nvc-backlog, /i485-flow, /processing-times, /perm-pipeline, /h1b-demand, /ceac-scheduling, /legislation, /i140-receipts, /inventory-context, /visa-bulletin-history, /dependent-multipliers, /methodology) using Parser.latest() + NVCParser -> Typed Next.js UI
 
 See INA_MODEL.md (to be added) for equations. New data: drop files in data/ ; validated via `python -m src.scripts.update_data`.
 
 ## Files of Interest
 - api/main.py (endpoints + Pydantic)
 - src/engine/supply.py (central INA supply math)
-- src/engine/vb_predictor.py (Visa Bulletin forecast engine)
+- src/engine/vb_predictor.py (Visa Bulletin forecast engine — trend extrapolation)
+- src/engine/oppenheim.py (Oppenheim FAD solver — demand-supply equilibrium)
 - src/engine/demand.py (backlog clearance projection)
 - src/engine/legislation.py (pending bills + what-if scenarios)
 - frontend/src/app/{waterfall,supply-demand,predict,vb-forecast,legislation,...}/page.tsx

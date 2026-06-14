@@ -9,11 +9,12 @@ Data sources:
   Class of Admission"
   https://ohss.dhs.gov/topics/immigration/yearbook/{year}/table7
 
-- Raw Excel workbooks (FY2022–FY2023):
+- Raw Excel workbooks (FY2022–FY2024):
+  data/DHS_Yearbook/dhs_yearbook_lpr_fy2024.xlsx (sheet "Table 7")
   data/DHS_Yearbook/dhs_yearbook_lpr_fy2023.xlsx (sheet "Table 7")
   data/DHS_Yearbook/dhs_yearbook_lpr_fy2022.xlsx (sheet "Table 7d")
 
-- Pre-extracted CSV (FY2015–FY2023):
+- Pre-extracted CSV (FY2015–FY2024):
   data/DHS_Yearbook/dhs_table7_eb_multipliers.csv
 
 The multiplier = total_persons / principals for each EB category.  It converts
