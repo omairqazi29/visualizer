@@ -463,6 +463,7 @@ export function prefetchAll() {
   getCEACScheduling();
   getI140Receipts();
   getVBForecast('EB-1', 24, false);
+  getOppenheimPrediction('EB-1', 12, undefined, true);
 }
 
 // CEAC Scheduling
@@ -606,6 +607,8 @@ export interface OppenheimData {
     current_fad: string;
     demand_at_fad: number;
     total_demand: number;
+    total_demand_i485_only: number;
+    shadow_demand_ratio: number;
     annual_supply: number;
     monthly_supply: number;
     calibrated_rate: number;

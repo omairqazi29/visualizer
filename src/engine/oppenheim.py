@@ -29,6 +29,7 @@ from typing import Optional
 from ..constants import DEFAULT_INDIA_EB1_SUPPLY
 from ..parsers.dos_parser import DOSParser
 from ..parsers.inventory_parser import InventoryParser
+from ..parsers.pipeline_parser import PipelineParser
 from ..parsers.visa_bulletin_parser import VisaBulletinParser
 from .supply import SupplyCalculator, EB1_VISA_CATEGORIES
 
@@ -100,8 +101,11 @@ class OppenheimSolver:
     """
 
     DEFAULT_MATERIALIZATION_RATE: float = 0.65
-    LOW_RATE: float = 0.50      # Conservative → later FAD (optimistic for applicant)
-    HIGH_RATE: float = 0.80     # Aggressive → earlier FAD (pessimistic for applicant)
+    # Confidence band multipliers (applied to calibrated rate):
+    # Lower rate → more demand needed → later FAD → optimistic for applicant
+    # Higher rate → less demand needed → earlier FAD → pessimistic for applicant
+    RATE_BAND_LOW: float = 0.70     # 70% of calibrated rate → fad_high (optimistic)
+    RATE_BAND_HIGH: float = 1.40    # 140% of calibrated rate → fad_low (pessimistic)
 
     # Binary search year bounds (covers all PD years in inventory data)
     _MIN_YEAR: int = 2015
@@ -134,6 +138,7 @@ class OppenheimSolver:
         self._annual_supply: Optional[int] = None
         self._fy_supply: Optional[dict[int, int]] = None
         self._total_demand_cache: Optional[int] = None
+        self._shadow_ratio: Optional[float] = None
 
     # ── Lazy property accessors ───────────────────
 
@@ -159,6 +164,45 @@ class OppenheimSolver:
                 category=self.category, country=self.country,
             )
         return self._vb
+
+    # ── Shadow demand ──────────────────────────────
+
+    def _get_shadow_demand_ratio(self) -> float:
+        """Ratio of total effective demand to I-485 filed demand.
+
+        As DOF advances, people with approved I-140s who haven't filed
+        I-485 yet become eligible to file.  The I-140 pipeline contains
+        these "shadow" cases.  The ratio = (I-485 + I-140) / I-485
+        tells us how much the demand curve will inflate as dates advance.
+
+        The inventory captures people who HAVE filed I-485 (both
+        "Available" and "Awaiting Availability").  The I-140 pipeline
+        captures approved I-140 primaries × dependent multiplier who
+        have NOT yet filed I-485.
+
+        Returns 1.0 if pipeline data is unavailable (no inflation).
+        """
+        if self._shadow_ratio is not None:
+            return self._shadow_ratio
+
+        try:
+            pipe = PipelineParser.latest(data_dir=self.data_dir)
+            pipeline = pipe.get_all_eb_pipeline()
+            india = pipeline.get("India", {})
+            i140_count = india.get(self._category_key, 0)
+        except Exception:
+            i140_count = 0
+
+        # Use raw I-485 count (no shadow scaling) to avoid recursion
+        i485_count = self.inventory.get_cumulative_demand(
+            cutoff_year=2099, cutoff_month=1, category=self._category_key,
+        )
+        if i485_count <= 0:
+            self._shadow_ratio = 1.0
+        else:
+            self._shadow_ratio = (i485_count + i140_count) / i485_count
+
+        return self._shadow_ratio
 
     # ── Supply ────────────────────────────────────
 
@@ -215,18 +259,34 @@ class OppenheimSolver:
 
     # ── Demand curve ──────────────────────────────
 
-    def _demand_at(self, year: int, month: int) -> int:
-        """Cumulative I-485 demand with PD strictly before (year, month)."""
-        return self.inventory.get_cumulative_demand(
+    def _demand_at(self, year: int, month: int, raw: bool = False) -> int:
+        """Cumulative demand with PD strictly before (year, month).
+
+        Includes shadow demand: scales the I-485 inventory by the
+        shadow ratio (I-485 + I-140 pipeline) / I-485 to account for
+        approved I-140s who haven't filed I-485 yet.  As DOF advances,
+        these become eligible to file, inflating the real demand curve.
+
+        Args:
+            raw: If True, return raw I-485 count without shadow scaling.
+        """
+        base = self.inventory.get_cumulative_demand(
             cutoff_year=year, cutoff_month=month,
             category=self._category_key,
         )
+        if raw:
+            return base
+        return int(base * self._get_shadow_demand_ratio())
 
     def _total_demand(self) -> int:
-        """Total pending I-485 demand across all PD dates (cached)."""
+        """Total effective demand including shadow I-140 pipeline (cached)."""
         if self._total_demand_cache is None:
             self._total_demand_cache = self._demand_at(2099, 1)
         return self._total_demand_cache
+
+    def _total_demand_raw(self) -> int:
+        """Total I-485 demand only (no shadow scaling)."""
+        return self._demand_at(2099, 1, raw=True)
 
     # ── FAD binary search ─────────────────────────
 
@@ -335,10 +395,13 @@ class OppenheimSolver:
 
         calibrated = monthly_supply / interpolated if interpolated > 0 else self.materialization_rate
 
+        shadow_ratio = self._get_shadow_demand_ratio()
         return {
             "current_fad": current_fad.isoformat(),
             "demand_at_fad": int(interpolated),
             "total_demand": self._total_demand(),
+            "total_demand_i485_only": self._total_demand_raw(),
+            "shadow_demand_ratio": round(shadow_ratio, 2),
             "annual_supply": annual_supply,
             "monthly_supply": round(monthly_supply, 1),
             "calibrated_rate": round(calibrated, 4),
@@ -387,11 +450,11 @@ class OppenheimSolver:
         target = monthly_supply / rate
         fad, actual_demand = self._solve_fad(target)
 
-        # Confidence bounds
-        # Higher rate → lower target → earlier FAD → fad_low (pessimistic)
-        # Lower  rate → higher target → later FAD → fad_high (optimistic)
-        fad_low, _ = self._solve_fad(monthly_supply / self.HIGH_RATE)
-        fad_high, _ = self._solve_fad(monthly_supply / self.LOW_RATE)
+        # Confidence bounds (relative to calibrated rate)
+        rate_low = rate * self.RATE_BAND_LOW    # lower rate → bigger pool → later FAD
+        rate_high = rate * self.RATE_BAND_HIGH  # higher rate → smaller pool → earlier FAD
+        fad_low, _ = self._solve_fad(monthly_supply / rate_high)   # pessimistic (earlier)
+        fad_high, _ = self._solve_fad(monthly_supply / rate_low)   # optimistic (later)
 
         # Current VB status for comparison
         current_fad: Optional[date] = None
@@ -489,12 +552,14 @@ class OppenheimSolver:
             target = monthly_supply / rate + cumulative_issued
             fad, demand = self._solve_fad(target)
 
-            # Confidence bounds
+            # Confidence bounds (relative to calibrated rate)
+            rate_low = rate * self.RATE_BAND_LOW
+            rate_high = rate * self.RATE_BAND_HIGH
             fad_low, _ = self._solve_fad(
-                monthly_supply / self.HIGH_RATE + cumulative_issued,
+                monthly_supply / rate_high + cumulative_issued,
             )
             fad_high, _ = self._solve_fad(
-                monthly_supply / self.LOW_RATE + cumulative_issued,
+                monthly_supply / rate_low + cumulative_issued,
             )
 
             fy_issued = cumulative_issued - fy_issued_at_start
