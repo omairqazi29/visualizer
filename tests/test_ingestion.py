@@ -1003,8 +1003,10 @@ def test_cli_json_flag_emits_json(monkeypatch, capsys):
 def test_all_group_excludes_visa_bulletin():
     ids = resolve_source_ids("all")
     assert "visa_bulletin" not in ids
+    assert "dol_perm" not in ids  # opt-in via all_with_dol / dol
     assert "dos_iv_fsc" in ids
     assert "visa_bulletin" in resolve_source_ids("all_including_vb")
+    assert "dol_perm" in resolve_source_ids("all_with_dol")
 
 
 def test_disabled_stubs_present():
@@ -1022,7 +1024,7 @@ def test_looks_like_spreadsheet_and_html_sniff():
     assert looks_like_spreadsheet(b"<!DOCTYPE html><html>", "a.xlsx") is False
     assert looks_like_html(b"  <!DOCTYPE html><html>") is True
     assert looks_like_html(b"PK\x03\x04") is False
-    assert MAX_DOWNLOAD_BYTES == 80 * 1024 * 1024
+    assert MAX_DOWNLOAD_BYTES == 150 * 1024 * 1024
 
 
 def test_filter_paths_for_pr_only_under_data(tmp_path, monkeypatch):

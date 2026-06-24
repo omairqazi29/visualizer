@@ -1,0 +1,9 @@
+[    1211ms] [LOG] Detected browser language:  @ https://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics/immigrant-visa-statistics/monthly-immigrant-visa-issuances.html:290
+[    1211ms] [LOG] Page loaded. isChatOpen = , selectedLanguage =  @ https://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics/immigrant-visa-statistics/monthly-immigrant-visa-issuances.html:332
+[    2351ms] [WARNING] Warning: KaTeX doesn't work in quirks mode. Make sure your website has a suitable doctype. @ https://www.gstatic.com/_/mss/boq-cloud-ai-ucs/_/js/k=boq-cloud-ai-ucs.UcsWidgetUi.en_US.8X-PM_RgMEo.2021.O/am=BBCARgg/d=1/rs=AAj4Nmy99NBZitDvnlIWXRdqT1LopqJzHQ/m=bootstrap_module,ucs_widget_module,xlite_module:8331
+[    3576ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://travel.state.gov/apps/tsg-rwd/components/content/resources/cropped-dos_seal-32x32.png:0
+[    3764ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://travel.state.gov/apps/tsg-rwd/components/content/resources/cropped-dos_seal-64x64.png:0
+[  301222ms] [LOG] Stage  (lang=) @ https://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics/immigrant-visa-statistics/monthly-immigrant-visa-issuances.html:850
+[  301245ms] [ERROR] DF-MESSENGER Unknown request type: [object Object] @ https://www.gstatic.com/dialogflow-console/fast/df-messenger/prod/v1/df-messenger.js:206
+[  901222ms] [LOG] Stage  (lang=) @ https://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics/immigrant-visa-statistics/monthly-immigrant-visa-issuances.html:850
+[  901240ms] [ERROR] DF-MESSENGER Unknown request type: [object Object] @ https://www.gstatic.com/dialogflow-console/fast/df-messenger/prod/v1/df-messenger.js:206

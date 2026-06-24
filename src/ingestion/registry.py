@@ -390,15 +390,17 @@ SOURCE_REGISTRY: Dict[str, DataSource] = {
 
 
 # Source groups for CLI / workflow matrix
-# NOTE: `all` excludes visa_bulletin (owned by data-scan-visa-bulletin.yml) to avoid duplicate PRs
-_ENABLED_NON_VB = [
+# NOTE: `all` excludes visa_bulletin (owned by data-scan-visa-bulletin.yml) and
+# dol_perm (large multi-year OFLC archives; use `dol` explicitly to avoid noisy PRs).
+_ENABLED_CORE = [
     s
     for s, src in SOURCE_REGISTRY.items()
-    if src.enabled and s != "visa_bulletin"
+    if src.enabled and s not in ("visa_bulletin", "dol_perm")
 ]
 
 SOURCE_GROUPS: Dict[str, List[str]] = {
-    "all": list(_ENABLED_NON_VB),
+    "all": list(_ENABLED_CORE),
+    "all_with_dol": list(_ENABLED_CORE) + ["dol_perm"],
     "all_including_vb": [s for s, src in SOURCE_REGISTRY.items() if src.enabled],
     "dos": ["dos_iv_fsc"],
     "dos_iv": ["dos_iv_fsc"],

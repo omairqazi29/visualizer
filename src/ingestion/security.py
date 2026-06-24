@@ -9,8 +9,10 @@ from urllib.parse import urlparse, unquote
 
 from .registry import DATA_DIR, PROJECT_ROOT
 
-# Max download size (bytes) — prevents disk DoS in CI
-MAX_DOWNLOAD_BYTES = 80 * 1024 * 1024  # 80 MB
+# Max download size (bytes) — prevents disk DoS in CI.
+# DOL PERM quarterly archives routinely exceed 80 MB (some ~90–100 MB); 150 MB
+# still blocks multi-GB abuse while allowing legitimate OFLC disclosures.
+MAX_DOWNLOAD_BYTES = 150 * 1024 * 1024  # 150 MB
 
 # Magic bytes / content sniffing
 XLSX_MAGIC = b"PK"  # zip-based xlsx

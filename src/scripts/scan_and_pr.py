@@ -191,13 +191,24 @@ def main(argv: list | None = None) -> int:
         payload["fetch"] = [r.to_dict() for r in fetch_results]
 
         if any_fetch_failed(fetch_results) and not args.dry_run:
-            print("ERROR: one or more fetches failed — refusing PR", file=sys.stderr)
-            exit_code = 1
-            payload["exit_hints"].append("fetch_failed")
-            if args.pr:
-                if args.as_json:
-                    print(json.dumps(payload, indent=2, default=str))
-                return 1
+            ok_n = sum(1 for r in fetch_results if r.success and not r.skipped and not r.dry_run)
+            fail_n = sum(1 for r in fetch_results if not r.success and not r.skipped)
+            # Partial success: still allow PR for successful downloads; only hard-fail if nothing worked
+            if ok_n == 0 and fail_n > 0:
+                print("ERROR: all fetches failed — refusing PR", file=sys.stderr)
+                exit_code = 1
+                payload["exit_hints"].append("fetch_all_failed")
+                if args.pr:
+                    if args.as_json:
+                        print(json.dumps(payload, indent=2, default=str))
+                    return 1
+            else:
+                print(
+                    f"WARNING: {fail_n} fetch(es) failed; continuing with {ok_n} successful download(s)",
+                    file=sys.stderr,
+                )
+                payload["exit_hints"].append("fetch_partial_failed")
+                exit_code = 1  # non-zero overall so CI shows warning; PR may still proceed below
 
     if args.validate:
         print("\nValidating...")
@@ -235,11 +246,14 @@ def main(argv: list | None = None) -> int:
                 return 1
 
     if args.pr:
-        # Fail closed if fetch was requested and failed
-        if args.fetch and any_fetch_failed(fetch_results) and not args.dry_run:
-            if args.as_json:
-                print(json.dumps(payload, indent=2, default=str))
-            return 1
+        # Fail closed only when every attempted fetch failed (partial success is OK)
+        if args.fetch and fetch_results and not args.dry_run:
+            ok_n = sum(1 for r in fetch_results if r.success and not r.skipped and not r.dry_run)
+            fail_n = sum(1 for r in fetch_results if not r.success and not r.skipped)
+            if ok_n == 0 and fail_n > 0:
+                if args.as_json:
+                    print(json.dumps(payload, indent=2, default=str))
+                return 1
 
         files = paths_from_fetch_results(fetch_results)
         branch = args.branch_name or propose_branch_name(source_ids)

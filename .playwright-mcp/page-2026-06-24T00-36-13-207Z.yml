@@ -1,0 +1,1660 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - button "Open Virtual Assistant" [ref=e5] [cursor=pointer]:
+      - img [ref=e7]
+    - generic:
+      - option "English" [selected]
+      - option "Español"
+  - generic:
+    - 'heading "Worldwide Caution: The Department of State advises Americans worldwide to exercise increased caution." [level=3] [ref=e12]':
+      - text: "Worldwide Caution:"
+      - link "The Department of State advises Americans worldwide to exercise increased caution." [ref=e13] [cursor=pointer]:
+        - /url: https://travel.state.gov/en/international-travel/travel-advisories/global-events/worldwide-caution.html
+    - generic [ref=e14]:
+      - link "Skip to main content" [ref=e15] [cursor=pointer]:
+        - /url: "#inner-content"
+      - text:  
+      - list [ref=e17]:
+        - listitem [ref=e18]:
+          - link "Home" [ref=e19] [cursor=pointer]:
+            - /url: /content/travel.html
+          - text: "|"
+        - listitem [ref=e20]:
+          - link "Travel Advisories" [ref=e21] [cursor=pointer]:
+            - /url: /content/travel/en/traveladvisories/traveladvisories.html
+          - text: "|"
+        - listitem [ref=e22]:
+          - link "Newsroom" [ref=e23] [cursor=pointer]:
+            - /url: /content/travel/en/News/newsroom.html
+          - text: "|"
+        - listitem [ref=e24]:
+          - link "About Us|" [ref=e25] [cursor=pointer]:
+            - /url: /content/travel/en/about-us.html
+        - listitem [ref=e26]:
+          - link "Contact Us" [ref=e27] [cursor=pointer]:
+            - /url: /content/travel/en/contact-us.html
+          - text: "|"
+        - listitem [ref=e28]:
+          - link "Careers" [ref=e29] [cursor=pointer]:
+            - /url: https://careers.state.gov/
+          - text: "|"
+        - listitem [ref=e30]:
+          - link " MyTravelGov" [ref=e31] [cursor=pointer]:
+            - /url: /content/travel/en/about-us/mytravelgov.html
+            - generic [ref=e32]: 
+            - text: MyTravelGov
+          - text: "|"
+        - listitem:
+          - link "Find U.S. Embassies & Consulates":
+            - /url: http://www.usembassy.gov/
+            - generic [ref=e35] [cursor=pointer]: Find U.S. Embassies & Consulates
+      - text:      
+  - generic [ref=e36]:
+    - generic [ref=e39]:
+      - link "Travel.State.Gov US Department of State Homepage" [ref=e40] [cursor=pointer]:
+        - /url: /content/travel.html
+        - img "Travel.State.Gov US Department of State Homepage" [ref=e41]
+      - generic [ref=e42]:
+        - generic:
+          - search:
+            - textbox "Search" [ref=e43]
+            - button "" [ref=e44] [cursor=pointer]:
+              - generic [ref=e45]: 
+    - text: 
+    - list [ref=e50]:
+      - listitem [ref=e51]:
+        - link "U.S. Passports" [ref=e52] [cursor=pointer]:
+          - /url: /content/travel/en/passports.html
+          - heading "U.S. Passports" [level=4] [ref=e53]
+      - listitem [ref=e54]:
+        - link "International Travel" [ref=e55] [cursor=pointer]:
+          - /url: /content/travel/en/international-travel.html
+          - heading "International Travel" [level=4] [ref=e56]
+      - listitem [ref=e57]:
+        - link "U.S. Visas" [ref=e58] [cursor=pointer]:
+          - /url: /content/travel/en/us-visas.html
+          - heading "U.S. Visas" [level=4] [ref=e59]
+      - listitem [ref=e60]:
+        - link "Intercountry Adoption" [ref=e61] [cursor=pointer]:
+          - /url: /content/travel/en/Intercountry-Adoption.html
+          - heading "Intercountry Adoption" [level=4] [ref=e62]
+      - listitem [ref=e63]:
+        - link "International Parental Child Abduction" [ref=e64] [cursor=pointer]:
+          - /url: /content/travel/en/International-Parental-Child-Abduction.html
+          - heading "International Parental Child Abduction" [level=4] [ref=e65]
+      - listitem [ref=e66]:
+        - link "Replace or Certify Documents" [ref=e67] [cursor=pointer]:
+          - /url: /content/travel/en/replace-certify-docs.html
+          - heading "Replace or Certify Documents" [level=4] [ref=e68]
+    - generic [ref=e71]:
+      - list:
+        - listitem [ref=e72]:
+          - paragraph [ref=e73]:
+            - link "Legal Resources" [ref=e74] [cursor=pointer]:
+              - /url: /content/travel/en/legal/travel-legal-considerations.html
+        - listitem [ref=e75]:
+          - paragraph [ref=e76]:
+            - link "U.S. Visa Law & Policy" [ref=e77] [cursor=pointer]:
+              - /url: /content/travel/en/legal/visa-law0.html
+        - listitem [ref=e78]:
+          - paragraph [ref=e79]:
+            - link "Judicial Assistance Destination Information" [ref=e80] [cursor=pointer]:
+              - /url: /content/travel/en/legal/Judicial-Assistance-Country-Information.html
+    - generic:
+      - generic [ref=e81]:
+        - link "Travel.State.Gov" [ref=e82] [cursor=pointer]:
+          - /url: /content/travel.html
+        - text: ">"
+        - link "Legal Resources" [ref=e83] [cursor=pointer]:
+          - /url: /content/travel/en/legal.html
+        - text: ">"
+        - link "U.S. Visa Law & Policy" [ref=e84] [cursor=pointer]:
+          - /url: /content/travel/en/legal/visa-law0.html
+        - text: ">"
+        - link "Visa Statistics" [ref=e85] [cursor=pointer]:
+          - /url: /content/travel/en/legal/visa-law0/visa-statistics.html
+        - text: ">"
+        - link "Immigrant Visa Statistics" [ref=e86] [cursor=pointer]:
+          - /url: /content/travel/en/legal/visa-law0/visa-statistics/immigrant-visa-statistics.html
+        - text: "> Monthly Immigrant Visa Issuance Statistics"
+      - generic [ref=e87]:
+        - generic:
+          - paragraph [ref=e89]:
+            - strong [ref=e90]: "Share this page:"
+          - list [ref=e91]:
+            - listitem [ref=e92]:
+              - link "Print" [ref=e93] [cursor=pointer]:
+                - /url: "#"
+                - generic [ref=e94]: 
+            - listitem [ref=e95]:
+              - link "Email" [ref=e96] [cursor=pointer]:
+                - /url: mailto:?Subject=Monthly Immigrant Visa Issuance Statistics&body=https://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics/immigrant-visa-statistics/monthly-immigrant-visa-issuances.html
+                - generic [ref=e97]: 
+            - listitem [ref=e98]:
+              - link "Facebook" [ref=e99] [cursor=pointer]:
+                - /url: https://www.facebook.com/sharer/sharer.php?u=https://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics/immigrant-visa-statistics/monthly-immigrant-visa-issuances.html&amp;src=sdkpreparse
+                - generic [ref=e100]: 
+            - listitem [ref=e101]:
+              - link "Twitter" [ref=e102] [cursor=pointer]:
+                - /url: https://twitter.com/intent/tweet?text=Monthly Immigrant Visa Issuance Statisticshttps://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics/immigrant-visa-statistics/monthly-immigrant-visa-issuances.html
+                - generic [ref=e103]: 
+    - generic:
+      - generic:
+        - text: 
+        - list [ref=e107]:
+          - listitem [ref=e108]:
+            - paragraph [ref=e109]:
+              - link "The Visa Bulletin" [ref=e110] [cursor=pointer]:
+                - /url: /content/travel/en/legal/visa-law0/visa-bulletin.html
+          - listitem [ref=e111]:
+            - paragraph [ref=e112]:
+              - link "Visa Statistics" [ref=e113] [cursor=pointer]:
+                - /url: /content/travel/en/legal/visa-law0/visa-statistics.html
+          - listitem [ref=e114]:
+            - paragraph [ref=e115]:
+              - link "Laws & Regulations" [ref=e116] [cursor=pointer]:
+                - /url: /content/travel/en/legal/visa-law0/laws-regulations.html
+          - listitem [ref=e117]:
+            - paragraph [ref=e118]:
+              - link "Accepting, Serving in, or Performing Duties of a Position with the Government of a Foreign State - Immigration and Nationality Act (INA) Section 349(a)(4)" [ref=e119] [cursor=pointer]:
+                - /url: /content/travel/en/legal/visa-law0/Loss-US-Nationality-Public-Office-in-Foreign-State.html
+          - listitem [ref=e120]:
+            - paragraph [ref=e121]:
+              - link "Loss of U.S. Nationality and Service in the Armed Forces of a Foreign State - Immigration and Nationality Act (INA) Section 349(a)(3)" [ref=e122] [cursor=pointer]:
+                - /url: /content/travel/en/legal/visa-law0/Loss-US-Nationality-Service-in-Armed-Forces-of-a-Foreign-State.html
+      - generic [ref=e123]:
+        - generic [ref=e124]:
+          - generic [ref=e125]:
+            - link "start of main content":
+              - /url: javascript:void(0);
+            - heading "Monthly Immigrant Visa Issuance Statistics" [level=1] [ref=e126]
+          - generic [ref=e127]:
+            - generic [ref=e129]:
+              - paragraph
+              - paragraph [ref=e130]: The reports below contain preliminary data which are subject to change.
+              - paragraph [ref=e131]: The Visa Office has changed its methodology for calculating visa data beginning with the Fiscal Year (FY) 2019 annual Report of the Visa Office and continuing with FY 2020 data, to reflect the greater access to application-level data attained during FY 2019. Our previous methodology was based on a count of workload actions, which were not linked by application. The new methodology more accurately reflects final outcomes from the visa application process during a specified reporting period. The new methodology follows visa applications, including updates to their status (i.e., issued or refused), which could change as the fiscal year progresses, or result in slight changes in data for earlier years. Therefore, beginning with FY 2020, individual monthly issuance reports should not be aggregated, as this will not provide an accurate issuance total for the fiscal year to date. Instead, refer to our annual Report of the Visa Office for final full Fiscal Year statistics.
+              - paragraph [ref=e132]: While the new methodology is more accurate, it does not mean that our prior methodology was flawed. The two are simply not comparable. However, based on our analysis, the discrepancies between the methodologies are minor. For example, the difference between reported issuances of NIVs and IVs in FY 2018 (legacy methodology) and those in FY 2019 (new methodology) is less than one percent worldwide.
+              - paragraph [ref=e133]: Please note that the new methodology is only being applied to the monthly IV issuance reports below, beginning with the December 2019 reports.
+              - paragraph [ref=e134]: Beginning with February 2021, the format of the Immigrant Visa data being reported will be updated to reflect the more commonly used and recognized general visa categories, which are the same as published in the annual Report of the Visa Office.
+              - paragraph
+            - generic [ref=e136]:
+              - paragraph
+              - paragraph [ref=e137]: Fiscal Year 2017
+              - list [ref=e138]:
+                - listitem [ref=e139]:
+                  - link "March 2017 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e140] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/March%202017%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class%20-%20Worldwide.pdf
+                    - text: March 2017 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e141]: 
+                - listitem [ref=e142]:
+                  - link "March 2017 - IV Issuances by Post and Visa Class " [ref=e143] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/March%202017%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: March 2017 - IV Issuances by Post and Visa Class
+                    - generic [ref=e144]: 
+                - listitem [ref=e145]:
+                  - link "April 2017 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e146] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202017%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: April 2017 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e147]: 
+                - listitem [ref=e148]:
+                  - link "April 2017 - IV Issuances by Post and Visa Class " [ref=e149] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202017%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: April 2017 - IV Issuances by Post and Visa Class
+                    - generic [ref=e150]: 
+                - listitem [ref=e151]:
+                  - link "May 2017 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e152] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202017%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: May 2017 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e153]: 
+                - listitem [ref=e154]:
+                  - link "May 2017 - IV Issuances by Post and Visa Class " [ref=e155] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202017%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: May 2017 - IV Issuances by Post and Visa Class
+                    - generic [ref=e156]: 
+                - listitem [ref=e157]:
+                  - link "June 2017 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e158] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE%202017%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: June 2017 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e159]: 
+                - listitem [ref=e160]:
+                  - link "June 2017 - IV Issuances by Post and Visa Class " [ref=e161] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE%202017%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: June 2017 - IV Issuances by Post and Visa Class
+                    - generic [ref=e162]: 
+                - listitem [ref=e163]:
+                  - link "July 2017 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e164] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202017%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: July 2017 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e165]: 
+                - listitem [ref=e166]:
+                  - link "July 2017 - IV Issuances by Post and Visa Class " [ref=e167] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202017%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: July 2017 - IV Issuances by Post and Visa Class
+                    - generic [ref=e168]: 
+                - listitem [ref=e169]:
+                  - link "August 2017 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e170] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202017%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: August 2017 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e171]: 
+                - listitem [ref=e172]:
+                  - link "August 2017 - IV Issuances by Post and Visa Class " [ref=e173] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202017%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: August 2017 - IV Issuances by Post and Visa Class
+                    - generic [ref=e174]: 
+                - listitem [ref=e175]:
+                  - link "September 2017 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e176] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202017%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: September 2017 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e177]: 
+                - listitem [ref=e178]:
+                  - link "September 2017 - IV Issuances by Post and Visa Class " [ref=e179] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202017%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: September 2017 - IV Issuances by Post and Visa Class
+                    - generic [ref=e180]: 
+              - paragraph [ref=e181]: Fiscal Year 2018
+              - list [ref=e182]:
+                - listitem [ref=e183]:
+                  - link "October 2017 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e184] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER%202017%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: October 2017 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e185]: 
+                - listitem [ref=e186]:
+                  - link "October 2017 - IV Issuances by Post and Visa Class " [ref=e187] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER%202017%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: October 2017 - IV Issuances by Post and Visa Class
+                    - generic [ref=e188]: 
+                - listitem [ref=e189]:
+                  - link "November 2017 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e190] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER%202017%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: November 2017 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e191]: 
+                - listitem [ref=e192]:
+                  - link "November 2017 - IV Issuances by Post and Visa Class " [ref=e193] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER%202017%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: November 2017 - IV Issuances by Post and Visa Class
+                    - generic [ref=e194]: 
+                - listitem [ref=e195]:
+                  - link "December 2017 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e196] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202017%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: December 2017 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e197]: 
+                - listitem [ref=e198]:
+                  - link "December 2017 - IV Issuances by Post and Visa Class " [ref=e199] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202017%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: December 2017 - IV Issuances by Post and Visa Class
+                    - generic [ref=e200]: 
+                - listitem [ref=e201]:
+                  - link "January 2018 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e202] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202018%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: January 2018 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e203]: 
+                - listitem [ref=e204]:
+                  - link "January 2018 - IV Issuances by Post and Visa Class " [ref=e205] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202018%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: January 2018 - IV Issuances by Post and Visa Class
+                    - generic [ref=e206]: 
+                - listitem [ref=e207]:
+                  - link "February 2018 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e208] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202018%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: February 2018 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e209]: 
+                - listitem [ref=e210]:
+                  - link "February 2018 - IV Issuances by Post and Visa Class " [ref=e211] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202018%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: February 2018 - IV Issuances by Post and Visa Class
+                    - generic [ref=e212]: 
+                - listitem [ref=e213]:
+                  - link "March 2018 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e214] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202018%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: March 2018 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e215]: 
+                - listitem [ref=e216]:
+                  - link "March 2018 - IV Issuances by Post and Visa Class " [ref=e217] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202018%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: March 2018 - IV Issuances by Post and Visa Class
+                    - generic [ref=e218]: 
+                - listitem [ref=e219]:
+                  - link "April 2018 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e220] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202018%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: April 2018 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e221]: 
+                - listitem [ref=e222]:
+                  - link "April 2018 - IV Issuances by Post and Visa Class " [ref=e223] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202018%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: April 2018 - IV Issuances by Post and Visa Class
+                    - generic [ref=e224]: 
+                - listitem [ref=e225]:
+                  - link "May 2018 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e226] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202018%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: May 2018 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e227]: 
+                - listitem [ref=e228]:
+                  - link "May 2018 - IV Issuances by Post and Visa Class " [ref=e229] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202018%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: May 2018 - IV Issuances by Post and Visa Class
+                    - generic [ref=e230]: 
+                - listitem [ref=e231]:
+                  - link "June 2018 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e232] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/June%202018%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: June 2018 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e233]: 
+                - listitem [ref=e234]:
+                  - link "June 2018 - IV Issuances by Post and Visa Class " [ref=e235] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/June%202018%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: June 2018 - IV Issuances by Post and Visa Class
+                    - generic [ref=e236]: 
+                - listitem [ref=e237]:
+                  - link "July 2018 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e238] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202018%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: July 2018 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e239]: 
+                - listitem [ref=e240]:
+                  - link "July 2018 - IV Issuances by Post and Visa Class " [ref=e241] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202018%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: July 2018 - IV Issuances by Post and Visa Class
+                    - generic [ref=e242]: 
+                - listitem [ref=e243]:
+                  - link "August 2018 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e244] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202018%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: August 2018 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e245]: 
+                - listitem [ref=e246]:
+                  - link "August 2018 - IV Issuances by Post and Visa Class " [ref=e247] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202018%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: August 2018 - IV Issuances by Post and Visa Class
+                    - generic [ref=e248]: 
+                - listitem [ref=e249]:
+                  - link "September 2018 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e250] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202018%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: September 2018 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e251]: 
+                - listitem [ref=e252]:
+                  - link "September 2018 - IV Issuances by Post and Visa Class " [ref=e253] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202018%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: September 2018 - IV Issuances by Post and Visa Class
+                    - generic [ref=e254]: 
+              - paragraph [ref=e255]: Fiscal Year 2019
+              - list [ref=e256]:
+                - listitem [ref=e257]:
+                  - link "October 2018 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e258] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/October%202018%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: October 2018 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e259]: 
+                - listitem [ref=e260]:
+                  - link "October 2018 - IV Issuances by Post and Visa Class " [ref=e261] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/October%202018%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: October 2018 - IV Issuances by Post and Visa Class
+                    - generic [ref=e262]: 
+                - listitem [ref=e263]:
+                  - link "November 2018 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e264] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/November%202018%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: November 2018 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e265]: 
+                - listitem [ref=e266]:
+                  - link "November 2018 - IV Issuances by Post and Visa Class " [ref=e267] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/November%202018%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: November 2018 - IV Issuances by Post and Visa Class
+                    - generic [ref=e268]: 
+                - listitem [ref=e269]:
+                  - link "December 2018 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e270] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202018%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: December 2018 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e271]: 
+                - listitem [ref=e272]:
+                  - link "December 2018 - IV Issuances by Post and Visa Class " [ref=e273] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202018%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: December 2018 - IV Issuances by Post and Visa Class
+                    - generic [ref=e274]: 
+                - listitem [ref=e275]:
+                  - link "January 2019 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e276] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202019%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: January 2019 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e277]: 
+                - listitem [ref=e278]:
+                  - link "January 2019 - IV Issuances by Post and Visa Class " [ref=e279] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202019%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: January 2019 - IV Issuances by Post and Visa Class
+                    - generic [ref=e280]: 
+                - listitem [ref=e281]:
+                  - link "February 2019 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e282] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202019%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: February 2019 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e283]: 
+                - listitem [ref=e284]:
+                  - link "February 2019 - IV Issuances by Post and Visa Class " [ref=e285] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202019%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: February 2019 - IV Issuances by Post and Visa Class
+                    - generic [ref=e286]: 
+                - listitem [ref=e287]:
+                  - link "March 2019 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e288] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202019%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: March 2019 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e289]: 
+                - listitem [ref=e290]:
+                  - link "March 2019 - IV Issuances by Post and Visa Class " [ref=e291] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202019%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: March 2019 - IV Issuances by Post and Visa Class
+                    - generic [ref=e292]: 
+                - listitem [ref=e293]:
+                  - link "April 2019 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e294] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202019%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: April 2019 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e295]: 
+                - listitem [ref=e296]:
+                  - link "April 2019 - IV Issuances by Post and Visa Class " [ref=e297] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202019%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: April 2019 - IV Issuances by Post and Visa Class
+                    - generic [ref=e298]: 
+                - listitem [ref=e299]:
+                  - link "May 2019 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e300] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202019%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: May 2019 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e301]: 
+                - listitem [ref=e302]:
+                  - link "May 2019 - IV Issuances by Post and Visa Class " [ref=e303] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202019%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: May 2019 - IV Issuances by Post and Visa Class
+                    - generic [ref=e304]: 
+                - listitem [ref=e305]:
+                  - link "June 2019 - IV Issuances by FSC and Visa Class " [ref=e306] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE%202019%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: June 2019 - IV Issuances by FSC and Visa Class
+                    - generic [ref=e307]: 
+                - listitem [ref=e308]:
+                  - link "June 2019 - IV Issuances by Post and Visa Class " [ref=e309] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE%202019%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: June 2019 - IV Issuances by Post and Visa Class
+                    - generic [ref=e310]: 
+                - listitem [ref=e311]:
+                  - link "July 2019 - IV Issuances by FSC and Visa Class " [ref=e312] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202019%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: July 2019 - IV Issuances by FSC and Visa Class
+                    - generic [ref=e313]: 
+                - listitem [ref=e314]:
+                  - link "July 2019 - IV Issuances by Post and Visa Class " [ref=e315] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202019%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: July 2019 - IV Issuances by Post and Visa Class
+                    - generic [ref=e316]: 
+                - listitem [ref=e317]:
+                  - link "August 2019 - IV Issuances by FSC and Visa Class " [ref=e318] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202019%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: August 2019 - IV Issuances by FSC and Visa Class
+                    - generic [ref=e319]: 
+                - listitem [ref=e320]:
+                  - link "August 2019 - IV Issuances by Post and Visa Class " [ref=e321] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202019%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: August 2019 - IV Issuances by Post and Visa Class
+                    - generic [ref=e322]: 
+                - listitem [ref=e323]:
+                  - link "September 2019 - IV Issuances by FSC and Visa Class " [ref=e324] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202019%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: September 2019 - IV Issuances by FSC and Visa Class
+                    - generic [ref=e325]: 
+                - listitem [ref=e326]:
+                  - link "September 2019 - IV Issuances by Post and Visa Class " [ref=e327] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202019%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: September 2019 - IV Issuances by Post and Visa Class
+                    - generic [ref=e328]: 
+              - paragraph [ref=e329]: Fiscal Year 2020
+              - list [ref=e330]:
+                - listitem [ref=e331]:
+                  - link "October 2019 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e332] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER%202019%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: October 2019 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e333]: 
+                - listitem [ref=e334]:
+                  - link "October 2019 - IV Issuances by Post and Visa Class " [ref=e335] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER%202019%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: October 2019 - IV Issuances by Post and Visa Class
+                    - generic [ref=e336]: 
+                - listitem [ref=e337]:
+                  - link "November 2019 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e338] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER%202019%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: November 2019 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e339]: 
+                - listitem [ref=e340]:
+                  - link "November 2019 - IV Issuances by Post and Visa Class " [ref=e341] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER%202019%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: November 2019 - IV Issuances by Post and Visa Class
+                    - generic [ref=e342]: 
+                - listitem [ref=e343]:
+                  - link "December 2019 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e344] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202019%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: December 2019 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e345]: 
+                - listitem [ref=e346]:
+                  - link "December 2019 - IV Issuances by Post and Visa Class " [ref=e347] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202019%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: December 2019 - IV Issuances by Post and Visa Class
+                    - generic [ref=e348]: 
+                - listitem [ref=e349]:
+                  - link "January 2020 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e350] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202020%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: January 2020 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e351]: 
+                - listitem [ref=e352]:
+                  - link "January 2020 - IV Issuances by Post and Visa Class " [ref=e353] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202020%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: January 2020 - IV Issuances by Post and Visa Class
+                    - generic [ref=e354]: 
+                - listitem [ref=e355]:
+                  - link "February 2020 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e356] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202020%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: February 2020 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e357]: 
+                - listitem [ref=e358]:
+                  - link "February 2020 - IV Issuances by Post and Visa Class " [ref=e359] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202020%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: February 2020 - IV Issuances by Post and Visa Class
+                    - generic [ref=e360]: 
+                - listitem [ref=e361]:
+                  - link "March 2020 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e362] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202020%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: March 2020 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e363]: 
+                - listitem [ref=e364]:
+                  - link "March 2020 - IV Issuances by Post and Visa Class " [ref=e365] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202020%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: March 2020 - IV Issuances by Post and Visa Class
+                    - generic [ref=e366]: 
+                - listitem [ref=e367]:
+                  - link "April 2020 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e368] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202020%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: April 2020 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e369]: 
+                - listitem [ref=e370]:
+                  - link "April 2020 - IV Issuances by Post and Visa Class " [ref=e371] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202020%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: April 2020 - IV Issuances by Post and Visa Class
+                    - generic [ref=e372]: 
+                - listitem [ref=e373]:
+                  - link "May 2020 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e374] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202020%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: May 2020 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e375]: 
+                - listitem [ref=e376]:
+                  - link "May 2020 - IV Issuances by Post and Visa Class " [ref=e377] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202020%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: May 2020 - IV Issuances by Post and Visa Class
+                    - generic [ref=e378]: 
+                - listitem [ref=e379]:
+                  - link "June 2020 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e380] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/June%202020%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: June 2020 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e381]: 
+                - listitem [ref=e382]:
+                  - link "June 2020 - IV Issuances by Post and Visa Class " [ref=e383] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/June%202020%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: June 2020 - IV Issuances by Post and Visa Class
+                    - generic [ref=e384]: 
+                - listitem [ref=e385]:
+                  - link "July 2020 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e386] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202020%20%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: July 2020 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e387]: 
+                - listitem [ref=e388]:
+                  - link "July 2020 - IV Issuances by Post and Visa Class " [ref=e389] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202020%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: July 2020 - IV Issuances by Post and Visa Class
+                    - generic [ref=e390]: 
+                - listitem [ref=e391]:
+                  - link "August 2020 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e392] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202020%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: August 2020 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e393]: 
+                - listitem [ref=e394]:
+                  - link "August 2020 - IV Issuances by Post and Visa Class " [ref=e395] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202020%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: August 2020 - IV Issuances by Post and Visa Class
+                    - generic [ref=e396]: 
+                - listitem [ref=e397]:
+                  - link "September 2020 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e398] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPT%202020%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: September 2020 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e399]: 
+                - listitem [ref=e400]:
+                  - link "September 2020 - IV Issuances by Post and Visa Class " [ref=e401] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPT%202020%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: September 2020 - IV Issuances by Post and Visa Class
+                    - generic [ref=e402]: 
+              - paragraph [ref=e403]: Fiscal Year 2021
+              - list [ref=e404]:
+                - listitem [ref=e405]:
+                  - link "October 2020 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e406] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER%202020%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: October 2020 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e407]: 
+                - listitem [ref=e408]:
+                  - link "October 2020 - IV Issuances by Post and Visa Class " [ref=e409] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER%202020%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: October 2020 - IV Issuances by Post and Visa Class
+                    - generic [ref=e410]: 
+                - listitem [ref=e411]:
+                  - link "November 2020 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e412] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER%202020%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: November 2020 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e413]: 
+                - listitem [ref=e414]:
+                  - link "November 2020 - IV Issuances by Post and Visa Class " [ref=e415] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER%202020%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: November 2020 - IV Issuances by Post and Visa Class
+                    - generic [ref=e416]: 
+                - listitem [ref=e417]:
+                  - link "December 2020 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e418] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202020%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: December 2020 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e419]: 
+                - listitem [ref=e420]:
+                  - link "December 2020 - IV Issuances by Post and Visa Class " [ref=e421] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202020%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: December 2020 - IV Issuances by Post and Visa Class
+                    - generic [ref=e422]: 
+                - listitem [ref=e423]:
+                  - link "January 2021 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e424] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202021%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: January 2021 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e425]: 
+                - listitem [ref=e426]:
+                  - link "January 2021 - IV Issuances by Post and Visa Class " [ref=e427] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202021%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: January 2021 - IV Issuances by Post and Visa Class
+                    - generic [ref=e428]: 
+                - listitem [ref=e429]:
+                  - link "February 2021 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e430] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202021%20-%20IV%20Issuances%20by%20FSC%20and%20Visa%20Class.pdf
+                    - text: February 2021 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e431]: 
+                - listitem [ref=e432]:
+                  - link "February 2021 - IV Issuances by Post and Visa Class " [ref=e433] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202021%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: February 2021 - IV Issuances by Post and Visa Class
+                    - generic [ref=e434]: 
+                - listitem [ref=e435]:
+                  - link "March 2021 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e436] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202021%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: March 2021 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e437]: 
+                - listitem [ref=e438]:
+                  - link "March 2021 - IV Issuances by Post and Visa Class " [ref=e439] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202021%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: March 2021 - IV Issuances by Post and Visa Class
+                    - generic [ref=e440]: 
+                - listitem [ref=e441]:
+                  - link "April 2021 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e442] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202021%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: April 2021 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e443]: 
+                - listitem [ref=e444]:
+                  - link "April 2021 - IV Issuances by Post and Visa Class " [ref=e445] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202021%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: April 2021 - IV Issuances by Post and Visa Class
+                    - generic [ref=e446]: 
+                - listitem [ref=e447]:
+                  - link "May 2021 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e448] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY2021%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: May 2021 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e449]: 
+                - listitem [ref=e450]:
+                  - link "May 2021 - IV Issuances by Post and Visa Class " [ref=e451] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%20%202021%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: May 2021 - IV Issuances by Post and Visa Class
+                    - generic [ref=e452]: 
+                - listitem [ref=e453]:
+                  - link "June 2021 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e454] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE2021%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: June 2021 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e455]: 
+                - listitem [ref=e456]:
+                  - link "June 2021 - IV Issuances by Post and Visa Class " [ref=e457] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE%202021%20--%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: June 2021 - IV Issuances by Post and Visa Class
+                    - generic [ref=e458]: 
+                - listitem [ref=e459]:
+                  - link "July 2021 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e460] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY2021%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: July 2021 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e461]: 
+                - listitem [ref=e462]:
+                  - link "July 2021 - IV Issuances by Post and Visa Class " [ref=e463] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202021%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: July 2021 - IV Issuances by Post and Visa Class
+                    - generic [ref=e464]: 
+                - listitem [ref=e465]:
+                  - link "August 2021 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e466] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST2021%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: August 2021 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e467]: 
+                - listitem [ref=e468]:
+                  - link "August 2021 - IV Issuances by Post and Visa Class " [ref=e469] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202021%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: August 2021 - IV Issuances by Post and Visa Class
+                    - generic [ref=e470]: 
+                - listitem [ref=e471]:
+                  - link "September 2021 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e472] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER2021%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: September 2021 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e473]: 
+                - listitem [ref=e474]:
+                  - link "September 2021 - IV Issuances by Post and Visa Class " [ref=e475] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202021%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: September 2021 - IV Issuances by Post and Visa Class
+                    - generic [ref=e476]: 
+              - paragraph [ref=e477]: Fiscal Year 2022
+              - list [ref=e478]:
+                - listitem [ref=e479]:
+                  - link "October 2021 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e480] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER2021%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: October 2021 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e481]: 
+                - listitem [ref=e482]:
+                  - link "October 2021 - IV Issuances by Post and Visa Class " [ref=e483] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER%202021%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: October 2021 - IV Issuances by Post and Visa Class
+                    - generic [ref=e484]: 
+                - listitem [ref=e485]:
+                  - link "November 2021 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e486] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER2021%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: November 2021 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e487]: 
+                - listitem [ref=e488]:
+                  - link "November 2021 - IV Issuances by Post and Visa Class " [ref=e489] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER%202021%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: November 2021 - IV Issuances by Post and Visa Class
+                    - generic [ref=e490]: 
+                - listitem [ref=e491]:
+                  - link "December 2021 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e492] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER2021%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: December 2021 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e493]: 
+                - listitem [ref=e494]:
+                  - link "December 2021 - IV Issuances by Post and Visa Class " [ref=e495] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202021%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: December 2021 - IV Issuances by Post and Visa Class
+                    - generic [ref=e496]: 
+                - listitem [ref=e497]:
+                  - link "January 2022 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e498] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY2022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: January 2022 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e499]: 
+                - listitem [ref=e500]:
+                  - link "January 2022 - IV Issuances by Post and Visa Class " [ref=e501] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: January 2022 - IV Issuances by Post and Visa Class
+                    - generic [ref=e502]: 
+                - listitem [ref=e503]:
+                  - link "February 2022 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e504] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: February 2022 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e505]: 
+                - listitem [ref=e506]:
+                  - link "February 2022 - IV Issuances by Post and Visa Class " [ref=e507] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: February 2022 - IV Issuances by Post and Visa Class
+                    - generic [ref=e508]: 
+                - listitem [ref=e509]:
+                  - link "March 2022 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e510] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: March 2022 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e511]: 
+                - listitem [ref=e512]:
+                  - link "March 2022 - IV Issuances by Post and Visa Class " [ref=e513] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: March 2022 - IV Issuances by Post and Visa Class
+                    - generic [ref=e514]: 
+                - listitem [ref=e515]:
+                  - link "April 2022 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e516] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: April 2022 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e517]: 
+                - listitem [ref=e518]:
+                  - link "April 2022 - IV Issuances by Post and Visa Class " [ref=e519] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: April 2022 - IV Issuances by Post and Visa Class
+                    - generic [ref=e520]: 
+                - listitem [ref=e521]:
+                  - link "May 2022 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e522] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: May 2022 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e523]: 
+                - listitem [ref=e524]:
+                  - link "May 2022 - IV Issuances by Post and Visa Class " [ref=e525] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: May 2022 - IV Issuances by Post and Visa Class
+                    - generic [ref=e526]: 
+                - listitem [ref=e527]:
+                  - link "June 2022 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e528] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: June 2022 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e529]: 
+                - listitem [ref=e530]:
+                  - link "June 2022 - IV Issuances by Post and Visa Class " [ref=e531] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: June 2022 - IV Issuances by Post and Visa Class
+                    - generic [ref=e532]: 
+                - listitem [ref=e533]:
+                  - link "July 2022 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e534] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: July 2022 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e535]: 
+                - listitem [ref=e536]:
+                  - link "July 2022 - IV Issuances by Post and Visa Class " [ref=e537] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: July 2022 - IV Issuances by Post and Visa Class
+                    - generic [ref=e538]: 
+                - listitem [ref=e539]:
+                  - link "August 2022 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e540] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: August 2022 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e541]: 
+                - listitem [ref=e542]:
+                  - link "August 2022 - IV Issuances by Post and Visa Class " [ref=e543] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: August 2022 - IV Issuances by Post and Visa Class
+                    - generic [ref=e544]: 
+                - listitem [ref=e545]:
+                  - link "September 2022 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e546] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: September 2022 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e547]: 
+                - listitem [ref=e548]:
+                  - link "September 2022 - IV Issuances by Post and Visa Class " [ref=e549] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: September 2022 - IV Issuances by Post and Visa Class
+                    - generic [ref=e550]: 
+              - paragraph [ref=e551]: Fiscal Year 2023
+              - list [ref=e552]:
+                - listitem [ref=e553]:
+                  - link "October 2022 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e554] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: October 2022 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e555]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e556] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/OCTOBER%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                - listitem [ref=e557]:
+                  - link "October 2022 - IV Issuances by Post and Visa Class " [ref=e558] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: October 2022 - IV Issuances by Post and Visa Class
+                    - generic [ref=e559]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e560] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/OCTOBER%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                - listitem [ref=e561]:
+                  - link "November 2022 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e562] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: November 2022 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e563]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e564] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/NOVEMBER%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                - listitem [ref=e565]:
+                  - link "November 2022 - IV Issuances by Post and Visa Class " [ref=e566] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: November 2022 - IV Issuances by Post and Visa Class
+                    - generic [ref=e567]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e568] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/NOVEMBER%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                - listitem [ref=e569]:
+                  - link "December 2022 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e570] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: December 2022 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e571]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e572] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/DECEMBER%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class_v1.xlsx
+                - listitem [ref=e573]:
+                  - link "December 2022 - IV Issuances by Post and Visa Class " [ref=e574] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: December 2022 - IV Issuances by Post and Visa Class
+                    - generic [ref=e575]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e576] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/DECEMBER%202022%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                - listitem [ref=e577]:
+                  - link "January 2023 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e578] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: January 2023 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e579]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e580] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/JANUARY%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                - listitem [ref=e581]:
+                  - link "January 2023 - IV Issuances by Post and Visa Class " [ref=e582] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: January 2023 - IV Issuances by Post and Visa Class
+                    - generic [ref=e583]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e584] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/JANUARY%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                - listitem [ref=e585]:
+                  - link "February 2023 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e586] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: February 2023 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e587]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e588] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/FEBRUARY%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                - listitem [ref=e589]:
+                  - link "February 2023 - IV Issuances by Post and Visa Class " [ref=e590] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: February 2023 - IV Issuances by Post and Visa Class
+                    - generic [ref=e591]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e592] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/FEBRUARY%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                - listitem [ref=e593]:
+                  - link "March 2023 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e594] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: March 2023 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e595]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e596] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/MARCH%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                - listitem [ref=e597]:
+                  - link "March 2023 - IV Issuances by Post and Visa Class " [ref=e598] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: March 2023 - IV Issuances by Post and Visa Class
+                    - generic [ref=e599]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e600] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/MARCH%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                - listitem [ref=e601]:
+                  - link "April 2023 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e602] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: April 2023 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e603]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e604] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/APRIL%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                - listitem [ref=e605]:
+                  - link "April 2023 - IV Issuances by Post and Visa Class " [ref=e606] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: April 2023 - IV Issuances by Post and Visa Class
+                    - generic [ref=e607]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e608] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/APRIL%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                - listitem [ref=e609]:
+                  - link "May 2023 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e610] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: May 2023 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e611]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e612] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/MAY%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                - listitem [ref=e613]:
+                  - link "May 2023 - IV Issuances by Post and Visa Class " [ref=e614] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: May 2023 - IV Issuances by Post and Visa Class
+                    - generic [ref=e615]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e616] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/MAY%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                - listitem [ref=e617]:
+                  - link "June 2023 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e618] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: June 2023 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e619]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e620] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/JUNE%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                - listitem [ref=e621]:
+                  - link "June 2023 - IV Issuances by Post and Visa Class " [ref=e622] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: June 2023 - IV Issuances by Post and Visa Class
+                    - generic [ref=e623]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e624] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/JUNE%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                - listitem [ref=e625]:
+                  - link "July 2023 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e626] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: July 2023 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e627]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e628] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/JULY%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                - listitem [ref=e629]:
+                  - link "July 2023 - IV Issuances by Post and Visa Class " [ref=e630] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: July 2023 - IV Issuances by Post and Visa Class
+                    - generic [ref=e631]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e632] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/JULY%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                - listitem [ref=e633]:
+                  - link "August 2023 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e634] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: August 2023 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e635]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e636] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/AUGUST%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                - listitem [ref=e637]:
+                  - link "August 2023 - IV Issuances by Post and Visa Class " [ref=e638] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: August 2023 - IV Issuances by Post and Visa Class
+                    - generic [ref=e639]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e640] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/AUGUST%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                - listitem [ref=e641]:
+                  - link "September 2023 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e642] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: September 2023 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e643]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e644] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/SEPTEMBER%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                - listitem [ref=e645]:
+                  - link "September 2023 - IV Issuances by Post and Visa Class " [ref=e646] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: September 2023 - IV Issuances by Post and Visa Class
+                    - generic [ref=e647]: 
+                  - text: "-"
+                  - link "(Excel)" [ref=e648] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2023/SEPTEMBER%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+              - paragraph [ref=e649]: Fiscal Year 2024
+              - list [ref=e650]:
+                - listitem [ref=e651]:
+                  - link "October 2023 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e652] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: October 2023 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e653]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e654] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/OCTOBER%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e655]:
+                  - link "October 2023 - IV Issuances by Post and Visa Class " [ref=e656] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: October 2023 - IV Issuances by Post and Visa Class
+                    - generic [ref=e657]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e658] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/OCTOBER%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e659]:
+                  - link "November 2023 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e660] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: November 2023 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e661]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e662] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/NOVEMBER%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e663]:
+                  - link "November 2023 - IV Issuances by Post and Visa Class " [ref=e664] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: November 2023 - IV Issuances by Post and Visa Class
+                    - generic [ref=e665]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e666] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/NOVEMBER%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e667]:
+                  - link "December 2023 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e668] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: December 2023 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e669]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e670] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/DECEMBER%202023%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e671]:
+                  - link "December 2023 - IV Issuances by Post and Visa Class " [ref=e672] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: December 2023 - IV Issuances by Post and Visa Class
+                    - generic [ref=e673]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e674] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/DECEMBER%202023%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e675]:
+                  - link "January 2024 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e676] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: January 2024 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e677]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e678] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/JANUARY%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e679]:
+                  - link "January 2024 - IV Issuances by Post and Visa Class " [ref=e680] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: January 2024 - IV Issuances by Post and Visa Class
+                    - generic [ref=e681]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e682] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/JANUARY%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e683]:
+                  - link "February 2024 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e684] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: February 2024 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e685]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e686] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/FEBRUARY%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e687]:
+                  - link "February 2024 - IV Issuances by Post and Visa Class " [ref=e688] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: February 2024 - IV Issuances by Post and Visa Class
+                    - generic [ref=e689]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e690] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/FEBRUARY%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e691]:
+                  - link "March 2024 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e692] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: March 2024 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e693]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e694] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/MARCH%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e695]:
+                  - link "March 2024 - IV Issuances by Post and Visa Class " [ref=e696] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: March 2024 - IV Issuances by Post and Visa Class
+                    - generic [ref=e697]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e698] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/MARCH%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e699]:
+                  - link "April 2024 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e700] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: April 2024 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e701]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e702] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/APRIL%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e703]:
+                  - link "April 2024 - IV Issuances by Post and Visa Class " [ref=e704] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: April 2024 - IV Issuances by Post and Visa Class
+                    - generic [ref=e705]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e706] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/APRIL%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e707]:
+                  - link "May 2024 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e708] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: May 2024 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e709]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e710] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/MAY%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e711]:
+                  - link "May 2024 - IV Issuances by Post and Visa Class " [ref=e712] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: May 2024 - IV Issuances by Post and Visa Class
+                    - generic [ref=e713]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e714] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/MAY%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e715]:
+                  - link "June 2024 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e716] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: June 2024 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e717]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e718] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/JUNE%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e719]:
+                  - link "June 2024 - IV Issuances by Post and Visa Class " [ref=e720] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: June 2024 - IV Issuances by Post and Visa Class
+                    - generic [ref=e721]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e722] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/JUNE%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e723]:
+                  - link "July 2024 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e724] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: July 2024 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e725]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e726] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/JULY%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e727]:
+                  - link "July 2024 - IV Issuances by Post and Visa Class " [ref=e728] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: July 2024 - IV Issuances by Post and Visa Class
+                    - generic [ref=e729]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e730] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/JULY%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e731]:
+                  - link "August 2024 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e732] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: August 2024 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e733]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e734] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/AUGUST%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e735]:
+                  - link "August 2024 - IV Issuances by Post and Visa Class " [ref=e736] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: August 2024 - IV Issuances by Post and Visa Class
+                    - generic [ref=e737]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e738] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/AUGUST%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e739]:
+                  - link "September 2024 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e740] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: September 2024 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e741]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e742] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/SEPTEMBER%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e743]:
+                  - link "September 2024 - IV Issuances by Post and Visa Class " [ref=e744] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: September 2024 - IV Issuances by Post and Visa Class
+                    - generic [ref=e745]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e746] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2024/SEPTEMBER%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+              - paragraph [ref=e747]: Fiscal Year 2025
+              - list [ref=e748]:
+                - listitem [ref=e749]:
+                  - link "October 2024 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e750] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: October 2024 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e751]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e752] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/OCTOBER%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e753]:
+                  - link "October 2024 - IV Issuances by Post and Visa Class " [ref=e754] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/OCTOBER%202024%20-%20%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: October 2024 - IV Issuances by Post and Visa Class
+                    - generic [ref=e755]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e756] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/OCTOBER%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e757]:
+                  - link "November 2024 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e758] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: November 2024 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e759]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e760] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/NOVEMBER%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e761]:
+                  - link "November 2024 - IV Issuances by Post and Visa Class " [ref=e762] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/NOVEMBER%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: November 2024 - IV Issuances by Post and Visa Class
+                    - generic [ref=e763]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e764] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/NOVEMBER%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e765]:
+                  - link "December 2024 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e766] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: December 2024 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e767]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e768] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/DECEMBER%202024%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e769]:
+                  - link "December 2024 - IV Issuances by Post and Visa Class " [ref=e770] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/DECEMBER%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: December 2024 - IV Issuances by Post and Visa Class
+                    - generic [ref=e771]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e772] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/DECEMBER%202024%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e773]:
+                  - link "January 2025 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e774] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: January 2025 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e775]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e776] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/JANUARY%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e777]:
+                  - link "January 2025 - IV Issuances by Post and Visa Class " [ref=e778] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JANUARY%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: January 2025 - IV Issuances by Post and Visa Class
+                    - generic [ref=e779]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e780] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/JANUARY%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e781]:
+                  - link "February 2025 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e782] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: February 2025 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e783]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e784] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/FEBRUARY%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e785]:
+                  - link "February 2025 - IV Issuances by Post and Visa Class " [ref=e786] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/FEBRUARY%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: February 2025 - IV Issuances by Post and Visa Class
+                    - generic [ref=e787]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e788] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/FEBRUARY%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e789]:
+                  - link "March 2025 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e790] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: March 2025 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e791]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e792] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/MARCH%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e793]:
+                  - link "March 2025 - IV Issuances by Post and Visa Class " [ref=e794] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MARCH%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: March 2025 - IV Issuances by Post and Visa Class
+                    - generic [ref=e795]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e796] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/MARCH%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e797]:
+                  - link "April 2025 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e798] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: April 2025 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e799]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e800] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/APRIL%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e801]:
+                  - link "April 2025 - IV Issuances by Post and Visa Class " [ref=e802] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/APRIL%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: April 2025 - IV Issuances by Post and Visa Class
+                    - generic [ref=e803]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e804] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/APRIL%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e805]:
+                  - link "May 2025 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e806] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: May 2025 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e807]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e808] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/MAY%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e809]:
+                  - link "May 2025 - IV Issuances by Post and Visa Class " [ref=e810] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/MAY%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: May 2025 - IV Issuances by Post and Visa Class
+                    - generic [ref=e811]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e812] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/MAY%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e813]:
+                  - link "June 2025 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e814] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: June 2025 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e815]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e816] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/JUNE%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e817]:
+                  - link "June 2025 - IV Issuances by Post and Visa Class " [ref=e818] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JUNE%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: June 2025 - IV Issuances by Post and Visa Class
+                    - generic [ref=e819]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e820] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/JUNE%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e821]:
+                  - link "July 2025 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e822] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: July 2025 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e823]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e824] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/JULY%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e825]:
+                  - link "July 2025 - IV Issuances by Post and Visa Class " [ref=e826] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/JULY%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: July 2025 - IV Issuances by Post and Visa Class
+                    - generic [ref=e827]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e828] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/JULY%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e829]:
+                  - link "August 2025 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e830] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: August 2025 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e831]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e832] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/AUGUST%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e833]:
+                  - link "August 2025 - IV Issuances by Post and Visa Class " [ref=e834] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/AUGUST%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: August 2025 - IV Issuances by Post and Visa Class
+                    - generic [ref=e835]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e836] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/AUGUST%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e837]:
+                  - link "September 2025 - IV Issuances by FSC or Place of Birth and Visa Class " [ref=e838] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.pdf
+                    - text: September 2025 - IV Issuances by FSC or Place of Birth and Visa Class
+                    - generic [ref=e839]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e840] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/SEPTEMBER%202025%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx
+                  - text: )
+                - listitem [ref=e841]:
+                  - link "September 2025 - IV Issuances by Post and Visa Class " [ref=e842] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/SEPTEMBER%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.pdf
+                    - text: September 2025 - IV Issuances by Post and Visa Class
+                    - generic [ref=e843]: 
+                  - text: "- ("
+                  - link "Excel" [ref=e844] [cursor=pointer]:
+                    - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Excel/FY2025/SEPTEMBER%202025%20-%20IV%20Issuances%20by%20Post%20and%20Visa%20Class.xlsx
+                  - text: )
+              - paragraph
+            - generic [ref=e846]:
+              - paragraph
+              - paragraph [ref=e847]:
+                - text: For definitions of immigrant visa classification symbols, please
+                - link "click here " [ref=e848] [cursor=pointer]:
+                  - /url: /content/dam/visas/Statistics/Immigrant-Statistics/MonthlyIVIssuances/Immigrant%20Visa%20Symbols_2024.pdf
+                  - text: click here
+                  - generic [ref=e849]: 
+                - text: .
+              - paragraph
+        - generic [ref=e853]:
+          - heading "Law & Policy - In This Section" [level=3] [ref=e854]
+          - text: 
+          - paragraph [ref=e856]:
+            - link "Visa Bulletin" [ref=e857] [cursor=pointer]:
+              - /url: /content/travel/en/legal/visa-law0/visa-bulletin.html
+            - link "Visa Statistics" [ref=e858] [cursor=pointer]:
+              - /url: /content/travel/en/legal/visa-law0/visa-statistics.html
+            - link "Annual Reports" [ref=e859] [cursor=pointer]:
+              - /url: /content/travel/en/legal/visa-law0/visa-statistics/annual-reports.html
+            - link "Immigrant Visa Statistics" [ref=e860] [cursor=pointer]:
+              - /url: /content/travel/en/legal/visa-law0/visa-statistics/immigrant-visa-statistics.html
+            - link "Nonimmigrant Visa Statistics" [ref=e861] [cursor=pointer]:
+              - /url: /content/travel/en/legal/visa-law0/visa-statistics/nonimmigrant-visa-statistics.html
+            - link "Graphs" [ref=e862] [cursor=pointer]:
+              - /url: /content/travel/en/legal/visa-law0/visa-statistics/graphs.html
+            - link "Laws and Regulations" [ref=e863] [cursor=pointer]:
+              - /url: /content/travel/en/legal/visa-law0/laws-regulations.html
+  - generic [ref=e866]:
+    - generic [ref=e867]:
+      - generic [ref=e868]: Travel.State.Gov
+      - list [ref=e869]:
+        - listitem [ref=e870]:
+          - heading "Travel.State.Gov" [level=4] [ref=e871]:
+            - link "Travel.State.Gov" [ref=e872] [cursor=pointer]:
+              - /url: /content/travel.html
+        - listitem
+        - listitem
+        - listitem [ref=e873]:
+          - heading "U.S. Passports" [level=4] [ref=e874]:
+            - link "U.S. Passports" [ref=e875] [cursor=pointer]:
+              - /url: /content/travel/en/passports.html
+        - listitem [ref=e876]:
+          - heading "International Travel" [level=4] [ref=e877]:
+            - link "International Travel" [ref=e878] [cursor=pointer]:
+              - /url: /en/international-travel.html
+        - listitem [ref=e879]:
+          - heading "U.S. Visas" [level=4] [ref=e880]:
+            - link "U.S. Visas" [ref=e881] [cursor=pointer]:
+              - /url: /content/travel/en/us-visas.html
+        - listitem [ref=e882]:
+          - heading "Intercountry Adoption" [level=4] [ref=e883]:
+            - link "Intercountry Adoption" [ref=e884] [cursor=pointer]:
+              - /url: /content/travel/en/Intercountry-Adoption.html
+        - listitem [ref=e885]:
+          - heading "International Parental Child Abduction" [level=4] [ref=e886]:
+            - link "International Parental Child Abduction" [ref=e887] [cursor=pointer]:
+              - /url: /content/travel/en/International-Parental-Child-Abduction.html
+        - listitem [ref=e888]:
+          - heading "Records and Authentications" [level=4] [ref=e889]:
+            - link "Records and Authentications" [ref=e890] [cursor=pointer]:
+              - /url: /content/travel/en/records-and-authentications.html
+    - generic [ref=e891]:
+      - generic [ref=e892]: Popular Links
+      - list [ref=e893]:
+        - listitem [ref=e894]:
+          - link "Home" [ref=e895] [cursor=pointer]:
+            - /url: /content/travel.html
+            - heading "Home" [level=4] [ref=e896]
+        - listitem [ref=e897]:
+          - link "Travel Advisories" [ref=e898] [cursor=pointer]:
+            - /url: /content/travel/en/traveladvisories/traveladvisories.html
+            - heading "Travel Advisories" [level=4] [ref=e899]
+        - listitem [ref=e900]:
+          - link "Newsroom" [ref=e901] [cursor=pointer]:
+            - /url: /content/travel/en/News/newsroom.html
+            - heading "Newsroom" [level=4] [ref=e902]
+        - listitem [ref=e903]:
+          - link "About Us" [ref=e904] [cursor=pointer]:
+            - /url: /content/travel/en/about-us.html
+            - heading "About Us" [level=4] [ref=e905]
+        - listitem [ref=e906]:
+          - link "Contact Us" [ref=e907] [cursor=pointer]:
+            - /url: /content/travel/en/contact-us.html
+            - heading "Contact Us" [level=4] [ref=e908]
+        - listitem [ref=e909]:
+          - link "Careers" [ref=e910] [cursor=pointer]:
+            - /url: https://careers.state.gov/
+            - heading "Careers" [level=4] [ref=e911]
+        - listitem [ref=e912]:
+          - link "MyTravelGov" [ref=e913] [cursor=pointer]:
+            - /url: /content/travel/en/about-us/mytravelgov.html
+            - heading "MyTravelGov" [level=4] [ref=e914]
+        - listitem [ref=e915]:
+          - link "Find U.S. Embassies & Consulates" [ref=e916] [cursor=pointer]:
+            - /url: http://www.usembassy.gov/
+            - heading "Find U.S. Embassies & Consulates" [level=4] [ref=e917]
+    - generic [ref=e919]:
+      - heading "Stay Connected" [level=3] [ref=e920]
+      - list [ref=e921]:
+        - listitem [ref=e922]:
+          - link "" [ref=e923] [cursor=pointer]:
+            - /url: http://www.facebook.com/pages/Bureau-of-Consular-Affairs/9229303148
+            - generic [ref=e924]: 
+        - listitem [ref=e925]:
+          - link "" [ref=e926] [cursor=pointer]:
+            - /url: https://www.instagram.com/travelgov/
+            - generic [ref=e927]: 
+        - listitem [ref=e928]:
+          - link "" [ref=e929] [cursor=pointer]:
+            - /url: http://twitter.com/TravelGov
+            - generic [ref=e930]: 
+        - listitem [ref=e931]:
+          - link "" [ref=e932] [cursor=pointer]:
+            - /url: https://www.youtube.com/@TravelGov
+            - generic [ref=e933]: 
+        - listitem [ref=e934]:
+          - link "" [ref=e935] [cursor=pointer]:
+            - /url: /content/travel/en/rss.html
+            - generic [ref=e936]: 
+      - generic [ref=e937]:
+        - heading "Legal Resources" [level=3] [ref=e938]
+        - list [ref=e939]:
+          - listitem [ref=e940]:
+            - heading "Legal Information" [level=4] [ref=e941]:
+              - link "Legal Information" [ref=e942] [cursor=pointer]:
+                - /url: /content/travel/en/legal.html
+          - listitem [ref=e943]:
+            - heading "Info for U.S. Law Enforcement" [level=4] [ref=e944]:
+              - link "Info for U.S. Law Enforcement" [ref=e945] [cursor=pointer]:
+                - /url: /content/travel/en/consularnotification.html
+  - generic [ref=e947]:
+    - link "Privacy" [ref=e949] [cursor=pointer]:
+      - /url: https://www.state.gov/privacy-policy/
+    - text: "|"
+    - link "Accessibility" [ref=e950] [cursor=pointer]:
+      - /url: https://www.state.gov/section-508-accessibility-statement/
+    - text: "|"
+    - link "Copyright & Disclaimer" [ref=e951] [cursor=pointer]:
+      - /url: /content/travel/en/copyright-disclaimer.html
+    - text: "|"
+    - link "FOIA" [ref=e952] [cursor=pointer]:
+      - /url: https://foia.state.gov/
+    - text: "|"
+    - link "GSA " [ref=e953] [cursor=pointer]:
+      - /url: "#ExternalPopup"
+      - text: GSA
+      - generic [ref=e954]: 
+    - text: "|"
+    - link "No FEAR Act Data" [ref=e955] [cursor=pointer]:
+      - /url: https://www.state.gov/key-topics-office-of-civil-rights/eeo-no-fear-act-whistleblower-protection-acts/
+    - text: "|"
+    - link "Office of the Inspector General" [ref=e956] [cursor=pointer]:
+      - /url: https://www.stateoig.gov
+    - text: "|"
+    - link "USA.gov " [ref=e957] [cursor=pointer]:
+      - /url: "#ExternalPopup"
+      - text: USA.gov
+      - generic [ref=e958]: 
+    - text: "|"
+    - link "USA.gov/espanol " [ref=e959] [cursor=pointer]:
+      - /url: "#ExternalPopup"
+      - text: USA.gov/espanol
+      - generic [ref=e960]: 
+    - text: "|"
+    - text: This site is managed by the U.S. Department of State. External links to other Internet sites and listings of private entities on this page are provided as a convenience and should not be construed as the U.S. Department of State or U.S. government endorsement of the entity, its views, the products or services it provides, or the accuracy of information contained therein. The order in which names appear has no significance, and the listings or links may be removed at any time at the discretion of the Department.
