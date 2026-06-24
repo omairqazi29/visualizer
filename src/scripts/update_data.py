@@ -2,19 +2,33 @@
 """
 Data Update Utility for The Spillover Engine.
 
-Fetches or prepares latest DOS IV issuance reports and USCIS EB Inventory / pipeline files.
-Since official sites require manual download (no stable public API for Excel),
-this script:
-- Prints instructions with latest known URLs (research-verified)
-- Validates any user-placed new files in data/DOS/ or data/ using auto-discovery
-- Re-runs parsers on the discovered latest files for sanity
+Supports both the **automated** ingestion pipeline and the original **manual**
+validation workflow.
 
-The engine (api + SupplyCalculator + parsers) now auto-discovers the newest matching
-eb_inventory*.xlsx and *performance*.xlsx / eb_i140*.xlsx via filename date or mtime.
-DOS loads *every* file in data/DOS/ whose name matches the month-year prefix (new bulletins
-just work if naming convention followed).
+## Automated flow (preferred)
 
-Usage: python -m src.scripts.update_data
+Scan public DOS / USCIS pages, download new Excel files into `data/`, validate
+with parsers, and optionally open a GitHub PR:
+
+    python -m src.scripts.scan_and_pr --scan --dry-run
+    python -m src.scripts.scan_and_pr --scan --fetch --validate --source dos_iv
+    python -m src.scripts.scan_and_pr --scan --fetch --validate --pr --source all
+
+GitHub Actions runs the same entrypoint on a schedule (see
+`.github/workflows/data-scan.yml` and `data-scan-visa-bulletin.yml`).
+
+Source registry: `src/ingestion/registry.py`
+Scanner / fetcher / PR helper: `src/ingestion/`
+
+## Manual flow (this module default)
+
+Prints research-verified URLs, then validates currently discovered files in
+`data/DOS/`, `data/eb_inventory_*.xlsx`, and pipeline xlsx via auto-discovery.
+
+Usage:
+    python -m src.scripts.update_data              # validate current data
+    python -m src.scripts.update_data --scan       # delegate to scan_and_pr --scan
+    python -m src.scripts.update_data --help-auto  # print automation help
 
 Research note (INA/news): Always cross-check travel.state.gov for newest monthly
 "IV Issuances by FSC..." and uscis.gov for "Employment-Based Adjustment of Status Inventory".
@@ -22,6 +36,9 @@ Research baselines (e.g. DEFAULT_INDIA_EB1_SUPPLY) are from the 2026 snapshot; r
 demand numbers always come from the latest discovered files in data/.
 """
 
+from __future__ import annotations
+
+import argparse
 import sys
 from pathlib import Path
 
@@ -38,12 +55,42 @@ from src.data_discovery import (
 )
 
 
-def main():
+def print_automation_help() -> None:
+    print(
+        """
+Automated data ingestion
+========================
+
+CLI:
+  python -m src.scripts.scan_and_pr --list-sources
+  python -m src.scripts.scan_and_pr --scan --dry-run
+  python -m src.scripts.scan_and_pr --scan --fetch --validate --source dos_iv
+  python -m src.scripts.scan_and_pr --scan --fetch --validate --pr --source uscis
+
+Source groups: all | dos_iv | visa_bulletin | uscis | uscis_inventory |
+               uscis_i485_perf | uscis_i140 | dhs | dol | supply
+
+GitHub Actions:
+  .github/workflows/data-scan.yml            — scheduled + workflow_dispatch
+  .github/workflows/data-scan-visa-bulletin.yml — faster VB cadence
+
+After data merges, update the changelog in docs/POLICY_VERIFICATION.md if
+supply/demand inputs changed. Visa Bulletin still needs CSV history rows in
+data/visa_bulletin/ when a new bulletin posts (scanner records bulletin URLs).
+""".strip()
+    )
+
+
+def validate_current_data() -> None:
     print("=" * 60)
     print("Spillover Engine - Data Refresh Helper")
     print("=" * 60)
     print()
-    print("1. Download latest files manually:")
+    print("Automated scan/fetch/PR is available via:")
+    print("  python -m src.scripts.scan_and_pr --scan --dry-run")
+    print("  python -m src.scripts.update_data --help-auto")
+    print()
+    print("1. Download latest files (manual fallback):")
     print("   - DOS Monthly:")
     print(
         "     https://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics/immigrant-visa-statistics/monthly-immigrant-visa-issuances.html"
@@ -120,9 +167,46 @@ def main():
 
     print("\nData refresh complete. Re-run API tests or `docker-compose up --build`.")
     print(
-        "For full revamp, consider adding a simple HTTP fetcher for known report pages + pandas read."
+        "For scheduled ingestion, see .github/workflows/data-scan.yml "
+        "or run: python -m src.scripts.scan_and_pr --scan --fetch --validate"
     )
 
 
+def main(argv: list | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Spillover Engine data refresh helper (manual validate + automation pointer)"
+    )
+    parser.add_argument(
+        "--scan",
+        action="store_true",
+        help="Delegate to scan_and_pr --scan (pass through extra args after --)",
+    )
+    parser.add_argument(
+        "--help-auto",
+        action="store_true",
+        help="Print automated ingestion help and exit",
+    )
+    parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Only validate current data (default behavior)",
+    )
+    args, rest = parser.parse_known_args(argv)
+
+    if args.help_auto:
+        print_automation_help()
+        return 0
+
+    if args.scan:
+        from src.scripts.scan_and_pr import main as scan_main
+
+        # Forward remaining args; ensure --scan is set
+        fwd = ["--scan"] + rest
+        return scan_main(fwd)
+
+    validate_current_data()
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

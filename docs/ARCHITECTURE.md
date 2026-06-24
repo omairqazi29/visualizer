@@ -18,6 +18,26 @@
   - *USCIS adjudicative hold (39 Proclamation countries):* Vacated Jun 5, 2026 (Dorcas v. USCIS). No model impact — affects domestic I-485 processing, not consular issuances measured by DOS.
 - Current reality (Jun 2026 VB): India EB-1 FAD retrogressed to 15DEC22 (from 01APR23 in May). DOS warned of possible "Unavailable" before FY end. FY2024 Visa Office: "~6,952 were issued to applicants chargeable to India" (out of 47,462 EB-1 total). USCIS Mar 2026 inv: 22,310 India EB-1 I-485 pending (grew from 15,412 in Oct 2025 — filing surge outpacing approvals). I-140 pipeline: 20,592 primary × 2.5 = 51,480. No INA 201/203 amendments.
 
+## Automated Data Ingestion
+
+Public government data pages are scanned and (optionally) committed via a config-driven
+pipeline — no hardcoded supply numbers; files drop into `data/` and are picked up by
+`src/data_discovery.py` + existing parsers.
+
+| Piece | Location |
+|---|---|
+| Source registry (DOS/USCIS/DHS/DOL + disabled stubs) | `src/ingestion/registry.py` |
+| Scan / fetch / validate / security | `src/ingestion/scanner.py`, `fetcher.py`, `validator.py`, `security.py` |
+| PR helper (`chore/data-*` + `gh pr create`) | `src/ingestion/pr_helper.py` |
+| CLI | `python -m src.scripts.scan_and_pr` (`--scan` / `--fetch` / `--validate` / `--pr` / `--dry-run`) |
+| Manual validate + automation pointer | `python -m src.scripts.update_data` |
+| Scheduled workflows | `.github/workflows/data-scan.yml` (excludes `visa_bulletin`), `data-scan-visa-bulletin.yml` |
+| Live smoke script | `scripts/verify_sources_live.py` |
+
+Flow: public HTML pages → link match + host allowlist → download under `data/` → parser QA → optional PR.
+Operational details, source groups (`all`, `all_including_vb`, `dos_iv`, `uscis`, …), and fail-closed
+behavior are documented in `docs/POLICY_VERIFICATION.md` § Automated Data Ingestion.
+
 ## Core Components
 
 ### 1. Data Parsers (`src/parsers`)

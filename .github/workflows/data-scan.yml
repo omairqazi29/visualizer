@@ -1,0 +1,176 @@
+# Scheduled + on-demand scan of public DOS / USCIS / DHS / DOL data pages.
+# Single invocation: scan + fetch + validate + pr (avoids re-scan classifying files as exists).
+# Visa Bulletin is excluded from `all` — use data-scan-visa-bulletin.yml.
+#
+# Permissions: contents:write + pull-requests:write
+
+name: Data source scan
+
+on:
+  schedule:
+    # Twice weekly: Monday + Thursday 14:00 UTC
+    - cron: "0 14 * * 1,4"
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Source group or id"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - all_including_vb
+          - dos_iv
+          - uscis
+          - uscis_inventory
+          - uscis_i485_perf
+          - uscis_i140
+          - dhs
+          - dol
+          - supply
+          - visa_bulletin
+      dry_run:
+        description: "Scan only; do not commit or open PR"
+        required: false
+        default: false
+        type: boolean
+      skip_pr:
+        description: "Fetch + validate but do not open PR"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: data-scan-${{ github.event.inputs.source || 'all' }}
+  cancel-in-progress: false
+
+env:
+  DEFAULT_BRANCH: master
+
+jobs:
+  scan:
+    name: Scan & ingest
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve options
+        id: opts
+        env:
+          INPUT_SOURCE: ${{ github.event.inputs.source }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          INPUT_SKIP_PR: ${{ github.event.inputs.skip_pr }}
+        run: |
+          SRC="${INPUT_SOURCE:-all}"
+          # Allowlist sanitize (defense in depth; choice input is primary guard)
+          case "$SRC" in
+            all|all_including_vb|dos_iv|uscis|uscis_inventory|uscis_i485_perf|uscis_i140|dhs|dol|supply|visa_bulletin|dos_iv_fsc)
+              ;;
+            *)
+              echo "Invalid source input: $SRC" >&2
+              exit 1
+              ;;
+          esac
+          echo "source=$SRC" >> "$GITHUB_OUTPUT"
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
+            echo "dry_flag=--dry-run" >> "$GITHUB_OUTPUT"
+            echo "pr_flag=" >> "$GITHUB_OUTPUT"
+          elif [ "$INPUT_SKIP_PR" = "true" ]; then
+            echo "dry_flag=" >> "$GITHUB_OUTPUT"
+            echo "pr_flag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "dry_flag=" >> "$GITHUB_OUTPUT"
+            echo "pr_flag=--pr" >> "$GITHUB_OUTPUT"
+          fi
+          echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+          # Resolve default branch at runtime (scheduled events lack github.event.repository in some contexts)
+          DB="${{ env.DEFAULT_BRANCH }}"
+          if command -v gh >/dev/null 2>&1; then
+            DETECTED=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || true)
+            if [ -n "$DETECTED" ]; then DB="$DETECTED"; fi
+          fi
+          echo "base_branch=$DB" >> "$GITHUB_OUTPUT"
+
+      - name: Scan / fetch / validate / PR (single invocation)
+        id: pipeline
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE: ${{ steps.opts.outputs.source }}
+          DRY_FLAG: ${{ steps.opts.outputs.dry_flag }}
+          PR_FLAG: ${{ steps.opts.outputs.pr_flag }}
+          BASE_BRANCH: ${{ steps.opts.outputs.base_branch }}
+          BRANCH_DATE: ${{ steps.opts.outputs.date }}
+        run: |
+          set -o pipefail
+          BRANCH="chore/data-${SOURCE}-${BRANCH_DATE}-${GITHUB_RUN_ID}"
+          # shellcheck: SOURCE is allowlisted above; passed via env not inline expression injection
+          if [ -n "$DRY_FLAG" ]; then
+            python -m src.scripts.scan_and_pr \
+              --scan \
+              --source "$SOURCE" \
+              --delay 1.0 \
+              --dry-run \
+              --json | tee /tmp/pipeline_result.json
+          elif [ -n "$PR_FLAG" ]; then
+            python -m src.scripts.scan_and_pr \
+              --scan --fetch --validate --pr \
+              --source "$SOURCE" \
+              --delay 1.0 \
+              --include-baseline-validate \
+              --base-branch "$BASE_BRANCH" \
+              --branch-name "$BRANCH" \
+              --json | tee /tmp/pipeline_result.json
+          else
+            python -m src.scripts.scan_and_pr \
+              --scan --fetch --validate \
+              --source "$SOURCE" \
+              --delay 1.0 \
+              --include-baseline-validate \
+              --json | tee /tmp/pipeline_result.json
+          fi
+
+      - name: Job summary
+        if: always()
+        env:
+          SOURCE: ${{ steps.opts.outputs.source }}
+          DRY_FLAG: ${{ steps.opts.outputs.dry_flag }}
+        run: |
+          {
+            echo "## Data scan summary"
+            echo ""
+            echo "- **Source:** \`$SOURCE\`"
+            echo "- **Dry run:** \`${DRY_FLAG:-false}\`"
+            echo "- **Workflow:** data-scan.yml (single invocation)"
+            echo "- **VB note:** \`all\` excludes visa_bulletin; see data-scan-visa-bulletin.yml"
+            echo ""
+            echo "### Pipeline output (tail)"
+            echo '```'
+            tail -n 50 /tmp/pipeline_result.json 2>/dev/null || echo "(no output)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

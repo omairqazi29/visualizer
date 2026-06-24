@@ -177,10 +177,98 @@ After any data update, sanity-check against the current Visa Bulletin:
 | Court ruling on USCIS holds only | docs only (no model impact) | — |
 | New Visa Bulletin (monthly) | `data/visa_bulletin/india_eb_history.csv`, `india_eb1_history.csv` | `test_vb_predictor.py` |
 
+
+
+## Automated Data Ingestion (GitHub Actions)
+
+The repository includes an automated pipeline that scans public DOS / USCIS / DHS / DOL
+pages for new Excel (and related) files, downloads them into the correct `data/` paths,
+validates with existing parsers, and can open a PR. **No hardcoded supply numbers** — only
+file placement; the engine still derives supply via `supply.py` + parsers.
+
+### Components
+
+| Piece | Location |
+|---|---|
+| Source registry | `src/ingestion/registry.py` |
+| Scanner / fetcher / security | `src/ingestion/scanner.py`, `fetcher.py`, `security.py` |
+| Validator (parser QA; not a security boundary) | `src/ingestion/validator.py` |
+| PR helper | `src/ingestion/pr_helper.py` |
+| CLI | `python -m src.scripts.scan_and_pr` |
+| Manual validate + pointer | `python -m src.scripts.update_data` |
+| Live smoke (integration) | `scripts/verify_sources_live.py` or `pytest -m integration` |
+| Main scheduled workflow | `.github/workflows/data-scan.yml` — Mon/Thu 14:00 UTC + `workflow_dispatch` |
+| Visa Bulletin cadence | `.github/workflows/data-scan-visa-bulletin.yml` — every 3 days + `workflow_dispatch` |
+
+### Coverage matrix (enabled vs stub)
+
+| Source id | Agency | Enabled | Notes |
+|---|---|---|---|
+| `dos_iv_fsc` | DOS | yes | FSC/Place of Birth xlsx only → `data/DOS/` |
+| `visa_bulletin` | DOS | yes | Owned by VB workflow only; records `.seen_bulletins.txt` (not CSV history) |
+| `uscis_inventory` | USCIS | yes | Often missing on landing page; `follow_links` depth-1; may need manual drop |
+| `uscis_i485_perf` | USCIS | yes | → `data/USCIS_I485/` |
+| `uscis_i140` | USCIS | yes | `eb_i140_*`, `i140_rec_*` → `data/` |
+| `dhs_yearbook` | DHS | yes | `follow_links`; often no direct xlsx on OHSS page |
+| `dol_perm` | DOL | yes | PERM disclosure xlsx/zip → `data/DOL_PERM/` |
+| `nvc_waiting_list`, `uscis_i485_monthly_csv`, `uscis_processing_times`, `ceac_scheduling`, `h1b_data` | various | **no** (stubs) | Enable when URLs/patterns stabilize |
+
+### Local usage
+
+```bash
+# List configured sources (incl. disabled stubs)
+python -m src.scripts.scan_and_pr --list-sources
+
+# Dry-run scan (network read-only; no downloads/commits)
+python -m src.scripts.scan_and_pr --scan --dry-run
+
+# Scan one agency group, download new files, validate parsers
+python -m src.scripts.scan_and_pr --scan --fetch --validate --source dos_iv
+python -m src.scripts.scan_and_pr --scan --fetch --validate --source uscis
+
+# Open a PR (requires git + gh auth; not for normal local use unless intentional)
+python -m src.scripts.scan_and_pr --scan --fetch --validate --pr --source all --dry-run
+
+# Live page smoke (requires requests + network)
+python scripts/verify_sources_live.py
+```
+
+Source groups: `all` (excludes `visa_bulletin`) | `all_including_vb` | `dos_iv` | `visa_bulletin` |
+`uscis` | `uscis_inventory` | `uscis_i485_perf` | `uscis_i140` | `dhs` | `dol` | `supply`
+
+### Behavior notes
+
+- **Idempotent:** files already present under the target dir (by normalized/dedup name) are skipped.
+  USCIS dedup normalizes `performancedata`↔`performance_data` and strips `_vN` only (does **not**
+  collapse distinct form prefixes like `eb_i140` vs `i140_rec`).
+- **Fail-closed:** scan failures, fetch failures, or validation failures exit non-zero and block `--pr`
+  (use `--allow-scan-errors` only for exploratory scans).
+- **Security:** per-source host allowlist; path traversal rejected; downloads capped at 80MB;
+  `.xlsx`/`.xls` must start with zip/OLE magic; only paths under `data/` are staged for PRs.
+- **DOS:** only `IV Issuances by FSC or Place of Birth` Excel files (not Post-level tables).
+- **USCIS EB inventory:** landing page often has **no** `eb_inventory_*.xlsx`; scanner + `follow_links`
+  watch for it; otherwise drop into `data/` manually (auto-discovery still applies).
+- **Visa Bulletin:** main `all` group excludes VB (avoids duplicate PRs). Dedicated workflow records
+  recent bulletin HTML URLs in `data/visa_bulletin/.seen_bulletins.txt`. Maintainers must still append
+  FAD/DOF rows to `india_eb_history.csv` / `india_eb1_history.csv` (and China if applicable).
+- **GHA:** single scan/fetch/validate/pr invocation per run; `source` is a choice allowlist passed via env;
+  branch names include `GITHUB_RUN_ID`; default base branch is `master` (auto-detected).
+- **Politeness:** User-Agent `SpilloverEngine-DataScanner/1.0 (+…/visualizer; …)`; ~1s delay; public pages only.
+- **After a data PR merges:** run full tests; if supply/demand inputs changed, add a row to the
+  **Changelog** below (AGENTS.md requirement).
+
+### workflow_dispatch inputs (`data-scan.yml`)
+
+- `source` — choice: `all` | `all_including_vb` | `dos_iv` | `uscis` | … (default `all`)
+- `dry_run` — scan only, no commit/PR
+- `skip_pr` — fetch + validate without opening a PR
+
 ## Changelog
 
 | Date | Event | Model Impact | Updated By |
 |---|---|---|---|
+| Jun 2026 | Data-scan review fixes: single GHA invocation, host/path security, fail-closed PR gate, `master`/auto base branch, VB excluded from main `all` group, disabled stubs, live verify script, ARCHITECTURE/AGENTS/POLICY docs. | No model number change | AI-assisted |
+| Jun 2026 | Added automated data-scan pipeline (`src/ingestion/`, `scan_and_pr` CLI, GitHub Actions `data-scan.yml` + `data-scan-visa-bulletin.yml`). Scans DOS IV FSC, USCIS I-140/I-485 perf/inventory patterns, DHS/DOL pages; opens chore/data-* PRs when new files appear. | No model number change by itself — enables faster drop-in data updates | AI-assisted |
 | Jun 2026 | Data-driven supply model fix. (1) EB-4/5 spillover now uses TOTAL usage (consular+AOS) from `dhs_eb_category_usage.csv` parsed from DHS Yearbook XLSX — was using DOS consular-only. (2) India EB-1 share uses non-India demand subtraction from live I-485 inventory + DHS Yearbook — replaces backlog-ratio method. (3) SIV categories (SQ/SI/SD/SE/SK/SR/SU/SW) excluded from EB-4/5 restriction savings — Afghan/Iraqi SIVs are congressionally mandated, exempt from exec restrictions, confirmed by continued DOS issuance. Removes phantom 19.5k Afghan EB-4/5 "savings"; EB-4/5 spillover → 0 (oversubscribed even under restrictions). India EB-1: ~33k (was 44k with phantom spillover). Added Mar 2026 + Oct/Dec 2025 inventory snapshots. | Accurate supply: no phantom SIV savings, no hardcoded numbers | AI-assisted |
 | Jun 2026 | Added Visa Bulletin Predictor. Extended VB history from Oct 2022 to Oct 2015 (387 rows, EB-1/EB-2/EB-3). New `VBPredictor` engine, `/api/vb-forecast` endpoint, `/vb-forecast` frontend page. 87+ EB-1 data points for advancement analysis. | New VB forecast capability — month-by-month FAD/DOF prediction with confidence bands | AI-assisted |
 | Jun 2026 | Added DOS 75-country IV pause to model. ACTUAL_RESTRICTED_COUNTRIES now union of 39-country Proclamation ban + 75-country IV pause = **91 countries**. Major additions: Brazil, Pakistan, Bangladesh, Egypt, Ethiopia, Colombia, Ghana, Iraq, Jamaica, Nepal, Russia, etc. | Significantly increased restriction savings — these are major IV consumers whose consular issuance is now paused | AI-assisted |

@@ -1,0 +1,93 @@
+# Faster-cadence scan for Visa Bulletin index pages (often mid-month).
+# Owns visa_bulletin exclusively (excluded from main data-scan.yml `all` group).
+
+name: Visa Bulletin scan
+
+on:
+  schedule:
+    - cron: "0 15 */3 * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Scan only; do not commit or open PR"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: data-scan-visa-bulletin
+  cancel-in-progress: false
+
+env:
+  DEFAULT_BRANCH: master
+
+jobs:
+  scan-vb:
+    name: Scan Visa Bulletin index
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Scan visa bulletin
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          set -o pipefail
+          DB="${DEFAULT_BRANCH}"
+          if command -v gh >/dev/null 2>&1; then
+            DETECTED=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || true)
+            if [ -n "$DETECTED" ]; then DB="$DETECTED"; fi
+          fi
+          DATE=$(date -u +%Y-%m-%d)
+          BRANCH="chore/data-visa_bulletin-${DATE}-${GITHUB_RUN_ID}"
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
+            python -m src.scripts.scan_and_pr --scan --source visa_bulletin --delay 1.0 --dry-run
+          else
+            python -m src.scripts.scan_and_pr \
+              --scan --fetch --validate --pr \
+              --source visa_bulletin \
+              --delay 1.0 \
+              --base-branch "$DB" \
+              --branch-name "$BRANCH"
+          fi
+
+      - name: Remind about CSV updates
+        if: always()
+        run: |
+          {
+            echo "## Visa Bulletin scan"
+            echo ""
+            echo "If a new bulletin was detected, update:"
+            echo "- \`data/visa_bulletin/india_eb_history.csv\`"
+            echo "- \`data/visa_bulletin/india_eb1_history.csv\`"
+            echo "- \`data/visa_bulletin/china_eb1_history.csv\` (if applicable)"
+            echo ""
+            echo "Then run \`python3 -m pytest tests/test_vb_predictor.py -v\`."
+          } >> "$GITHUB_STEP_SUMMARY"
