@@ -1,0 +1,89 @@
+# Faster-cadence scan for Visa Bulletin index pages (often mid-month).
+# Does not download binary data; records new bulletin URLs and opens a PR only
+# if .seen_bulletins.txt changes. Maintainers still add CSV history rows.
+
+name: Visa Bulletin scan
+
+on:
+  schedule:
+    # Every 3 days at 15:00 UTC
+    - cron: "0 15 */3 * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Scan only; do not commit or open PR"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: data-scan-visa-bulletin
+  cancel-in-progress: false
+
+jobs:
+  scan-vb:
+    name: Scan Visa Bulletin index
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install requests>=2.31.0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Scan visa bulletin
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DRY_FLAG=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            DRY_FLAG="--dry-run"
+          fi
+          DATE=$(date -u +%Y-%m-%d)
+          if [ -n "$DRY_FLAG" ]; then
+            python -m src.scripts.scan_and_pr --scan --source visa_bulletin --delay 1.0 $DRY_FLAG
+          else
+            python -m src.scripts.scan_and_pr \
+              --scan --fetch --validate --pr \
+              --source visa_bulletin \
+              --delay 1.0 \
+              --base-branch "${{ github.event.repository.default_branch || 'main' }}" \
+              --branch-name "chore/data-visa_bulletin-${DATE}"
+          fi
+
+      - name: Remind about CSV updates
+        if: always()
+        run: |
+          {
+            echo "## Visa Bulletin scan"
+            echo ""
+            echo "If a new bulletin was detected, update:"
+            echo "- \`data/visa_bulletin/india_eb_history.csv\`"
+            echo "- \`data/visa_bulletin/india_eb1_history.csv\`"
+            echo "- \`data/visa_bulletin/china_eb1_history.csv\` (if applicable)"
+            echo ""
+            echo "Then run \`python3 -m pytest tests/test_vb_predictor.py -v\`."
+          } >> "$GITHUB_STEP_SUMMARY"

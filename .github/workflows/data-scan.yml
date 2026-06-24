@@ -1,0 +1,162 @@
+# Scheduled + on-demand scan of public DOS / USCIS / DHS / DOL data pages.
+# Downloads new files into data/, validates with parsers, opens a PR if anything changed.
+#
+# Permissions: contents:write + pull-requests:write (GITHUB_TOKEN is enough on same repo).
+# Optional secret GH_TOKEN if org policy blocks default token from opening PRs.
+
+name: Data source scan
+
+on:
+  schedule:
+    # Twice weekly: Monday + Thursday 14:00 UTC (~mid-morning US)
+    - cron: "0 14 * * 1,4"
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Source group or id (all | dos_iv | visa_bulletin | uscis | uscis_inventory | uscis_i485_perf | uscis_i140 | dhs | dol | supply)"
+        required: false
+        default: "all"
+        type: string
+      dry_run:
+        description: "Scan only; do not commit or open PR"
+        required: false
+        default: false
+        type: boolean
+      skip_pr:
+        description: "Fetch + validate but do not open PR"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: data-scan-${{ github.event.inputs.source || 'all' }}
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    name: Scan & ingest (${{ github.event.inputs.source || 'all' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need full history for branch/PR from default branch tip
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install requests>=2.31.0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve source + flags
+        id: opts
+        run: |
+          SRC="${{ github.event.inputs.source }}"
+          if [ -z "$SRC" ]; then SRC="all"; fi
+          echo "source=$SRC" >> "$GITHUB_OUTPUT"
+          DRY="${{ github.event.inputs.dry_run }}"
+          if [ "$DRY" = "true" ]; then
+            echo "dry_flag=--dry-run" >> "$GITHUB_OUTPUT"
+          else
+            echo "dry_flag=" >> "$GITHUB_OUTPUT"
+          fi
+          SKIP_PR="${{ github.event.inputs.skip_pr }}"
+          if [ "$SKIP_PR" = "true" ] || [ "$DRY" = "true" ]; then
+            echo "pr_flag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_flag=--pr" >> "$GITHUB_OUTPUT"
+          fi
+          echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Scan public data sources
+        id: scan
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          python -m src.scripts.scan_and_pr \
+            --scan \
+            --source "${{ steps.opts.outputs.source }}" \
+            --delay 1.0 \
+            ${{ steps.opts.outputs.dry_flag }} \
+            --json | tee /tmp/scan_result.json
+          # Count new candidates via python
+          python - <<'PY'
+          import json, os, pathlib
+          p = pathlib.Path("/tmp/scan_result.json")
+          # scan_and_pr may print non-json lines before json; find last JSON object
+          text = p.read_text()
+          start = text.rfind("{")
+          data = json.loads(text[start:]) if start >= 0 else {}
+          scan = data.get("scan") or []
+          new_n = sum(s.get("new_count", 0) for s in scan)
+          print(f"new_candidates={new_n}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"new_count={new_n}\n")
+          PY
+
+      - name: Fetch + validate new files
+        if: steps.opts.outputs.dry_flag == ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          python -m src.scripts.scan_and_pr \
+            --scan --fetch --validate \
+            --source "${{ steps.opts.outputs.source }}" \
+            --delay 1.0 \
+            --include-baseline-validate \
+            --json | tee /tmp/fetch_result.json
+
+      - name: Open data PR if files changed
+        if: steps.opts.outputs.pr_flag == '--pr' && steps.opts.outputs.dry_flag == ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          # Re-scan+fetch+pr in one invocation so branch/commit sees unstaged new files
+          python -m src.scripts.scan_and_pr \
+            --scan --fetch --validate --pr \
+            --source "${{ steps.opts.outputs.source }}" \
+            --delay 1.0 \
+            --base-branch "${{ github.event.repository.default_branch || 'main' }}" \
+            --branch-name "chore/data-${{ steps.opts.outputs.source }}-${{ steps.opts.outputs.date }}" \
+            --json | tee /tmp/pr_result.json
+          echo "PR step finished (success or 'nothing staged' are both acceptable outcomes)"
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Data scan summary"
+            echo ""
+            echo "- **Source:** \`${{ steps.opts.outputs.source }}\`"
+            echo "- **Dry run:** \`${{ steps.opts.outputs.dry_flag || 'false' }}\`"
+            echo "- **Workflow:** data-scan.yml"
+            echo ""
+            echo "### Scan output (tail)"
+            echo '```'
+            tail -n 40 /tmp/scan_result.json 2>/dev/null || echo "(no scan output)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
