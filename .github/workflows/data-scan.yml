@@ -19,6 +19,7 @@ on:
         type: choice
         options:
           - all
+          - all_with_dol
           - all_including_vb
           - dos_iv
           - uscis
@@ -54,6 +55,8 @@ env:
 jobs:
   scan:
     name: Scan & ingest
+    # Only run on the canonical repo (forks lack write tokens / should not open PRs)
+    if: github.repository == 'omairqazi29/visualizer'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -89,7 +92,7 @@ jobs:
           SRC="${INPUT_SOURCE:-all}"
           # Allowlist sanitize (defense in depth; choice input is primary guard)
           case "$SRC" in
-            all|all_including_vb|dos_iv|uscis|uscis_inventory|uscis_i485_perf|uscis_i140|dhs|dol|supply|visa_bulletin|dos_iv_fsc)
+            all|all_with_dol|all_including_vb|dos_iv|uscis|uscis_inventory|uscis_i485_perf|uscis_i140|dhs|dol|supply|visa_bulletin|dos_iv_fsc)
               ;;
             *)
               echo "Invalid source input: $SRC" >&2

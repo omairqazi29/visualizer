@@ -28,6 +28,7 @@ env:
 jobs:
   scan-vb:
     name: Scan Visa Bulletin index
+    if: github.repository == 'omairqazi29/visualizer'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 

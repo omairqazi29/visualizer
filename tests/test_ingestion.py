@@ -554,6 +554,11 @@ def test_safe_basename_rejects_traversal():
     assert safe_basename("ok_file.xlsx") == "ok_file.xlsx"
     # Double-dot inside filename (not a path component) is allowed
     assert safe_basename("report..final.xlsx") == "report..final.xlsx"
+    # URL-encoded traversal must be rejected after unquote (not only pre-unquote separators)
+    with pytest.raises(ValueError, match="path traversal"):
+        safe_basename("..%2F..%2Fevil.xlsx")
+    with pytest.raises(ValueError, match="path traversal"):
+        safe_basename("%2e%2e%2fevil.xlsx")
     with pytest.raises(ValueError):
         safe_basename("../../../evil.xlsx")
     with pytest.raises(ValueError):
@@ -998,8 +1003,10 @@ def test_cli_json_flag_emits_json(monkeypatch, capsys):
 def test_all_group_excludes_visa_bulletin():
     ids = resolve_source_ids("all")
     assert "visa_bulletin" not in ids
+    assert "dol_perm" not in ids  # opt-in via all_with_dol / dol
     assert "dos_iv_fsc" in ids
     assert "visa_bulletin" in resolve_source_ids("all_including_vb")
+    assert "dol_perm" in resolve_source_ids("all_with_dol")
 
 
 def test_disabled_stubs_present():
@@ -1007,4 +1014,165 @@ def test_disabled_stubs_present():
 
     assert "nvc_waiting_list" in REG
     assert REG["nvc_waiting_list"].enabled is False
+
+
+def test_looks_like_spreadsheet_and_html_sniff():
+    from src.ingestion.security import looks_like_html, looks_like_spreadsheet, MAX_DOWNLOAD_BYTES
+
+    assert looks_like_spreadsheet(b"PK\x03\x04rest", "a.xlsx") is True
+    assert looks_like_spreadsheet(b"\xd0\xcf\x11\xe0rest", "a.xls") is True
+    assert looks_like_spreadsheet(b"<!DOCTYPE html><html>", "a.xlsx") is False
+    assert looks_like_html(b"  <!DOCTYPE html><html>") is True
+    assert looks_like_html(b"PK\x03\x04") is False
+    assert MAX_DOWNLOAD_BYTES == 150 * 1024 * 1024
+
+
+def test_filter_paths_for_pr_only_under_data(tmp_path, monkeypatch):
+    from src.ingestion import pr_helper, security
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    good = data_dir / "DOS" / "x.xlsx"
+    good.parent.mkdir(parents=True)
+    good.write_bytes(b"PK")
+    bad = tmp_path / "outside.xlsx"
+    bad.write_bytes(b"PK")
+
+    def under_tmp_data(p: Path) -> bool:
+        try:
+            Path(p).resolve().relative_to(data_dir.resolve())
+            return True
+        except ValueError:
+            return False
+
+    monkeypatch.setattr(security, "DATA_DIR", data_dir)
+    monkeypatch.setattr(pr_helper, "DATA_DIR", data_dir)
+    monkeypatch.setattr(pr_helper, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(pr_helper, "is_under_data_dir", under_tmp_data)
+
+    # Relative missing path under data/ is allowlisted by path only (existence checked elsewhere)
+    filtered = pr_helper.filter_paths_for_pr([str(good), str(bad), "data/missing.xlsx"])
+    assert str(bad) not in filtered and all("outside" not in f for f in filtered)
+    assert any("x.xlsx" in f for f in filtered)
+    assert all(f.startswith("data/") or "data" in f for f in filtered)
+
+
+def test_cli_validate_failure_blocks_pr(monkeypatch):
+    from src.scripts import scan_and_pr as cli
+    from src.ingestion.fetcher import FetchResult
+    from src.ingestion.scanner import ScanResult as SR
+    from src.ingestion.validator import ValidationReport, ValidationItem
+
+    sr = SR(source_id="dos_iv_fsc", scan_url="http://x", page_fetched=True)
+    cand = RemoteCandidate(
+        source_id="dos_iv_fsc",
+        agency="DOS",
+        url="http://x/f.xlsx",
+        filename="f.xlsx",
+        status="new",
+        content_type="file",
+        target_path=Path("data/DOS/f.xlsx"),
+    )
+    sr.candidates.append(cand)
+    fr = FetchResult(candidate=cand, success=True, path=Path("data/DOS/f.xlsx"), bytes_written=10)
+
+    bad_report = ValidationReport()
+    bad_report.items.append(
+        ValidationItem(path="data/DOS/f.xlsx", kind="dos", ok=False, message="corrupt")
+    )
+
+    monkeypatch.setattr(cli, "scan_sources", lambda *a, **k: [sr])
+    monkeypatch.setattr(cli, "fetch_from_scan_results", lambda *a, **k: [fr])
+    monkeypatch.setattr(cli, "validate_downloaded_files", lambda *a, **k: bad_report)
+    called = {"pr": False}
+
+    def no_pr(*a, **k):
+        called["pr"] = True
+        raise AssertionError("create_data_pr must not run when validate fails")
+
+    monkeypatch.setattr(cli, "create_data_pr", no_pr)
+    monkeypatch.setattr(cli, "paths_from_fetch_results", lambda *a, **k: ["data/DOS/f.xlsx"])
+
+    rc = cli.main(["--scan", "--fetch", "--validate", "--pr", "--source", "dos_iv"])
+    assert rc == 1
+    assert called["pr"] is False
+
+
+def test_fetch_rejects_disallowed_url(monkeypatch):
+    from src.ingestion.fetcher import fetch_candidate
+    from src.ingestion.scanner import RemoteCandidate
+
+    cand = RemoteCandidate(
+        source_id="dos_iv_fsc",
+        agency="DOS",
+        url="https://evil.example/payload.xlsx",
+        filename="payload.xlsx",
+        status="new",
+        content_type="file",
+        target_path=Path("data/DOS/payload.xlsx"),
+    )
+    monkeypatch.setattr(
+        "src.ingestion.fetcher.get_source",
+        lambda sid: type("S", (), {"allowed_hosts": ("travel.state.gov",)})(),
+    )
+    monkeypatch.setattr("src.ingestion.fetcher.is_under_data_dir", lambda p: True)
+    r = fetch_candidate(cand, dry_run=False, delay=0)
+    assert r.success is False
+    assert "url blocked" in r.error or "allowlist" in r.error.lower() or "host" in r.error.lower()
+
+
+def test_fetch_rejects_non_spreadsheet_magic(monkeypatch, tmp_path):
+    """xlsx extension with HTML body must fail (not land as data)."""
+    from src.ingestion.fetcher import fetch_candidate
+    from src.ingestion.scanner import RemoteCandidate
+    from src.ingestion.registry import DATA_DIR
+
+    dest = DATA_DIR / "DOS" / "_test_magic_reject.xlsx"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists():
+        dest.unlink()
+
+    class FakeResp:
+        status_code = 200
+        headers = {"Content-Type": "application/octet-stream"}
+        url = "https://travel.state.gov/fake.xlsx"
+
+        def iter_content(self, chunk_size=8192):
+            yield b"<!DOCTYPE html><html><body>not a spreadsheet</body></html>"
+
+        def raise_for_status(self):
+            pass
+
+        def close(self):
+            pass
+
+    class FakeSession:
+        def get(self, *a, **k):
+            return FakeResp()
+
+    cand = RemoteCandidate(
+        source_id="dos_iv_fsc",
+        agency="DOS",
+        url="https://travel.state.gov/fake.xlsx",
+        filename="_test_magic_reject.xlsx",
+        status="new",
+        content_type="file",
+        target_path=dest,
+    )
+    monkeypatch.setattr(
+        "src.ingestion.fetcher.get_source",
+        lambda sid: type("S", (), {"allowed_hosts": ("travel.state.gov",)})(),
+    )
+    r = fetch_candidate(cand, session=FakeSession(), dry_run=False, delay=0)
+    assert r.success is False
+    assert "HTML" in r.error or "magic" in r.error.lower() or "looks like" in r.error.lower()
+    assert dest.exists() is False
+    part = dest.with_suffix(dest.suffix + ".part")
+    assert part.exists() is False
+
+
+def test_disabled_stub_ceac_present():
+    from src.ingestion.registry import SOURCE_REGISTRY as REG
+
     assert "ceac_scheduling" in REG
+    assert REG["ceac_scheduling"].enabled is False
