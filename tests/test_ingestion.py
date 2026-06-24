@@ -300,11 +300,14 @@ def test_scan_source_network_failure():
 # ── Fetcher ─────────────────────────────────────────────────────────────────
 
 
-def test_fetch_candidate_dry_run(tmp_path):
+def test_fetch_candidate_dry_run(tmp_path, monkeypatch):
+    from src.ingestion import fetcher as fetcher_mod
+
+    monkeypatch.setattr(fetcher_mod, "is_under_data_dir", lambda p: True)
     cand = RemoteCandidate(
         source_id="dos_iv_fsc",
         agency="DOS",
-        url="https://example.com/file.xlsx",
+        url="https://travel.state.gov/file.xlsx",
         filename="file.xlsx",
         target_path=tmp_path / "file.xlsx",
         status="new",
@@ -322,7 +325,7 @@ def test_fetch_candidate_skips_existing(tmp_path):
     cand = RemoteCandidate(
         source_id="dos_iv_fsc",
         agency="DOS",
-        url="https://example.com/file.xlsx",
+        url="https://travel.state.gov/file.xlsx",
         filename="file.xlsx",
         target_path=dest,
         status="exists",
@@ -333,12 +336,15 @@ def test_fetch_candidate_skips_existing(tmp_path):
     assert fr.success
 
 
-def test_fetch_candidate_downloads(tmp_path):
+def test_fetch_candidate_downloads(tmp_path, monkeypatch):
+    from src.ingestion import fetcher as fetcher_mod
+
+    monkeypatch.setattr(fetcher_mod, "is_under_data_dir", lambda p: True)
     dest = tmp_path / "file.xlsx"
     cand = RemoteCandidate(
         source_id="dos_iv_fsc",
         agency="DOS",
-        url="https://example.com/file.xlsx",
+        url="https://travel.state.gov/file.xlsx",
         filename="file.xlsx",
         target_path=dest,
         status="new",
@@ -346,6 +352,9 @@ def test_fetch_candidate_downloads(tmp_path):
     )
 
     class FakeResp:
+        url = "https://travel.state.gov/file.xlsx"
+        headers = {"Content-Type": "application/octet-stream"}
+
         def raise_for_status(self):
             pass
 
@@ -357,7 +366,7 @@ def test_fetch_candidate_downloads(tmp_path):
             return FakeResp()
 
     fr = fetch_candidate(cand, session=FakeSess(), delay=0)
-    assert fr.success
+    assert fr.success, fr.error
     assert dest.exists()
     assert fr.bytes_written > 0
 
@@ -436,23 +445,28 @@ def test_build_pr_body_includes_engine_notes():
 
 def test_paths_from_fetch_results(tmp_path, monkeypatch):
     import src.ingestion.pr_helper as pr_mod
+    from src.ingestion.registry import PROJECT_ROOT as REAL_ROOT
 
-    monkeypatch.setattr(pr_mod, "PROJECT_ROOT", tmp_path)
-    f = tmp_path / "data" / "DOS" / "x.xlsx"
-    f.parent.mkdir(parents=True)
-    f.write_bytes(b"x")
+    # Use real project data/ path so is_under_data_dir passes
+    f = REAL_ROOT / "data" / "DOS"
+    if not f.exists():
+        pytest.skip("no data/DOS in repo")
+    sample = next(f.glob("*.xlsx"), None)
+    if sample is None:
+        pytest.skip("no DOS xlsx")
     cand = RemoteCandidate(
         source_id="dos_iv_fsc",
         agency="DOS",
         url="http://x",
-        filename="x.xlsx",
-        target_path=f,
+        filename=sample.name,
+        target_path=sample,
         status="fetched",
         content_type="file",
     )
-    fr = FetchResult(candidate=cand, success=True, path=f, bytes_written=1)
+    fr = FetchResult(candidate=cand, success=True, path=sample, bytes_written=1)
     paths = paths_from_fetch_results([fr])
-    assert paths == ["data/DOS/x.xlsx"]
+    assert len(paths) == 1
+    assert paths[0].startswith("data/")
 
 
 def test_create_data_pr_dry_run():
@@ -529,3 +543,464 @@ def test_live_uscis_page_has_eb_or_i485_xlsx():
     links = extract_links(r.text, src.scan_url)
     xlsx = [u for u, _ in links if u.lower().endswith((".xlsx", ".xls"))]
     assert len(xlsx) >= 1
+
+# ── Security ─────────────────────────────────────────────────────────────────
+
+
+def test_safe_basename_rejects_traversal():
+    from src.ingestion.security import safe_basename
+    import pytest
+
+    assert safe_basename("ok_file.xlsx") == "ok_file.xlsx"
+    with pytest.raises(ValueError):
+        safe_basename("../../../evil.xlsx")
+    with pytest.raises(ValueError):
+        safe_basename("foo/bar.xlsx")
+
+
+def test_safe_target_path_stays_under_dir(tmp_path):
+    from src.ingestion.security import safe_target_path
+    import pytest
+
+    dest = safe_target_path(tmp_path, "good.xlsx")
+    assert dest.parent == tmp_path.resolve()
+    with pytest.raises(ValueError):
+        safe_target_path(tmp_path, "../escape.xlsx")
+
+
+def test_is_allowed_url_host_and_scheme():
+    from src.ingestion.security import is_allowed_url
+
+    ok, _ = is_allowed_url("https://travel.state.gov/x.xlsx", ("travel.state.gov",))
+    assert ok
+    ok, reason = is_allowed_url("https://evil.com/x.xlsx", ("travel.state.gov",))
+    assert not ok
+    ok, reason = is_allowed_url("ftp://travel.state.gov/x", ("travel.state.gov",))
+    assert not ok
+    ok, _ = is_allowed_url("https://sub.uscis.gov/a", ("uscis.gov",))
+    assert ok
+
+
+def test_scan_rejects_offsite_candidate_via_allowlist(tmp_path, monkeypatch):
+    import src.ingestion.scanner as scanner_mod
+    import src.ingestion.registry as reg_mod
+
+    monkeypatch.setattr(reg_mod, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(scanner_mod, "PROJECT_ROOT", tmp_path)
+    (tmp_path / "data" / "DOS").mkdir(parents=True)
+
+    html = (
+        '<html><body>'
+        '<a href="https://evil.example/IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth.xlsx">bad</a>'
+        '<a href="https://travel.state.gov/content/dam/x/JANUARY%202026%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class.xlsx">good</a>'
+        '</body></html>'
+    )
+    src = get_source("dos_iv_fsc")
+    result = scan_source(src, html_override=html, delay=0)
+    urls = [c.url for c in result.candidates]
+    assert all("evil.example" not in u for u in urls)
+    assert any("travel.state.gov" in u for u in urls)
+
+
+def test_target_path_for_rejects_traversal():
+    from src.ingestion.registry import target_path_for
+    import pytest
+
+    src = get_source("dos_iv_fsc")
+    with pytest.raises(ValueError):
+        target_path_for(src, "../../outside.xlsx")
+
+
+def test_uscis_i140_and_i140_rec_not_collapsed(tmp_path, monkeypatch):
+    import src.ingestion.scanner as scanner_mod
+    import src.ingestion.registry as reg_mod
+
+    monkeypatch.setattr(reg_mod, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(scanner_mod, "PROJECT_ROOT", tmp_path)
+    (tmp_path / "data").mkdir(parents=True)
+    (tmp_path / "data" / "i140_rec_by_class_country_fy2026_q1_v1.xlsx").write_bytes(b"PK\x03\x04x")
+
+    html = (
+        '<html><body>'
+        '<a href="/sites/default/files/document/reports/eb_i140_i360_i526_performancedata_fy2026_q1_v1.xlsx">EB perf</a>'
+        '<a href="/sites/default/files/document/reports/i140_rec_by_class_country_fy2026_q1_v1.xlsx">I-140 rec</a>'
+        '</body></html>'
+    )
+    src = get_source("uscis_i140")
+    result = scan_source(src, html_override=html, delay=0)
+    by_name = {c.filename: c.status for c in result.candidates}
+    assert by_name["i140_rec_by_class_country_fy2026_q1_v1.xlsx"] == "exists"
+    assert by_name["eb_i140_i360_i526_performancedata_fy2026_q1_v1.xlsx"] == "new"
+
+
+def test_uscis_performance_data_variant_matches_local(tmp_path, monkeypatch):
+    """performancedata vs performance_data + _v1 suffix only (not different form stems)."""
+    import src.ingestion.scanner as scanner_mod
+    import src.ingestion.registry as reg_mod
+
+    monkeypatch.setattr(reg_mod, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(scanner_mod, "PROJECT_ROOT", tmp_path)
+    d = tmp_path / "data" / "USCIS_I485"
+    d.mkdir(parents=True)
+    # Local uses performancedata; remote uses performance_data + _v1
+    (d / "i485_performancedata_fy2026_q1.xlsx").write_bytes(b"PK\x03\x04x")
+
+    html = (
+        '<html><body>'
+        '<a href="/sites/default/files/document/reports/i485_performance_data_fy2026_q1_v1.xlsx">perf</a>'
+        '</body></html>'
+    )
+    src = get_source("uscis_i485_perf")
+    result = scan_source(src, html_override=html, delay=0)
+    assert len(result.candidates) == 1
+    assert result.candidates[0].status == "exists"
+
+
+def test_dos_v1_suffix_dedup(tmp_path, monkeypatch):
+    import src.ingestion.scanner as scanner_mod
+    import src.ingestion.registry as reg_mod
+
+    monkeypatch.setattr(reg_mod, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(scanner_mod, "PROJECT_ROOT", tmp_path)
+    dos = tmp_path / "data" / "DOS"
+    dos.mkdir(parents=True)
+    (dos / "DECEMBER 2022 - IV Issuances by FSC or Place of Birth and Visa Class.xlsx").write_bytes(b"x")
+
+    # Basename must pass safe_basename (no path segments in stored name)
+    html = (
+        '<html><body>'
+        '<a href="https://travel.state.gov/dam/visas/DECEMBER%202022%20-%20IV%20Issuances%20by%20FSC%20or%20Place%20of%20Birth%20and%20Visa%20Class_v1.xlsx">Excel</a>'
+        '</body></html>'
+    )
+    src = get_source("dos_iv_fsc")
+    result = scan_source(src, html_override=html, delay=0)
+    assert len(result.candidates) >= 1
+    assert result.candidates[0].status == "exists"
+
+
+def test_vb_year_filter_excludes_old(tmp_path, monkeypatch):
+    import src.ingestion.scanner as scanner_mod
+    import src.ingestion.registry as reg_mod
+
+    monkeypatch.setattr(reg_mod, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(scanner_mod, "PROJECT_ROOT", tmp_path)
+    (tmp_path / "data" / "visa_bulletin").mkdir(parents=True)
+
+    html = (
+        '<html><body>'
+        '<a href="/content/travel/en/legal/visa-law0/visa-bulletin/2010/visa-bulletin-for-april-2010.html">old</a>'
+        '<a href="/content/travel/en/legal/visa-law0/visa-bulletin/2026/visa-bulletin-for-july-2026.html">new</a>'
+        '</body></html>'
+    )
+    src = get_source("visa_bulletin")
+    result = scan_source(src, html_override=html, delay=0)
+    names = [c.filename for c in result.candidates]
+    assert "visa-bulletin-for-july-2026.html" in names
+    assert "visa-bulletin-for-april-2010.html" not in names
+
+
+def test_kind_for_path_and_missing():
+    from src.ingestion.validator import _kind_for_path, validate_path
+
+    assert _kind_for_path(Path("/tmp/DOS/foo.xlsx")) == "dos"
+    assert _kind_for_path(Path("data/eb_inventory_april_2026.xlsx")) == "inventory"
+    item = validate_path(Path("/nonexistent/file.xlsx"))
+    assert item.ok is False
+    assert item.kind == "missing"
+
+
+def test_validate_empty_file(tmp_path):
+    from src.ingestion.validator import validate_path
+
+    p = tmp_path / "eb_inventory_test.xlsx"
+    p.write_bytes(b"")
+    item = validate_path(p)
+    assert item.ok is False
+
+
+def test_validate_unknown_strict(tmp_path):
+    from src.ingestion.validator import validate_path
+
+    p = tmp_path / "random_notes.txt"
+    p.write_text("hello")
+    assert validate_path(p, strict_unknown=False).ok is True
+    assert validate_path(p, strict_unknown=True).ok is False
+
+
+def test_validate_report_ok_aggregate(tmp_path):
+    from src.ingestion.validator import validate_downloaded_files
+
+    p = tmp_path / "missing.xlsx"
+    report = validate_downloaded_files(paths=[p])
+    assert report.ok is False
+
+
+def test_validate_real_dos_single_file_if_present():
+    from src.ingestion.validator import validate_path
+    from src.data_discovery import get_dos_dir
+
+    dos_dir = Path(get_dos_dir())
+    files = list(dos_dir.glob("*.xlsx")) if dos_dir.exists() else []
+    if not files:
+        pytest.skip("no DOS files in repo")
+    item = validate_path(files[0])
+    assert item.ok is True
+    assert item.kind == "dos"
+
+
+def test_fetch_refuses_outside_data(tmp_path):
+    from src.ingestion.fetcher import fetch_candidate
+
+    cand = RemoteCandidate(
+        source_id="dos_iv_fsc",
+        agency="DOS",
+        url="https://travel.state.gov/x.xlsx",
+        filename="x.xlsx",
+        target_path=tmp_path / "outside.xlsx",
+        status="new",
+        content_type="file",
+    )
+    fr = fetch_candidate(cand, delay=0)
+    assert fr.success is False
+    assert "data" in fr.error.lower() or "outside" in fr.error.lower()
+
+
+def test_fetch_cleans_part_on_failure(tmp_path, monkeypatch):
+    from src.ingestion import fetcher as fetcher_mod
+
+    monkeypatch.setattr(fetcher_mod, "is_under_data_dir", lambda p: True)
+    dest = tmp_path / "file.xlsx"
+    cand = RemoteCandidate(
+        source_id="dos_iv_fsc",
+        agency="DOS",
+        url="https://travel.state.gov/x.xlsx",
+        filename="file.xlsx",
+        target_path=dest,
+        status="new",
+        content_type="file",
+    )
+
+    class BoomSess:
+        def get(self, *a, **k):
+            raise ConnectionError("boom")
+
+    fr = fetcher_mod.fetch_candidate(cand, session=BoomSess(), delay=0)
+    assert fr.success is False
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_any_fetch_failed():
+    from src.ingestion.fetcher import any_fetch_failed, FetchResult
+
+    c = RemoteCandidate(
+        source_id="x", agency="DOS", url="u", filename="f", status="new", content_type="file"
+    )
+    ok = FetchResult(candidate=c, success=True, skipped=True)
+    bad = FetchResult(candidate=c, success=False, error="nope")
+    assert any_fetch_failed([ok]) is False
+    assert any_fetch_failed([ok, bad]) is True
+
+
+def test_propose_branch_name_includes_run_id(monkeypatch):
+    from datetime import date
+    from src.ingestion.pr_helper import propose_branch_name
+
+    monkeypatch.setenv("GITHUB_RUN_ID", "12345678")
+    name = propose_branch_name(["dos_iv_fsc"], when=date(2026, 6, 23))
+    assert "12345678" in name
+    assert name.startswith("chore/data-dos_iv_fsc-2026-06-23")
+
+
+def test_sanitize_pr_filename():
+    from src.ingestion.security import sanitize_pr_filename
+
+    assert "`" not in sanitize_pr_filename("bad`name.xlsx")
+    assert len(sanitize_pr_filename("a" * 200)) <= 120
+
+
+def test_create_data_pr_git_unavailable(monkeypatch):
+    from src.ingestion.pr_helper import create_data_pr
+
+    monkeypatch.setattr("src.ingestion.pr_helper._git_available", lambda: False)
+    r = create_data_pr(files=["data/DOS/x.xlsx"], source_ids=["dos_iv_fsc"], dry_run=False)
+    assert r.success is False
+    assert "git not available" in r.message
+
+
+def test_create_data_pr_nothing_staged(monkeypatch):
+    from src.ingestion.pr_helper import create_data_pr
+    from subprocess import CompletedProcess
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["git", "rev-parse"]:
+            return CompletedProcess(cmd, 0, stdout="master\n", stderr="")
+        if cmd[:2] == ["git", "checkout"]:
+            return CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:2] == ["git", "add"]:
+            return CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:3] == ["git", "diff", "--cached"]:
+            return CompletedProcess(cmd, 0, stdout="", stderr="")
+        return CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("src.ingestion.pr_helper._git_available", lambda: True)
+    monkeypatch.setattr("src.ingestion.pr_helper._run", fake_run)
+    r = create_data_pr(
+        files=["data/DOS/x.xlsx"],
+        source_ids=["dos_iv_fsc"],
+        dry_run=False,
+        restore_branch=False,
+    )
+    assert r.success is False
+    assert "nothing staged" in r.message
+
+
+def test_create_data_pr_success_with_mocks(monkeypatch):
+    from src.ingestion.pr_helper import create_data_pr
+    from subprocess import CompletedProcess
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["git", "rev-parse"] and "abbrev-ref" in cmd:
+            return CompletedProcess(cmd, 0, stdout="master\n", stderr="")
+        if cmd[:2] == ["git", "rev-parse"]:
+            return CompletedProcess(cmd, 0, stdout="abc123\n", stderr="")
+        if cmd[:2] == ["git", "checkout"]:
+            return CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:2] == ["git", "add"]:
+            return CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:3] == ["git", "diff", "--cached"]:
+            return CompletedProcess(cmd, 0, stdout="data/DOS/x.xlsx\n", stderr="")
+        if cmd[:2] == ["git", "commit"]:
+            return CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:2] == ["git", "push"]:
+            return CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:2] == ["gh", "pr"]:
+            return CompletedProcess(cmd, 0, stdout="https://github.com/x/y/pull/1\n", stderr="")
+        return CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("src.ingestion.pr_helper._git_available", lambda: True)
+    monkeypatch.setattr("src.ingestion.pr_helper._gh_available", lambda: True)
+    monkeypatch.setattr("src.ingestion.pr_helper._run", fake_run)
+    monkeypatch.setattr("src.ingestion.pr_helper.filter_paths_for_pr", lambda files: list(files))
+
+    r = create_data_pr(
+        files=["data/DOS/x.xlsx"],
+        source_ids=["dos_iv_fsc"],
+        dry_run=False,
+        base_branch="master",
+        restore_branch=True,
+    )
+    assert r.success is True
+    assert "pull/1" in r.pr_url
+
+
+def test_create_data_pr_gh_missing_still_success(monkeypatch):
+    from src.ingestion.pr_helper import create_data_pr
+    from subprocess import CompletedProcess
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["git", "rev-parse"] and "abbrev-ref" in cmd:
+            return CompletedProcess(cmd, 0, stdout="master\n", stderr="")
+        if cmd[:2] == ["git", "rev-parse"]:
+            return CompletedProcess(cmd, 0, stdout="abc\n", stderr="")
+        if cmd[:2] == ["git", "checkout"]:
+            return CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:2] == ["git", "add"]:
+            return CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:3] == ["git", "diff", "--cached"]:
+            return CompletedProcess(cmd, 0, stdout="data/DOS/x.xlsx\n", stderr="")
+        if cmd[:2] == ["git", "commit"]:
+            return CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[:2] == ["git", "push"]:
+            return CompletedProcess(cmd, 0, stdout="", stderr="")
+        return CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("src.ingestion.pr_helper._git_available", lambda: True)
+    monkeypatch.setattr("src.ingestion.pr_helper._gh_available", lambda: False)
+    monkeypatch.setattr("src.ingestion.pr_helper._run", fake_run)
+    monkeypatch.setattr("src.ingestion.pr_helper.filter_paths_for_pr", lambda files: list(files))
+
+    r = create_data_pr(
+        files=["data/DOS/x.xlsx"],
+        source_ids=["dos_iv_fsc"],
+        dry_run=False,
+        restore_branch=False,
+    )
+    assert r.success is True
+    assert "gh CLI not available" in r.message
+
+
+def test_cli_invalid_source_exit_2():
+    from src.scripts.scan_and_pr import main
+
+    assert main(["--source", "not_a_real_thing"]) == 2
+
+
+def test_cli_scan_failure_exit_1(monkeypatch):
+    from src.scripts import scan_and_pr as cli
+    from src.ingestion.scanner import ScanResult as SR
+
+    def bad_scan(*a, **k):
+        r = SR(source_id="dos_iv_fsc", scan_url="http://x", page_fetched=False)
+        r.errors.append("ConnectionError: down")
+        return [r]
+
+    monkeypatch.setattr(cli, "scan_sources", bad_scan)
+    rc = cli.main(["--scan", "--source", "dos_iv"])
+    assert rc == 1
+
+
+def test_cli_fetch_failure_blocks_pr(monkeypatch):
+    from src.scripts import scan_and_pr as cli
+    from src.ingestion.fetcher import FetchResult
+    from src.ingestion.scanner import ScanResult as SR
+
+    sr = SR(source_id="dos_iv_fsc", scan_url="http://x", page_fetched=True)
+    cand = RemoteCandidate(
+        source_id="dos_iv_fsc",
+        agency="DOS",
+        url="http://x/f.xlsx",
+        filename="f.xlsx",
+        status="new",
+        content_type="file",
+        target_path=Path("/tmp/f.xlsx"),
+    )
+    sr.candidates.append(cand)
+
+    monkeypatch.setattr(cli, "scan_sources", lambda *a, **k: [sr])
+    monkeypatch.setattr(
+        cli,
+        "fetch_from_scan_results",
+        lambda *a, **k: [FetchResult(candidate=cand, success=False, error="boom")],
+    )
+    rc = cli.main(["--scan", "--fetch", "--pr", "--source", "dos_iv"])
+    assert rc == 1
+
+
+def test_cli_json_flag_emits_json(monkeypatch, capsys):
+    from src.scripts import scan_and_pr as cli
+    from src.ingestion.scanner import ScanResult as SR
+
+    monkeypatch.setattr(
+        cli,
+        "scan_sources",
+        lambda *a, **k: [SR(source_id="dos_iv_fsc", scan_url="http://x", page_fetched=True)],
+    )
+    rc = cli.main(["--scan", "--source", "dos_iv", "--dry-run", "--json"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "source_ids" in out
+
+
+def test_all_group_excludes_visa_bulletin():
+    ids = resolve_source_ids("all")
+    assert "visa_bulletin" not in ids
+    assert "dos_iv_fsc" in ids
+    assert "visa_bulletin" in resolve_source_ids("all_including_vb")
+
+
+def test_disabled_stubs_present():
+    from src.ingestion.registry import SOURCE_REGISTRY as REG
+
+    assert "nvc_waiting_list" in REG
+    assert REG["nvc_waiting_list"].enabled is False
+    assert "ceac_scheduling" in REG

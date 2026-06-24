@@ -18,6 +18,30 @@
   - *USCIS adjudicative hold (39 Proclamation countries):* Vacated Jun 5, 2026 (Dorcas v. USCIS). No model impact — affects domestic I-485 processing, not consular issuances measured by DOS.
 - Current reality (Jun 2026 VB): India EB-1 FAD retrogressed to 15DEC22 (from 01APR23 in May). DOS warned of possible "Unavailable" before FY end. FY2024 Visa Office: "~6,952 were issued to applicants chargeable to India" (out of 47,462 EB-1 total). USCIS Mar 2026 inv: 22,310 India EB-1 I-485 pending (grew from 15,412 in Oct 2025 — filing surge outpacing approvals). I-140 pipeline: 20,592 primary × 2.5 = 51,480. No INA 201/203 amendments.
 
+## Automated Data Ingestion
+
+Public DOS/USCIS/DHS/DOL pages are scanned by  ( source config,
+ /  /  / ). CLI: Scanning sources: dos_iv_fsc, uscis_inventory, uscis_i485_perf, uscis_i140, dhs_yearbook, dol_perm (dry_run=False)
+=== Data Source Scan Summary ===
+[FAIL] dos_iv_fsc: 0 new, 0 already present (0 links, 0 pages, 1 errors)
+       error: requests library not installed
+[FAIL] uscis_inventory: 0 new, 0 already present (0 links, 0 pages, 1 errors)
+       error: requests library not installed
+[FAIL] uscis_i485_perf: 0 new, 0 already present (0 links, 0 pages, 1 errors)
+       error: requests library not installed
+[FAIL] uscis_i140: 0 new, 0 already present (0 links, 0 pages, 1 errors)
+       error: requests library not installed
+[FAIL] dhs_yearbook: 0 new, 0 already present (0 links, 0 pages, 1 errors)
+       error: requests library not installed
+[FAIL] dol_perm: 0 new, 0 already present (0 links, 0 pages, 1 errors)
+       error: requests library not installed
+TOTAL: 0 new file(s)/bulletin(s), 0 already present
+WARNING: one or more source scans failed (see errors above).
+Scheduled GitHub Actions:  (excludes visa_bulletin) and
+. New files drop into  and are auto-discovered by
+ — no hardcoded supply numbers. See 
+section Automated Data Ingestion.
+
 ## Core Components
 
 ### 1. Data Parsers (`src/parsers`)

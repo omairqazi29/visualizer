@@ -9,6 +9,7 @@ Usage examples:
 
 Environment:
   GITHUB_TOKEN / GH_TOKEN — required for --pr in CI (gh auth)
+  GITHUB_RUN_ID — included in branch names when set (CI)
 """
 
 from __future__ import annotations
@@ -31,7 +32,11 @@ from src.ingestion.registry import (  # noqa: E402
     resolve_source_ids,
 )
 from src.ingestion.scanner import scan_sources, summarize_scan  # noqa: E402
-from src.ingestion.fetcher import fetch_from_scan_results, summarize_fetch  # noqa: E402
+from src.ingestion.fetcher import (  # noqa: E402
+    any_fetch_failed,
+    fetch_from_scan_results,
+    summarize_fetch,
+)
 from src.ingestion.validator import (  # noqa: E402
     validate_downloaded_files,
     summarize_validation,
@@ -41,6 +46,7 @@ from src.ingestion.pr_helper import (  # noqa: E402
     paths_from_fetch_results,
     propose_branch_name,
 )
+from src.ingestion.security import detect_default_branch  # noqa: E402
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -52,8 +58,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "--source",
         default="all",
         help=(
-            "Source id or group: all | dos_iv | visa_bulletin | uscis | uscis_inventory | "
-            "uscis_i485_perf | uscis_i140 | dhs | dol | supply | <source_id> | comma-list"
+            "Source id or group: all | all_including_vb | dos_iv | visa_bulletin | uscis | "
+            "uscis_inventory | uscis_i485_perf | uscis_i140 | dhs | dol | supply | "
+            "<source_id> | comma-list. Note: `all` excludes visa_bulletin (use dedicated workflow)."
         ),
     )
     p.add_argument("--scan", action="store_true", help="Scan configured source pages for links")
@@ -63,7 +70,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--dry-run",
         action="store_true",
-        help="Do not write files / commit / open PR (scan still hits network unless --offline-html)",
+        help="Do not write files / commit / open PR (scan still hits the network)",
     )
     p.add_argument(
         "--list-sources",
@@ -80,7 +87,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         dest="as_json",
-        help="Emit machine-readable JSON summary on stdout",
+        help="Emit machine-readable JSON summary on stdout (after human-readable logs)",
     )
     p.add_argument(
         "--include-baseline-validate",
@@ -89,13 +96,18 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--base-branch",
-        default="main",
-        help="Base branch for PR (default: main)",
+        default="auto",
+        help="Base branch for PR (default: auto — detect via gh/git, else master)",
     )
     p.add_argument(
         "--branch-name",
         default=None,
         help="Override chore/data-* branch name",
+    )
+    p.add_argument(
+        "--allow-scan-errors",
+        action="store_true",
+        help="Exit 0 even when some source scans fail (default: exit 1 on scan failure)",
     )
     return p
 
@@ -104,14 +116,14 @@ def _print_sources() -> None:
     print("Registered data sources:\n")
     for sid, src in sorted(SOURCE_REGISTRY.items()):
         flag = "ON " if src.enabled else "off"
-        print(f"  [{flag}] {sid:20s} ({src.agency:5s}) {src.description[:70]}")
+        print(f"  [{flag}] {sid:22s} ({src.agency:5s}) {src.description[:70]}")
         print(f"         scan: {src.scan_url}")
         print(f"         dest: {src.target_dir}")
         print(f"         engine: {src.engine_notes[:90]}")
         print()
     print("Groups:")
     for g, ids in sorted(SOURCE_GROUPS.items()):
-        print(f"  {g:18s} -> {', '.join(ids)}")
+        print(f"  {g:20s} -> {', '.join(ids)}")
 
 
 def main(argv: list | None = None) -> int:
@@ -138,23 +150,34 @@ def main(argv: list | None = None) -> int:
         "fetch": None,
         "validate": None,
         "pr": None,
+        "exit_hints": [],
     }
 
     scan_results = []
     fetch_results = []
+    exit_code = 0
 
     if args.scan or args.fetch or args.pr:
-        # Need scan for fetch/pr context
-        do_scan = args.scan or args.fetch or args.pr
-        if do_scan:
-            print(f"Scanning sources: {', '.join(source_ids)} (dry_run={args.dry_run})")
-            scan_results = scan_sources(
-                source_ids,
-                delay=0.05 if args.dry_run else args.delay,
-                dry_run=args.dry_run,
-            )
-            print(summarize_scan(scan_results))
-            payload["scan"] = [r.to_dict() for r in scan_results]
+        print(f"Scanning sources: {', '.join(source_ids)} (dry_run={args.dry_run})")
+        scan_results = scan_sources(
+            source_ids,
+            delay=0.05 if args.dry_run else args.delay,
+            dry_run=args.dry_run,
+        )
+        print(summarize_scan(scan_results))
+        payload["scan"] = [r.to_dict() for r in scan_results]
+
+        scan_failed = any(not r.page_fetched for r in scan_results)
+        if scan_failed and not args.allow_scan_errors:
+            print("ERROR: one or more source scans failed", file=sys.stderr)
+            exit_code = 1
+            payload["exit_hints"].append("scan_failed")
+            # Still allow fetch/validate/pr on partial success only if not failing closed early
+            # For fail-closed: stop before PR when scan failed
+            if args.pr and not args.dry_run:
+                if args.as_json:
+                    print(json.dumps(payload, indent=2, default=str))
+                return 1
 
     if args.fetch:
         print("\nFetching new candidates...")
@@ -167,42 +190,70 @@ def main(argv: list | None = None) -> int:
         print(summarize_fetch(fetch_results))
         payload["fetch"] = [r.to_dict() for r in fetch_results]
 
+        if any_fetch_failed(fetch_results) and not args.dry_run:
+            print("ERROR: one or more fetches failed — refusing PR", file=sys.stderr)
+            exit_code = 1
+            payload["exit_hints"].append("fetch_failed")
+            if args.pr:
+                if args.as_json:
+                    print(json.dumps(payload, indent=2, default=str))
+                return 1
+
     if args.validate:
         print("\nValidating...")
         paths = []
         for fr in fetch_results:
-            if fr.path and fr.success and not fr.dry_run:
+            if fr.path and fr.success and not fr.dry_run and not fr.skipped:
                 paths.append(fr.path)
         cands = []
         for sr in scan_results:
             cands.extend(sr.new_candidates)
+
+        strict = bool(args.pr) and not args.dry_run
         report = validate_downloaded_files(
             paths=paths or None,
             candidates=cands if not paths else None,
             include_baseline=args.include_baseline_validate or (not paths and not cands),
+            strict_unknown=strict,
+            require_under_data=strict,
         )
-        # If nothing specific, always include baseline for sanity
         if not report.items:
-            report = validate_downloaded_files(include_baseline=True)
+            report = validate_downloaded_files(
+                include_baseline=True,
+                strict_unknown=False,
+                require_under_data=False,
+            )
         print(summarize_validation(report))
         payload["validate"] = report.to_dict()
         if not report.ok and not args.dry_run:
-            if args.as_json:
-                print(json.dumps(payload, indent=2))
-            return 1
+            print("ERROR: validation failed — refusing PR", file=sys.stderr)
+            exit_code = 1
+            payload["exit_hints"].append("validate_failed")
+            if args.pr:
+                if args.as_json:
+                    print(json.dumps(payload, indent=2, default=str))
+                return 1
 
     if args.pr:
+        # Fail closed if fetch was requested and failed
+        if args.fetch and any_fetch_failed(fetch_results) and not args.dry_run:
+            if args.as_json:
+                print(json.dumps(payload, indent=2, default=str))
+            return 1
+
         files = paths_from_fetch_results(fetch_results)
-        # Also include any new candidates that already exist on disk but untracked — skip for safety
         branch = args.branch_name or propose_branch_name(source_ids)
-        print(f"\nPR step (branch={branch}, dry_run={args.dry_run})...")
+        base = args.base_branch
+        if base in (None, "", "auto"):
+            base = detect_default_branch(_ROOT)
+        print(f"\nPR step (branch={branch}, base={base}, dry_run={args.dry_run})...")
         pr_result = create_data_pr(
             files=files,
             source_ids=source_ids,
             scan_results=scan_results,
             branch_name=branch,
             dry_run=args.dry_run,
-            base_branch=args.base_branch,
+            base_branch=base,
         )
         print(f"  success={pr_result.success}")
         print(f"  branch={pr_result.branch}")
@@ -213,19 +264,18 @@ def main(argv: list | None = None) -> int:
             print(f"  files={pr_result.committed_files}")
         payload["pr"] = pr_result.to_dict()
         if not pr_result.success and not args.dry_run:
-            # Not always fatal: "nothing staged" when no new data is normal
             if "nothing staged" in (pr_result.message or ""):
                 print("No new data to PR (this is OK if all sources are up to date).")
             else:
+                exit_code = 1
                 if args.as_json:
-                    print(json.dumps(payload, indent=2))
+                    print(json.dumps(payload, indent=2, default=str))
                 return 1
 
     if args.as_json:
         print(json.dumps(payload, indent=2, default=str))
 
-    # Exit 0 even when no new files — scan succeeded
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":
