@@ -10,3 +10,6 @@ ENV/
 data/mock_*.csv
 .pytest_cache/
 trace-analaysis/
+
+.playwright-mcp/
+=2.31.0

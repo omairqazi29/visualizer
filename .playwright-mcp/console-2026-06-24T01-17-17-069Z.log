@@ -1,9 +1,0 @@
-[     289ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://d2n4zfio24poj1.cloudfront.net/chatwidget/bundle.js:0
-[     705ms] Invalid or unexpected token
-[     797ms] [LOG] host name www.uscis.gov @ https://uscis.my.site.com/resource/1782263837398/MIAWChatWrapperJS:121
-[     797ms] [LOG] sending prod @ https://uscis.my.site.com/resource/1782263837398/MIAWChatWrapperJS:124
-[     797ms] [LOG] config production @ https://uscis.my.site.com/resource/1782263837398/MIAWChatWrapperJS:92
-[     797ms] [LOG] config obj{"domain":"uscis.my.salesforce.com","baseCoreURL":"https://uscis.my.salesforce.com","channel":"OAIS_Emma_Channel","channelUrl":"https://uscis.my.site.com/ESWOAISEmmaChannel1763090369120","channelScrt2URL":"https://uscis.my.salesforce-scrt.com","orgId":"00DG0000000hO5S"} @ https://uscis.my.site.com/resource/1782263837398/MIAWChatWrapperJS:95
-[     797ms] [LOG] BrowserDesktop lang en-US @ https://uscis.my.site.com/resource/1782263837398/MIAWChatWrapperJS:736
-[     797ms] [LOG] bootstrap urlhttps://uscis.my.site.com/ESWOAISEmmaChannel1763090369120/assets/js/bootstrap.min.js @ https://uscis.my.site.com/resource/1782263837398/MIAWChatWrapperJS:109
-[ 2580632ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://c.go-mpulse.net/api/config.json?key=A3WTK-PERZP-2W77L-XJ2AR-542NX&d=www.dhs.gov&t=5940883&v=1.815.0&if=&sl=1&si=3af246c6-4add-45db-bae2-48fb285cc8d9-th43kt&r=&bcn=%2F%2F173bf107.akstat.io%2F&acao=&ak.ai=102510:0
