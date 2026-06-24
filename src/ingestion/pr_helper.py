@@ -209,6 +209,11 @@ def create_data_pr(
     sha_r = _run(["git", "rev-parse", "HEAD"])
     prior_sha = (sha_r.stdout or "").strip()
     was_detached = current_branch in ("HEAD", "")
+    op_succeeded = False
+
+    def _clear_index_if_dirty() -> None:
+        """Unstage everything so a failed PR attempt does not leave a dirty index."""
+        _run(["git", "reset", "HEAD"])
 
     try:
         br = _run(["git", "checkout", "-B", branch])
@@ -222,6 +227,7 @@ def create_data_pr(
         if files:
             add = _run(["git", "add", "--"] + list(files))
             if add.returncode != 0:
+                _clear_index_if_dirty()
                 return PRResult(
                     success=False,
                     branch=branch,
@@ -233,6 +239,7 @@ def create_data_pr(
         # Double-check staged paths under data/
         staged_files = filter_paths_for_pr(staged_files)
         if not staged_files:
+            _clear_index_if_dirty()
             return PRResult(
                 success=False,
                 branch=branch,
@@ -243,6 +250,7 @@ def create_data_pr(
         body = build_pr_body(scan_results, staged_files, source_ids=source_ids)
         commit = _run(["git", "commit", "-m", title, "-m", body[:2000]])
         if commit.returncode != 0:
+            _clear_index_if_dirty()
             return PRResult(
                 success=False,
                 branch=branch,
@@ -259,6 +267,7 @@ def create_data_pr(
             )
 
         if not _gh_available():
+            op_succeeded = True
             return PRResult(
                 success=True,
                 branch=branch,
@@ -290,6 +299,7 @@ def create_data_pr(
             )
 
         pr_url = (pr.stdout or "").strip().splitlines()[-1] if pr.stdout else ""
+        op_succeeded = True
         return PRResult(
             success=True,
             branch=branch,
@@ -299,6 +309,9 @@ def create_data_pr(
         )
     finally:
         if restore_branch:
+            # On failure before commit, ensure index is clean before leaving the branch
+            if not op_succeeded:
+                _clear_index_if_dirty()
             if was_detached and prior_sha:
                 _run(["git", "checkout", prior_sha])
             elif current_branch and current_branch != branch:

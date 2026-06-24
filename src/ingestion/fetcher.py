@@ -159,13 +159,12 @@ def fetch_candidate(
                     ):
                         raise ValueError("response looks like HTML, not a data file")
                     ext = dest.suffix.lower()
-                    if ext in (".xlsx", ".xls") and not looks_like_spreadsheet(
-                        first_chunk, candidate.filename
-                    ):
-                        # warn but allow if content-type suggests octet-stream and has length
-                        ctype = (resp.headers.get("Content-Type") or "").lower()
-                        if "html" in ctype or "text/html" in ctype:
-                            raise ValueError(f"unexpected content-type for spreadsheet: {ctype}")
+                    if ext in (".xlsx", ".xls"):
+                        if not looks_like_spreadsheet(first_chunk, candidate.filename):
+                            raise ValueError(
+                                f"file magic does not look like xlsx/xls "
+                                f"(got {first_chunk[:8]!r}); refusing download"
+                            )
                 size += len(chunk)
                 if size > MAX_DOWNLOAD_BYTES:
                     raise ValueError(f"download exceeded max size {MAX_DOWNLOAD_BYTES} bytes")

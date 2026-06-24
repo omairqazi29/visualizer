@@ -6,6 +6,7 @@
 - **Commit Granularity**: Keep commits surgical and focused on a single logical change.
 
 ## Architecture & Data
+- **Automated data scans**: Public DOS/USCIS/DHS/DOL files are scanned via `src/ingestion/` and `.github/workflows/data-scan*.yml` (CLI: `python -m src.scripts.scan_and_pr`). Drop-in under `data/`; no hardcoded supply numbers. Details: `docs/POLICY_VERIFICATION.md` § Automated Data Ingestion.
 - **Python/Pandas**: Mandatory for data processing to handle messy government Excel/CSV headers and 'D' disclosure strings.
 - **Dependent Multiplier**: Use data-driven category-specific multipliers from DHS Yearbook Table 7 (`get_data_driven_multipliers()`) for I-140 pipeline. I-485 inventory already includes dependents (no multiplier needed).
 - **INA Logic**: Adhere to INA 201/203 spillover flow and the restriction redistribution logic as defined in the core engine.

@@ -19,15 +19,22 @@ HTML_SNIPPETS = (b"<!doctype html", b"<html", b"<head", b"<body")
 
 
 def safe_basename(raw_name: str) -> str:
-    """Return a filesystem-safe basename; reject path traversal."""
+    """Return a filesystem-safe basename; reject path traversal segments.
+
+    Rejects path separators and ``..`` / ``.`` as path *components*, not arbitrary
+    ``..`` substrings inside an otherwise normal filename (e.g. ``report..final.xlsx``).
+    """
     if not raw_name or not str(raw_name).strip():
         raise ValueError("empty filename")
-    # Reject path separators or .. in the *input* before stripping segments
     raw_s = str(raw_name)
-    if ".." in raw_s or "/" in raw_s or "\\" in raw_s:
+    # Path separators always mean traversal / multi-segment input
+    if "/" in raw_s or "\\" in raw_s:
         raise ValueError(f"path traversal rejected: {raw_name!r}")
     name = unquote(raw_s).split("?")[0].strip()
-    if not name or name in (".", ".."):
+    if not name:
+        raise ValueError(f"invalid filename: {raw_name!r}")
+    # Only reject .. / . as the entire basename (path component), not substring
+    if name in (".", ".."):
         raise ValueError(f"invalid filename: {raw_name!r}")
     if any(ord(c) < 32 for c in name):
         raise ValueError(f"control chars in filename: {raw_name!r}")

@@ -20,27 +20,23 @@
 
 ## Automated Data Ingestion
 
-Public DOS/USCIS/DHS/DOL pages are scanned by  ( source config,
- /  /  / ). CLI: Scanning sources: dos_iv_fsc, uscis_inventory, uscis_i485_perf, uscis_i140, dhs_yearbook, dol_perm (dry_run=False)
-=== Data Source Scan Summary ===
-[FAIL] dos_iv_fsc: 0 new, 0 already present (0 links, 0 pages, 1 errors)
-       error: requests library not installed
-[FAIL] uscis_inventory: 0 new, 0 already present (0 links, 0 pages, 1 errors)
-       error: requests library not installed
-[FAIL] uscis_i485_perf: 0 new, 0 already present (0 links, 0 pages, 1 errors)
-       error: requests library not installed
-[FAIL] uscis_i140: 0 new, 0 already present (0 links, 0 pages, 1 errors)
-       error: requests library not installed
-[FAIL] dhs_yearbook: 0 new, 0 already present (0 links, 0 pages, 1 errors)
-       error: requests library not installed
-[FAIL] dol_perm: 0 new, 0 already present (0 links, 0 pages, 1 errors)
-       error: requests library not installed
-TOTAL: 0 new file(s)/bulletin(s), 0 already present
-WARNING: one or more source scans failed (see errors above).
-Scheduled GitHub Actions:  (excludes visa_bulletin) and
-. New files drop into  and are auto-discovered by
- — no hardcoded supply numbers. See 
-section Automated Data Ingestion.
+Public government data pages are scanned and (optionally) committed via a config-driven
+pipeline — no hardcoded supply numbers; files drop into `data/` and are picked up by
+`src/data_discovery.py` + existing parsers.
+
+| Piece | Location |
+|---|---|
+| Source registry (DOS/USCIS/DHS/DOL + disabled stubs) | `src/ingestion/registry.py` |
+| Scan / fetch / validate / security | `src/ingestion/scanner.py`, `fetcher.py`, `validator.py`, `security.py` |
+| PR helper (`chore/data-*` + `gh pr create`) | `src/ingestion/pr_helper.py` |
+| CLI | `python -m src.scripts.scan_and_pr` (`--scan` / `--fetch` / `--validate` / `--pr` / `--dry-run`) |
+| Manual validate + automation pointer | `python -m src.scripts.update_data` |
+| Scheduled workflows | `.github/workflows/data-scan.yml` (excludes `visa_bulletin`), `data-scan-visa-bulletin.yml` |
+| Live smoke script | `scripts/verify_sources_live.py` |
+
+Flow: public HTML pages → link match + host allowlist → download under `data/` → parser QA → optional PR.
+Operational details, source groups (`all`, `all_including_vb`, `dos_iv`, `uscis`, …), and fail-closed
+behavior are documented in `docs/POLICY_VERIFICATION.md` § Automated Data Ingestion.
 
 ## Core Components
 

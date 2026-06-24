@@ -22,7 +22,7 @@ DATA_DIR = PROJECT_ROOT / "data"
 
 USER_AGENT = (
     "SpilloverEngine-DataScanner/1.0 "
-    "(+https://github.com/omairqazi29/gc-ia-visualizer; "
+    "(+https://github.com/omairqazi29/visualizer; "
     "public immigration data refresh; polite bot)"
 )
 

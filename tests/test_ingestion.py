@@ -552,10 +552,14 @@ def test_safe_basename_rejects_traversal():
     import pytest
 
     assert safe_basename("ok_file.xlsx") == "ok_file.xlsx"
+    # Double-dot inside filename (not a path component) is allowed
+    assert safe_basename("report..final.xlsx") == "report..final.xlsx"
     with pytest.raises(ValueError):
         safe_basename("../../../evil.xlsx")
     with pytest.raises(ValueError):
         safe_basename("foo/bar.xlsx")
+    with pytest.raises(ValueError):
+        safe_basename("..")
 
 
 def test_safe_target_path_stays_under_dir(tmp_path):
