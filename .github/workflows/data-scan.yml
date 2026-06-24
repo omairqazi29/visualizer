@@ -54,6 +54,8 @@ env:
 jobs:
   scan:
     name: Scan & ingest
+    # Only run on the canonical repo (forks lack write tokens / should not open PRs)
+    if: github.repository == 'omairqazi29/visualizer'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
