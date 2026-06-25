@@ -177,20 +177,18 @@ def test_publish_then_second_scan_picks_up_delta(isolated_data, mock_publisher):
     new_names = [c.filename for c in new2]
     exist_names = [c.filename for c in exist2]
 
-    assert published_name in new_names, (
-        f"expected published file {published_name!r} as status=new; "
-        f"new={new_names}; exist={exist_names}; all={[c.to_dict() for c in r2.candidates]}"
+    # Strict: pass2 must have exactly one new file — the one we just published
+    assert new_names == [published_name], (
+        f"expected pass2_new == [{published_name!r}] exactly; "
+        f"got new={new_names}; exist={exist_names}; all={[c.to_dict() for c in r2.candidates]}"
     )
     # Previously fetched seed files should now be exists (not new)
     assert len(exist2) >= 1, f"expected prior files as exists, got exist={exist_names}"
-    # Only the delta should be strictly new (allow edge cases but assert published is among them)
     assert all(c.status == "new" for c in new2)
     assert published_name not in exist_names
 
     # --- Fetch + validate the delta ---
-    delta_cands = [c for c in new2 if c.filename == published_name]
-    assert len(delta_cands) == 1
-    fetched2 = fetch_candidates(delta_cands, delay=0.0)
+    fetched2 = fetch_candidates(list(new2), delay=0.0)
     assert fetched2 and fetched2[0].success, (
         f"delta fetch failed: {fetched2[0].error if fetched2 else 'no result'}"
     )

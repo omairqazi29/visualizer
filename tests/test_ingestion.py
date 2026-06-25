@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import textwrap
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -489,6 +490,58 @@ def test_scan_and_pr_list_sources():
     from src.scripts.scan_and_pr import main
 
     assert main(["--list-sources"]) == 0
+
+
+def test_ingestion_env_overrides_opt_in_only(monkeypatch):
+    """INGESTION_* env must not alter sources unless explicitly set (production default)."""
+    from src.ingestion import registry
+
+    # Clear any opt-in env that might leak from the shell/e2e script
+    for key in list(os.environ):
+        if key.startswith("INGESTION_"):
+            monkeypatch.delenv(key, raising=False)
+    registry.refresh_paths_from_env()
+
+    # get_source / list_sources must match static SOURCE_REGISTRY when env unset
+    for sid, static in registry.SOURCE_REGISTRY.items():
+        if not static.enabled:
+            continue
+        got = registry.get_source(sid)
+        assert got is static or (
+            got.scan_url == static.scan_url
+            and tuple(got.allowed_hosts or ()) == tuple(static.allowed_hosts or ())
+            and got.source_id == static.source_id
+        ), f"{sid}: get_source diverged without env overrides"
+        assert got.scan_url == static.scan_url
+        assert tuple(got.allowed_hosts or ()) == tuple(static.allowed_hosts or ())
+
+    listed = {s.source_id: s for s in registry.list_sources(enabled_only=True)}
+    for sid, static in registry.SOURCE_REGISTRY.items():
+        if not static.enabled:
+            continue
+        assert sid in listed
+        assert listed[sid].scan_url == static.scan_url
+        assert tuple(listed[sid].allowed_hosts or ()) == tuple(static.allowed_hosts or ())
+
+    # With overrides set, get_source and list_sources both apply them
+    monkeypatch.setenv("INGESTION_EXTRA_ALLOWED_HOSTS", "localhost")
+    monkeypatch.setenv(
+        "INGESTION_SOURCE_URL_dos_iv_fsc",
+        "http://localhost:8765/dos/monthly",
+    )
+    overridden = registry.get_source("dos_iv_fsc")
+    assert overridden.scan_url == "http://localhost:8765/dos/monthly"
+    assert "localhost" in (overridden.allowed_hosts or ())
+    # Static registry entry must remain unchanged (opt-in applies at read time only)
+    assert registry.SOURCE_REGISTRY["dos_iv_fsc"].scan_url != overridden.scan_url
+    listed2 = {s.source_id: s for s in registry.list_sources(enabled_only=True)}
+    assert listed2["dos_iv_fsc"].scan_url == overridden.scan_url
+    assert "localhost" in (listed2["dos_iv_fsc"].allowed_hosts or ())
+
+    # Cleanup so other tests see normal defaults
+    monkeypatch.delenv("INGESTION_EXTRA_ALLOWED_HOSTS", raising=False)
+    monkeypatch.delenv("INGESTION_SOURCE_URL_dos_iv_fsc", raising=False)
+    registry.refresh_paths_from_env()
 
 
 def test_scan_and_pr_scan_with_html_mock(tmp_path, monkeypatch, capsys):

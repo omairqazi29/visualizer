@@ -275,15 +275,23 @@ without hitting travel.state.gov or uscis.gov.
 `INGESTION_PROJECT_ROOT`, `INGESTION_SOURCE_URL_<source_id>`, `INGESTION_SOURCE_URL_OVERRIDES`
 (JSON), `INGESTION_EXTRA_ALLOWED_HOSTS`, `INGESTION_REQUEST_DELAY_SEC`. See `src/ingestion/registry.py`.
 
+> **Security:** Never set `INGESTION_*` in GitHub Actions (`data-scan*.yml`) or
+> production/staging. Overrides redirect scans/downloads and extend host allowlists.
+> Local/e2e mock runs only (this harness sets them explicitly).
+
 ```bash
 # Start mock only (normal `docker compose up` unchanged — profile-gated)
 docker compose -f docker-compose.yml -f docker-compose.data-scan-e2e.yml \
   --profile data-scan-e2e up --build -d mock-data-publisher
 
+# Optional: parallel mock + API (api is in base docker-compose.yml, no profile)
+docker compose -f docker-compose.yml -f docker-compose.data-scan-e2e.yml \
+  --profile data-scan-e2e up --build -d mock-data-publisher api
+
 # Run assertions (starts docker if needed, tears down mock on exit)
 ./scripts/e2e_data_scan_pickup.sh
 
-# Or in-compose one-shot (publisher + scan-runner)
+# Or in-compose one-shot (publisher + scan-runner pytest container)
 docker compose -f docker-compose.yml -f docker-compose.data-scan-e2e.yml \
   --profile data-scan-e2e run --rm scan-runner
 

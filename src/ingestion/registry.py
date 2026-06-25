@@ -16,6 +16,9 @@ Optional env overrides (opt-in; no behavior change unless set — used by e2e/mo
   INGESTION_SOURCE_URL_<id>    — per-source scan URL (id uppercased, hyphens→underscores)
   INGESTION_EXTRA_ALLOWED_HOSTS — comma-separated hosts added to every source allowlist
   INGESTION_REQUEST_DELAY_SEC  — override polite delay (e.g. 0 for fast local e2e)
+
+SECURITY: never set INGESTION_* in GitHub Actions or production/staging. These
+redirect scans/downloads and weaken the host allowlist; only for local/e2e mock runs.
 """
 
 from __future__ import annotations
@@ -498,20 +501,14 @@ SOURCE_GROUPS: Dict[str, List[str]] = {
 }
 
 
-def get_source(source_id: str) -> DataSource:
-    """Return a source, applying opt-in env URL/host overrides when set."""
-    if source_id not in SOURCE_REGISTRY:
-        raise KeyError(
-            f"Unknown source_id={source_id!r}. "
-            f"Known: {', '.join(sorted(SOURCE_REGISTRY))}"
-        )
-    src = SOURCE_REGISTRY[source_id]
+def _apply_env_overrides(src: DataSource) -> DataSource:
+    """Apply opt-in INGESTION_* URL/host overrides; return ``src`` unchanged if unset."""
     url_overrides = _source_url_overrides()
     extra_hosts = _extra_allowed_hosts()
     if not url_overrides and not extra_hosts:
         return src
 
-    new_url = url_overrides.get(source_id, src.scan_url)
+    new_url = url_overrides.get(src.source_id, src.scan_url)
     new_hosts = tuple(src.allowed_hosts or ())
     if extra_hosts:
         # Preserve order, avoid dupes
@@ -528,11 +525,22 @@ def get_source(source_id: str) -> DataSource:
     return replace(src, scan_url=new_url, allowed_hosts=new_hosts)
 
 
+def get_source(source_id: str) -> DataSource:
+    """Return a source, applying opt-in env URL/host overrides when set."""
+    if source_id not in SOURCE_REGISTRY:
+        raise KeyError(
+            f"Unknown source_id={source_id!r}. "
+            f"Known: {', '.join(sorted(SOURCE_REGISTRY))}"
+        )
+    return _apply_env_overrides(SOURCE_REGISTRY[source_id])
+
+
 def list_sources(enabled_only: bool = True) -> List[DataSource]:
+    """List sources (enabled by default), applying the same env overrides as get_source()."""
     items = list(SOURCE_REGISTRY.values())
     if enabled_only:
         items = [s for s in items if s.enabled]
-    return items
+    return [_apply_env_overrides(s) for s in items]
 
 
 def resolve_source_ids(source_arg: Optional[str]) -> List[str]:
