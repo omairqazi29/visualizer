@@ -8,17 +8,44 @@ No secrets; only public government data pages.
 v1 scope: supply-critical + pipeline sources are enabled. Additional sources
 (NVC, CEAC, H1B, processing times, monthly I-485 CSVs) are registered as
 disabled stubs for completeness — enable when scan URLs/patterns are stable.
+
+Optional env overrides (opt-in; no behavior change unless set — used by e2e/mock tests):
+  INGESTION_PROJECT_ROOT       — override project root for path resolution
+  INGESTION_DATA_DIR           — override data/ write/read directory
+  INGESTION_SOURCE_URL_OVERRIDES — JSON map {source_id: scan_url}
+  INGESTION_SOURCE_URL_<id>    — per-source scan URL (id uppercased, hyphens→underscores)
+  INGESTION_EXTRA_ALLOWED_HOSTS — comma-separated hosts added to every source allowlist
+  INGESTION_REQUEST_DELAY_SEC  — override polite delay (e.g. 0 for fast local e2e)
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import json
+import os
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 # Project root (src/ingestion/ -> src/ -> project)
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_ROOT / "data"
+_DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _resolve_project_root() -> Path:
+    override = os.environ.get("INGESTION_PROJECT_ROOT", "").strip()
+    if override:
+        return Path(override).expanduser().resolve()
+    return _DEFAULT_PROJECT_ROOT
+
+
+def _resolve_data_dir(project_root: Path) -> Path:
+    override = os.environ.get("INGESTION_DATA_DIR", "").strip()
+    if override:
+        return Path(override).expanduser().resolve()
+    return project_root / "data"
+
+
+PROJECT_ROOT = _resolve_project_root()
+DATA_DIR = _resolve_data_dir(PROJECT_ROOT)
 
 USER_AGENT = (
     "SpilloverEngine-DataScanner/1.0 "
@@ -28,6 +55,61 @@ USER_AGENT = (
 
 REQUEST_DELAY_SEC = 1.0  # polite delay between page/file requests
 REQUEST_TIMEOUT_SEC = 45
+
+# Allow e2e/mock runs to skip the polite delay without code changes.
+_delay_override = os.environ.get("INGESTION_REQUEST_DELAY_SEC", "").strip()
+if _delay_override:
+    try:
+        REQUEST_DELAY_SEC = float(_delay_override)
+    except ValueError:
+        pass
+
+
+def _extra_allowed_hosts() -> Tuple[str, ...]:
+    """Hosts appended to every source allowlist when INGESTION_EXTRA_ALLOWED_HOSTS is set."""
+    raw = os.environ.get("INGESTION_EXTRA_ALLOWED_HOSTS", "").strip()
+    if not raw:
+        return ()
+    return tuple(h.strip() for h in raw.split(",") if h.strip())
+
+
+def _source_url_overrides() -> Dict[str, str]:
+    """Merge INGESTION_SOURCE_URL_OVERRIDES JSON + INGESTION_SOURCE_URL_<SOURCE_ID> envs."""
+    overrides: Dict[str, str] = {}
+    raw_json = os.environ.get("INGESTION_SOURCE_URL_OVERRIDES", "").strip()
+    if raw_json:
+        try:
+            parsed = json.loads(raw_json)
+            if isinstance(parsed, dict):
+                for k, v in parsed.items():
+                    if k and v:
+                        overrides[str(k)] = str(v)
+        except json.JSONDecodeError:
+            pass
+    prefix = "INGESTION_SOURCE_URL_"
+    for key, val in os.environ.items():
+        if not key.startswith(prefix) or key == "INGESTION_SOURCE_URL_OVERRIDES":
+            continue
+        if not val or not val.strip():
+            continue
+        sid = key[len(prefix) :].lower()
+        overrides[sid] = val.strip()
+    return overrides
+
+
+def refresh_paths_from_env() -> None:
+    """Re-read PROJECT_ROOT / DATA_DIR from env (for tests that set env after import)."""
+    global PROJECT_ROOT, DATA_DIR
+    PROJECT_ROOT = _resolve_project_root()
+    DATA_DIR = _resolve_data_dir(PROJECT_ROOT)
+    # Keep security module in sync if already imported
+    try:
+        from . import security
+
+        security.PROJECT_ROOT = PROJECT_ROOT
+        security.DATA_DIR = DATA_DIR
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _normalize_dos_fsc_name(url: str, link_text: str = "") -> str:
@@ -417,12 +499,33 @@ SOURCE_GROUPS: Dict[str, List[str]] = {
 
 
 def get_source(source_id: str) -> DataSource:
+    """Return a source, applying opt-in env URL/host overrides when set."""
     if source_id not in SOURCE_REGISTRY:
         raise KeyError(
             f"Unknown source_id={source_id!r}. "
             f"Known: {', '.join(sorted(SOURCE_REGISTRY))}"
         )
-    return SOURCE_REGISTRY[source_id]
+    src = SOURCE_REGISTRY[source_id]
+    url_overrides = _source_url_overrides()
+    extra_hosts = _extra_allowed_hosts()
+    if not url_overrides and not extra_hosts:
+        return src
+
+    new_url = url_overrides.get(source_id, src.scan_url)
+    new_hosts = tuple(src.allowed_hosts or ())
+    if extra_hosts:
+        # Preserve order, avoid dupes
+        seen = set(h.lower() for h in new_hosts)
+        merged = list(new_hosts)
+        for h in extra_hosts:
+            if h.lower() not in seen:
+                merged.append(h)
+                seen.add(h.lower())
+        new_hosts = tuple(merged)
+
+    if new_url == src.scan_url and new_hosts == tuple(src.allowed_hosts or ()):
+        return src
+    return replace(src, scan_url=new_url, allowed_hosts=new_hosts)
 
 
 def list_sources(enabled_only: bool = True) -> List[DataSource]:
@@ -459,8 +562,17 @@ def resolve_source_ids(source_arg: Optional[str]) -> List[str]:
 
 
 def target_path_for(source: DataSource, filename: str) -> Path:
-    """Build safe target path under source.target_dir (rejects traversal)."""
+    """Build safe target path under source.target_dir (rejects traversal).
+
+    When INGESTION_DATA_DIR is set, ``data/…`` targets are remapped under that
+    isolated data root so e2e/mock runs never write into the real ``data/`` tree.
+    """
     from .security import safe_target_path
 
     target_dir = PROJECT_ROOT / source.target_dir
+    data_override = os.environ.get("INGESTION_DATA_DIR", "").strip()
+    if data_override and source.target_dir.startswith("data"):
+        # data/DOS -> <INGESTION_DATA_DIR>/DOS ; data -> <INGESTION_DATA_DIR>
+        suffix = source.target_dir[len("data") :].lstrip("/\\")
+        target_dir = DATA_DIR / suffix if suffix else DATA_DIR
     return safe_target_path(target_dir, filename)
