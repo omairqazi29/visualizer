@@ -257,6 +257,51 @@ Source groups: `all` (excludes `visa_bulletin`) | `all_including_vb` | `dos_iv` 
 - **After a data PR merges:** run full tests; if supply/demand inputs changed, add a row to the
   **Changelog** below (AGENTS.md requirement).
 
+### Docker e2e: mock-publish + scan pickup (no live government sites)
+
+Offline/integration harness that proves the scanner picks up newly "published" files
+without hitting travel.state.gov or uscis.gov.
+
+| Piece | Location |
+|---|---|
+| Mock publisher (FastAPI) | `tests/e2e/mock_data_server/server.py` |
+| Mock Dockerfile | `tests/e2e/mock_data_server/Dockerfile` |
+| Compose profile `data-scan-e2e` | `docker-compose.data-scan-e2e.yml` |
+| E2E tests (`@pytest.mark.e2e`) | `tests/e2e/test_data_scan_pickup.py` |
+| Runner script | `scripts/e2e_data_scan_pickup.sh` |
+| Docs | `tests/e2e/README.md` |
+
+**Opt-in env overrides** (no production behavior change unless set): `INGESTION_DATA_DIR`,
+`INGESTION_PROJECT_ROOT`, `INGESTION_SOURCE_URL_<source_id>`, `INGESTION_SOURCE_URL_OVERRIDES`
+(JSON), `INGESTION_EXTRA_ALLOWED_HOSTS`, `INGESTION_REQUEST_DELAY_SEC`. See `src/ingestion/registry.py`.
+
+> **Security:** Never set `INGESTION_*` in GitHub Actions (`data-scan*.yml`) or
+> production/staging. Overrides redirect scans/downloads and extend host allowlists.
+> Local/e2e mock runs only (this harness sets them explicitly).
+
+```bash
+# Start mock only (normal `docker compose up` unchanged — profile-gated)
+docker compose -f docker-compose.yml -f docker-compose.data-scan-e2e.yml \
+  --profile data-scan-e2e up --build -d mock-data-publisher
+
+# Optional: parallel mock + API (api is in base docker-compose.yml, no profile)
+docker compose -f docker-compose.yml -f docker-compose.data-scan-e2e.yml \
+  --profile data-scan-e2e up --build -d mock-data-publisher api
+
+# Run assertions (starts docker if needed, tears down mock on exit)
+./scripts/e2e_data_scan_pickup.sh
+
+# Or in-compose one-shot (publisher + scan-runner pytest container)
+docker compose -f docker-compose.yml -f docker-compose.data-scan-e2e.yml \
+  --profile data-scan-e2e run --rm scan-runner
+
+# Local mock without Docker
+python tests/e2e/mock_data_server/server.py
+SKIP_DOCKER=1 ./scripts/e2e_data_scan_pickup.sh
+```
+
+Default unit suite excludes e2e/integration: `pytest` or `pytest -m 'not integration and not e2e'`.
+
 ### workflow_dispatch inputs (`data-scan.yml`)
 
 - `source` — choice: `all` | `all_including_vb` | `dos_iv` | `uscis` | … (default `all`)
@@ -267,6 +312,7 @@ Source groups: `all` (excludes `visa_bulletin`) | `all_including_vb` | `dos_iv` 
 
 | Date | Event | Model Impact | Updated By |
 |---|---|---|---|
+| Jun 2026 | Added Docker data-scan e2e harness (mock-data-publisher + `INGESTION_*` env overrides + compose profile `data-scan-e2e`). Proves scan/fetch/publish-delta pickup without live government sites. | No model number change | AI-assisted |
 | Jun 2026 | Data-scan review fixes: single GHA invocation, host/path security, fail-closed PR gate, `master`/auto base branch, VB excluded from main `all` group, disabled stubs, live verify script, ARCHITECTURE/AGENTS/POLICY docs. | No model number change | AI-assisted |
 | Jun 2026 | Added automated data-scan pipeline (`src/ingestion/`, `scan_and_pr` CLI, GitHub Actions `data-scan.yml` + `data-scan-visa-bulletin.yml`). Scans DOS IV FSC, USCIS I-140/I-485 perf/inventory patterns, DHS/DOL pages; opens chore/data-* PRs when new files appear. | No model number change by itself — enables faster drop-in data updates | AI-assisted |
 | Jun 2026 | Data-driven supply model fix. (1) EB-4/5 spillover now uses TOTAL usage (consular+AOS) from `dhs_eb_category_usage.csv` parsed from DHS Yearbook XLSX — was using DOS consular-only. (2) India EB-1 share uses non-India demand subtraction from live I-485 inventory + DHS Yearbook — replaces backlog-ratio method. (3) SIV categories (SQ/SI/SD/SE/SK/SR/SU/SW) excluded from EB-4/5 restriction savings — Afghan/Iraqi SIVs are congressionally mandated, exempt from exec restrictions, confirmed by continued DOS issuance. Removes phantom 19.5k Afghan EB-4/5 "savings"; EB-4/5 spillover → 0 (oversubscribed even under restrictions). India EB-1: ~33k (was 44k with phantom spillover). Added Mar 2026 + Oct/Dec 2025 inventory snapshots. | Accurate supply: no phantom SIV savings, no hardcoded numbers | AI-assisted |

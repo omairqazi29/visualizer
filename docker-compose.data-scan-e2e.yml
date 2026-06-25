@@ -1,0 +1,60 @@
+# Data-scan e2e: parallel mock publisher + optional scan-runner.
+# Does NOT alter normal `docker compose up` (profile-gated).
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.data-scan-e2e.yml \
+#     --profile data-scan-e2e up --build -d mock-data-publisher
+#   ./scripts/e2e_data_scan_pickup.sh
+#   docker compose -f docker-compose.yml -f docker-compose.data-scan-e2e.yml \
+#     --profile data-scan-e2e down
+#
+# Full in-compose run (publisher + scan-runner one-shot):
+#   docker compose -f docker-compose.yml -f docker-compose.data-scan-e2e.yml \
+#     --profile data-scan-e2e run --rm scan-runner
+
+services:
+  mock-data-publisher:
+    profiles: ["data-scan-e2e"]
+    build:
+      context: .
+      dockerfile: tests/e2e/mock_data_server/Dockerfile
+    ports:
+      - "8765:8765"
+    environment:
+      - MOCK_DATA_PORT=8765
+      - MOCK_DATA_HOST=0.0.0.0
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health')"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # Optional: run existing API in parallel (same profile) for multi-server demo
+  # Reuses the main `api` service from docker-compose.yml when both files are merged.
+  # Start with: docker compose ... --profile data-scan-e2e up -d mock-data-publisher api
+
+  scan-runner:
+    profiles: ["data-scan-e2e"]
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    depends_on:
+      mock-data-publisher:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    working_dir: /app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - INGESTION_REQUEST_DELAY_SEC=0
+      - INGESTION_EXTRA_ALLOWED_HOSTS=mock-data-publisher,localhost,127.0.0.1
+      - INGESTION_SOURCE_URL_dos_iv_fsc=http://mock-data-publisher:8765/dos/monthly
+      - INGESTION_SOURCE_URL_uscis_inventory=http://mock-data-publisher:8765/uscis/data
+      - INGESTION_SOURCE_URL_uscis_i485_perf=http://mock-data-publisher:8765/uscis/data
+      - INGESTION_SOURCE_URL_uscis_i140=http://mock-data-publisher:8765/uscis/data
+      - MOCK_PUBLISHER_URL=http://mock-data-publisher:8765
+      - E2E_IN_DOCKER=1
+    # Default command runs the pytest e2e module (override with compose run args)
+    command: ["python", "-m", "pytest", "tests/e2e/test_data_scan_pickup.py", "-m", "e2e", "-v", "--tb=short", "-s"]

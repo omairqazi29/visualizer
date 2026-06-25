@@ -288,7 +288,12 @@ def scan_source(
         all_links.extend(extract_links(html, page_url))
     result.links_examined = len(all_links)
 
-    target_dir = PROJECT_ROOT / source.target_dir
+    # Honor INGESTION_DATA_DIR via target_path_for's parent dir for a dummy name.
+    try:
+        sample_target = target_path_for(source, "_probe.xlsx")
+        target_dir = sample_target.parent
+    except Exception:  # noqa: BLE001
+        target_dir = PROJECT_ROOT / source.target_dir
     local_index = _local_files_index(target_dir, source.dedup_key_fn)
     is_bulletin = source.source_id == "visa_bulletin"
     vb_min_year = datetime.now(timezone.utc).year - 1
