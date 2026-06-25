@@ -120,8 +120,9 @@ def build_pr_body(
         try:
             src = get_source(sid)
             safe_desc = re.sub(r"[`*\[\]<>|]", "", src.description)[:200]
+            safe_engine = re.sub(r"[`*\[\]<>|]", "", src.engine_notes)[:200]
             lines.append(f"- **{sid}** ({src.agency}): {safe_desc}")
-            lines.append(f"  - Engine: {re.sub(r'[`*\\[\\]<>|]', '', src.engine_notes)[:200]}")
+            lines.append(f"  - Engine: {safe_engine}")
         except KeyError:
             lines.append(f"- **{sid}**")
 
