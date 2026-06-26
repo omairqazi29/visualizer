@@ -6,6 +6,11 @@ Uses historical VB data to decompose FAD movement into:
 3. Supply-adjusted scaling (higher supply → faster advancement)
 
 Produces month-by-month forecast with confidence bands.
+
+Unavailable ("U") months are excluded from advancement-rate statistics
+(no dated FAD to measure). Current ("C") months are likewise excluded.
+Forecast anchors on the latest *dated* FAD; if the latest bulletin is U,
+latest_actual reflects status=U with fad=None and methodology notes the gap.
 """
 
 from collections import defaultdict
@@ -30,6 +35,18 @@ def _next_month(year: int, month: int) -> tuple[int, int]:
     return year, month + 1
 
 
+def _resolve_baseline_supply() -> int:
+    """Prefer live supply-model baseline (FY2024 India EB-1) over constant."""
+    try:
+        from .supply import SupplyCalculator
+        calc = SupplyCalculator()
+        breakdown = calc.get_supply_breakdown(apply_freeze=False, apply_real_restrictions=False)
+        # Baseline India EB-1 from supply model (data-driven, not hardcoded result)
+        return int(breakdown.india_eb1_baseline or DEFAULT_INDIA_EB1_SUPPLY)
+    except Exception:
+        return DEFAULT_INDIA_EB1_SUPPLY
+
+
 class VBPredictor:
     """Forecasts future Visa Bulletin dates using historical patterns."""
 
@@ -43,10 +60,11 @@ class VBPredictor:
 
         Returns list of dicts:
             bulletin_month, fad, prev_fad, advancement_days,
-            calendar_month, fiscal_month
+            calendar_month, fiscal_month, skipped_unavailable
 
-        Only includes transitions between two consecutive non-Current FADs.
-        Negative advancement_days = retrogression.
+        Only includes transitions between two consecutive *dated* FADs.
+        Transitions involving Current ("C") or Unavailable ("U") are skipped
+        (no measurable advancement). Negative advancement_days = retrogression.
         """
         history = self.vb.get_history()
 
@@ -58,7 +76,7 @@ class VBPredictor:
             prev = history[i - 1]
             curr = history[i]
 
-            # Only include pairs where both FADs are non-Current
+            # Skip pairs involving Current or Unavailable (no dated FAD)
             if prev["fad"] is None or curr["fad"] is None:
                 continue
 
@@ -73,9 +91,15 @@ class VBPredictor:
                 "advancement_days": delta_days,
                 "calendar_month": cal_month,
                 "fiscal_month": _fiscal_month(cal_month),
+                "from_unavailable": bool(prev.get("fad_unavailable")),
+                "to_unavailable": bool(curr.get("fad_unavailable")),
             })
 
         return rates
+
+    def count_unavailable_months(self) -> int:
+        """Count bulletin months where FAD was Unavailable."""
+        return sum(1 for r in self.vb.get_history() if r.get("fad_unavailable"))
 
     def get_seasonal_pattern(self) -> dict[int, float]:
         """Average FAD advancement (days) by fiscal month.
@@ -110,15 +134,17 @@ class VBPredictor:
         """Summary stats on FAD advancement rates.
 
         Returns:
-            recent_avg: float — avg days/month over last N months
+            recent_avg: float — avg days/month over last N dated transitions
             recent_median: float
             recent_stdev: float
             overall_avg: float
             seasonal_pattern: dict[int, float]
             n_datapoints: int
             retrogression_count: int — months with negative advancement
+            unavailable_months: int — bulletin months with FAD=U
         """
         rates = self.get_advancement_rates()
+        unavailable_months = self.count_unavailable_months()
 
         if not rates:
             return {
@@ -129,6 +155,7 @@ class VBPredictor:
                 "seasonal_pattern": {fm: 0.0 for fm in range(1, 13)},
                 "n_datapoints": 0,
                 "retrogression_count": 0,
+                "unavailable_months": unavailable_months,
             }
 
         all_adv = [r["advancement_days"] for r in rates]
@@ -147,56 +174,95 @@ class VBPredictor:
             "seasonal_pattern": self.get_seasonal_pattern(),
             "n_datapoints": len(rates),
             "retrogression_count": sum(1 for a in all_adv if a < 0),
+            "unavailable_months": unavailable_months,
+        }
+
+    def months_until_fad_reaches(self, priority_date: str | date, forecast_result: dict | None = None) -> dict:
+        """Estimate months until forecasted FAD passes priority_date.
+
+        Returns {months_to_current, estimated_bulletin_month, confidence}.
+        If already current or no forecast, months_to_current=0 / None.
+        """
+        if isinstance(priority_date, str):
+            pd_date = date.fromisoformat(priority_date)
+        else:
+            pd_date = priority_date
+
+        result = forecast_result or self.forecast(months_ahead=60)
+        status = self.vb.get_current_status(pd_date.isoformat())
+
+        if status.get("fad_unavailable"):
+            # Category closed — wait for numbers to resume; use forecast if any
+            pass
+        elif status.get("fad_is_current"):
+            return {
+                "months_to_current": 0,
+                "estimated_bulletin_month": status.get("bulletin_month"),
+                "confidence": "high",
+                "already_current": True,
+            }
+
+        for i, pt in enumerate(result.get("forecast") or [], start=1):
+            pred = pt.get("predicted_fad")
+            if not pred:
+                continue
+            if pd_date < date.fromisoformat(pred):
+                # Wider confidence bands → lower confidence further out
+                conf = "high" if i <= 6 else ("medium" if i <= 18 else "low")
+                return {
+                    "months_to_current": i,
+                    "estimated_bulletin_month": pt["bulletin_month"],
+                    "confidence": conf,
+                    "already_current": False,
+                }
+
+        return {
+            "months_to_current": None,
+            "estimated_bulletin_month": None,
+            "confidence": "low",
+            "already_current": False,
         }
 
     def forecast(
         self,
         months_ahead: int = 24,
         annual_supply: int | None = None,
-        baseline_supply: int = DEFAULT_INDIA_EB1_SUPPLY,
+        baseline_supply: int | None = None,
     ) -> dict:
         """Forecast FAD/DOF for the next N months.
 
         Methodology:
-        1. Compute recent advancement rate (last 12 months weighted higher)
+        1. Compute recent advancement rate (last 12 dated transitions)
         2. Apply seasonal modulation:
            blended_rate = 0.7 * recent_avg + 0.3 * seasonal_avg_for_fiscal_month
         3. Supply scaling: if annual_supply provided,
            scale by (annual_supply / baseline_supply), capped at 3.0x
+           baseline_supply defaults to supply-model India EB-1 baseline
         4. Confidence bands: widen at sqrt(months_ahead) * recent_stdev
 
-        Returns:
-        {
-            "forecast": [
-                {
-                    "bulletin_month": "2026-07",
-                    "predicted_fad": "2023-05-15",
-                    "predicted_dof": "2024-01-01",
-                    "fad_confidence_low": "2023-03-01",
-                    "fad_confidence_high": "2023-08-01",
-                }, ...
-            ],
-            "latest_actual": {
-                "bulletin_month": "2026-06",
-                "fad": "2022-12-15",
-                "dof": "2023-12-01",
-            },
-            "stats": { ... },
-            "supply_factor": 1.0,
-            "dof_gap_months": 9.5,
-            "methodology": "descriptive string",
-        }
+        Unavailable / Current latest rows are reflected in latest_actual status
+        fields; forecast still anchors on latest dated FAD.
         """
         history = self.vb.get_history()
         stats = self.get_advancement_stats()
         seasonal = stats["seasonal_pattern"]
 
+        if baseline_supply is None:
+            baseline_supply = _resolve_baseline_supply()
+
         # --- Locate latest actuals ---
-        # Latest bulletin month (last row in history)
         if not history:
             return {
                 "forecast": [],
-                "latest_actual": {"bulletin_month": None, "fad": None, "dof": None},
+                "latest_actual": {
+                    "bulletin_month": None,
+                    "fad": None,
+                    "dof": None,
+                    "fad_status": "C",
+                    "dof_status": "C",
+                    "fad_unavailable": False,
+                    "dof_unavailable": False,
+                },
                 "stats": stats,
                 "supply_factor": 1.0,
                 "dof_gap_months": 0.0,
@@ -205,40 +271,52 @@ class VBPredictor:
 
         latest_row = history[-1]
         latest_bm = latest_row["bulletin_month"]
+        latest_fad_status = latest_row.get("fad_status", "date" if latest_row.get("fad") else "C")
+        latest_dof_status = latest_row.get("dof_status", "date" if latest_row.get("dof") else "C")
 
-        # Find latest non-Current FAD (starting point for forecast)
+        # Find latest dated FAD (starting point for forecast) — walk past U/C
         latest_fad: Optional[date] = None
         for r in reversed(history):
             if r["fad"] is not None:
                 latest_fad = r["fad"]
                 break
 
-        # Find latest non-Current DOF
         latest_dof: Optional[date] = None
         for r in reversed(history):
             if r["dof"] is not None:
                 latest_dof = r["dof"]
                 break
 
-        # Edge case: all history is Current — no FAD to anchor forecast
+        latest_actual = {
+            "bulletin_month": latest_bm,
+            # Prefer the *latest bulletin's* FAD (may be None if U/C)
+            "fad": latest_row["fad"].isoformat() if latest_row.get("fad") else None,
+            "dof": latest_row["dof"].isoformat() if latest_row.get("dof") else None,
+            "fad_status": latest_fad_status,
+            "dof_status": latest_dof_status,
+            "fad_unavailable": bool(latest_row.get("fad_unavailable")),
+            "dof_unavailable": bool(latest_row.get("dof_unavailable")),
+            # Anchor used for forecast (may differ from latest bulletin if U)
+            "forecast_anchor_fad": latest_fad.isoformat() if latest_fad else None,
+        }
+
+        # Edge case: all history is Current/Unavailable — no FAD to anchor
         if latest_fad is None:
+            reason = (
+                "Latest FAD is Unavailable and no prior dated FAD exists; cannot forecast."
+                if latest_row.get("fad_unavailable")
+                else "All historical FADs are Current (no retrogression); cannot forecast date advancement."
+            )
             return {
                 "forecast": [],
-                "latest_actual": {
-                    "bulletin_month": latest_bm,
-                    "fad": None,
-                    "dof": latest_dof.isoformat() if latest_dof else None,
-                },
+                "latest_actual": latest_actual,
                 "stats": stats,
                 "supply_factor": 1.0,
                 "dof_gap_months": 0.0,
-                "methodology": (
-                    "All historical FADs are Current (no retrogression); "
-                    "cannot forecast date advancement."
-                ),
+                "methodology": reason,
             }
 
-        # --- DOF-FAD gap ---
+        # --- DOF-FAD gap (dated months only) ---
         dof_info = self.vb.get_dof_lead_months()
         dof_gap_months: float = dof_info.get("median_gap", 0.0)
 
@@ -249,18 +327,14 @@ class VBPredictor:
 
         # --- Advancement parameters ---
         recent_avg = stats["recent_avg"]
-        # Minimum stdev of 15 days for confidence bands
         recent_std = max(15.0, stats["recent_stdev"])
 
-        # Earliest known FAD as retrogression floor
         all_fads = [r["fad"] for r in history if r["fad"] is not None]
         earliest_fad = min(all_fads)
 
-        # --- Parse starting bulletin month ---
         parts = latest_bm.split("-")
         bm_year, bm_month = int(parts[0]), int(parts[1])
 
-        # --- Build month-by-month forecast ---
         forecast_list: list[dict] = []
         current_fad = latest_fad
 
@@ -268,34 +342,31 @@ class VBPredictor:
             bm_year, bm_month = _next_month(bm_year, bm_month)
             fm = _fiscal_month(bm_month)
 
-            # Blended advancement: 70% recent average + 30% seasonal for this FM
             seasonal_rate = seasonal.get(fm, recent_avg)
             base_advancement = 0.7 * recent_avg + 0.3 * seasonal_rate
-
-            # Apply supply scaling
             base_advancement *= supply_factor
 
-            # Advance FAD
             new_fad = current_fad + timedelta(days=round(base_advancement))
 
-            # Clamp: FAD should not go before the earliest known retrogression
             if new_fad < earliest_fad:
                 new_fad = earliest_fad
 
-            # Confidence bands widen with sqrt(month_index)
             band_width = round(recent_std * sqrt(i + 1))
             conf_low = new_fad - timedelta(days=band_width)
             conf_high = new_fad + timedelta(days=band_width)
 
-            # Clamp low confidence bound
             if conf_low < earliest_fad:
                 conf_low = earliest_fad
 
-            # DOF estimate: FAD + median gap
             predicted_dof: Optional[date] = None
             if dof_gap_months > 0:
                 dof_delta = timedelta(days=round(dof_gap_months * 30.44))
                 predicted_dof = new_fad + dof_delta
+            elif latest_dof is not None:
+                # Fallback: preserve latest DOF offset from anchor FAD
+                offset = (latest_dof - latest_fad).days
+                if offset > 0:
+                    predicted_dof = new_fad + timedelta(days=offset)
 
             bm_str = f"{bm_year:04d}-{bm_month:02d}"
             forecast_list.append({
@@ -308,21 +379,27 @@ class VBPredictor:
 
             current_fad = new_fad
 
-        # --- Assemble result ---
-        latest_actual = {
-            "bulletin_month": latest_bm,
-            "fad": latest_fad.isoformat(),
-            "dof": latest_dof.isoformat() if latest_dof else None,
-        }
+        unavail_note = ""
+        if latest_row.get("fad_unavailable"):
+            unavail_note = (
+                f" Latest bulletin ({latest_bm}) FAD is Unavailable; "
+                f"forecast anchored on prior dated FAD {latest_fad.isoformat()}."
+            )
+        elif stats.get("unavailable_months", 0) > 0:
+            unavail_note = (
+                f" {stats['unavailable_months']} historical Unavailable month(s) "
+                "excluded from advancement stats."
+            )
 
         methodology = (
-            f"Blended forecast using {stats['n_datapoints']} historical data points: "
+            f"Blended forecast using {stats['n_datapoints']} dated transitions: "
             f"70% recent-12 avg ({recent_avg:.0f} days/mo) + "
             f"30% seasonal pattern by fiscal month. "
             f"Supply factor {supply_factor:.2f}x"
-            f"{f' (annual_supply={annual_supply:,})' if annual_supply is not None else ''}. "
+            f"{f' (annual_supply={annual_supply:,}, baseline={baseline_supply:,})' if annual_supply is not None else ''}. "
             f"Confidence bands widen at sqrt(month) × {recent_std:.0f} days. "
-            f"DOF estimated at FAD + {dof_gap_months:.1f} month gap (median of recent data)."
+            f"DOF estimated at FAD + {dof_gap_months:.1f} month gap (median of recent dated data)."
+            f"{unavail_note}"
         )
 
         return {
