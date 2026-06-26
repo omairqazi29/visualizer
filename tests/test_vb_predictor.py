@@ -275,6 +275,61 @@ def test_normalize_cell(raw, exp_date, exp_status):
     assert d == exp_date and s == exp_status
 
 
+def test_get_current_status_empty_history_unknown(tmp_path):
+    """Empty CSV → fad_status unknown (aligned with VBPredictor empty path)."""
+    import csv
+    from src.parsers.visa_bulletin_parser import VisaBulletinParser
+    f = tmp_path / "empty_vb.csv"
+    with f.open("w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["bulletin_month", "category", "country", "final_action_date", "date_of_filing", "source"])
+    vb = VisaBulletinParser(file_path=str(f), category="EB-1")
+    status = vb.get_current_status("2020-01-01")
+    assert status["fad_status"] == "unknown"
+    assert status["dof_status"] == "unknown"
+    assert status["fad_is_current"] is False
+    assert status["fad_remaining_months"] is None
+
+
+def test_get_current_status_latest_fad_current(tmp_path):
+    """When latest FAD is C, any PD is current with remaining 0.0."""
+    import csv
+    from src.parsers.visa_bulletin_parser import VisaBulletinParser
+    f = tmp_path / "current_vb.csv"
+    with f.open("w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["bulletin_month", "category", "country", "final_action_date", "date_of_filing", "source"])
+        w.writerow(["2026-06", "EB-1", "India", "2022-12-15", "2023-12-01", "test"])
+        w.writerow(["2026-07", "EB-1", "India", "C", "C", "test"])
+    vb = VisaBulletinParser(file_path=str(f), category="EB-1")
+    status = vb.get_current_status("2025-06-01")
+    assert status["fad_status"] == "C"
+    assert status["fad_is_current"] is True
+    assert status["fad_remaining_months"] == 0.0
+    assert status["dof_is_current"] is True
+
+
+def test_forecast_all_unavailable_empty(tmp_path):
+    """History with only U/C FADs → empty forecast, structured methodology."""
+    import csv
+    from src.engine.vb_predictor import VBPredictor
+    from src.parsers.visa_bulletin_parser import VisaBulletinParser
+    f = tmp_path / "all_u_vb.csv"
+    with f.open("w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["bulletin_month", "category", "country", "final_action_date", "date_of_filing", "source"])
+        w.writerow(["2026-06", "EB-2", "India", "U", "2015-01-15", "test"])
+        w.writerow(["2026-07", "EB-2", "India", "U", "2015-01-15", "test"])
+    # Patch predictor to use fixture file
+    p = VBPredictor(category="EB-2")
+    p.vb = VisaBulletinParser(file_path=str(f), category="EB-2")
+    result = p.forecast(months_ahead=6)
+    assert result["forecast"] == []
+    assert result["latest_actual"]["fad_status"] == "U"
+    assert result["methodology"]
+    assert "cannot forecast" in result["methodology"].lower() or "Unavailable" in result["methodology"]
+
+
 def test_vb_parser_unavailable_status():
     """Jul 2026 EB-2 India FAD is Unavailable — parser must not crash and must flag U."""
     from src.parsers.visa_bulletin_parser import VisaBulletinParser

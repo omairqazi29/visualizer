@@ -62,6 +62,8 @@ FAD-current ≠ queue-cleared. For a priority date near the Jul 2026 EB-1 FAD, V
 | Against running API | `python scripts/compare_predictors.py --priority-date 2022-10-01 --base-url http://localhost:8000` or `API_BASE_URL=…` |
 | Docker profile | `docker compose -f docker-compose.yml -f docker-compose.predictor-compare.yml --profile predictor-compare run --rm predictor-compare` (retries in script handle cold start) |
 | HTTP | `GET /api/predict`, `GET /api/vb-forecast`, `GET /api/predictor-compare` |
+
+`/api/predictor-compare` uses a **process-local** in-memory TTL cache (~120s, max 64 keys) keyed by `(priority_date, category, apply_real_restrictions)`. It is intentional for single-worker uvicorn/Docker (`api` service); multi-worker deploys do not share the cache (each worker warms independently — acceptable for a diagnostic route, not a correctness guarantee).
 - **I485FlowParser**: Monthly I-485 receipts vs. approvals from USCIS Congressional reports + quarterly performance data.
 - **ProcessingTimesParser**: USCIS processing times by service center for EB I-485.
 - **PERMParser**: DOL PERM Labor Certification data — leading indicator of EB-2/EB-3 I-140 filings.
