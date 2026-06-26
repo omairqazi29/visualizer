@@ -14,8 +14,8 @@ trace-analaysis/
 .playwright-mcp/
 =2.31.0
 
-# Perf matrix reports (JSON/MD kept optional; screenshots are large)
-artifacts/perf-matrix/**/*.png
-artifacts/perf-matrix/**/screenshots/
-# Keep directory structure but ignore bulky run outputs by default
-artifacts/perf-matrix/runs/
+# Perf matrix generated reports (regenerate via scripts/perf_matrix.py)
+artifacts/perf-matrix/
+# Local analysis notes (not product docs)
+trace.md
+
