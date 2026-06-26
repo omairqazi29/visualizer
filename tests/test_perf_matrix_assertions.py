@@ -30,6 +30,8 @@ def test_is_api_url_matches_port_and_path():
     assert not pm.is_api_url("http://127.0.0.1:13000/api/waterfall", 18000)  # frontend port
     assert not pm.is_api_url("http://127.0.0.1:18000/other", 18000)
     assert not pm.is_api_url("http://example.com:18000/api/x", 18000)
+    assert not pm.is_api_url("http://api:8000/api/x", 8000)
+    assert pm.is_api_url("http://api:8000/api/x", 8000, allow_docker_dns=True)
 
 
 def test_detect_data_ok_rejects_errors():

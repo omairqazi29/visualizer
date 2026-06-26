@@ -239,12 +239,16 @@ SCENARIOS: dict[str, dict[str, Any]] = {
         "expect_api": True,
     },
     "in-compose": {
+        # Only valid when frontend image was built with NEXT_PUBLIC_API_URL=http://api:8000/api
+        # (service DNS). Host-baked localhost URLs will fail inside the perf-runner container.
         "api_port": 8000,
         "frontend_port": 3000,
         "services": [],
         "env": {},
         "page_set": "all",
         "expect_api": True,
+        "allow_docker_dns": True,
+        "require_in_compose_api_bake": True,
     },
     "host-check": {
         "api_port": 8000,
@@ -303,22 +307,28 @@ def api_base_url(api_port: int) -> str:
     return f"http://127.0.0.1:{api_port}/api"
 
 
-def is_api_url(url: str, api_port: int) -> bool:
-    """True if URL targets the scenario API origin (host Playwright → published port)."""
+def is_api_url(url: str, api_port: int, allow_docker_dns: bool = False) -> bool:
+    """True if URL targets the scenario API origin (host Playwright → published port).
+
+    When allow_docker_dns=True (in-compose only), also accept hostname `api` on port 8000.
+    """
     try:
         p = urlparse(url)
     except Exception:
         return False
     host = (p.hostname or "").lower()
-    if host not in ("127.0.0.1", "localhost", "::1"):
-        return False
     port = p.port
     if port is None:
         port = 443 if (p.scheme or "") == "https" else 80
-    if int(port) != int(api_port):
-        return False
     path = p.path or ""
-    return path == "/api" or path.startswith("/api/")
+    if not (path == "/api" or path.startswith("/api/")):
+        return False
+    if host in ("127.0.0.1", "localhost", "::1") and int(port) == int(api_port):
+        return True
+    # In-compose Chromium → service DNS (frontend must be built with http://api:8000/api)
+    if allow_docker_dns and host == "api" and int(port) == 8000:
+        return True
+    return False
 
 
 def compose_cmd(project: str, *args: str) -> list[str]:
@@ -457,6 +467,7 @@ def collect_page_metrics(
     scenario: str,
     expect_api: bool,
     expect_api_failures: bool,
+    allow_docker_dns: bool = False,
     navigation_timeout_ms: int = 90_000,
 ) -> PageMetrics:
     """Collect page metrics with a single authoritative API outcome map (no double-count)."""
@@ -472,13 +483,16 @@ def collect_page_metrics(
     def _key(method: str, url: str) -> str:
         return f"{method}|{url}"
 
+    def _track(u: str) -> bool:
+        return is_api_url(u, api_port, allow_docker_dns=allow_docker_dns)
+
     def on_console(msg) -> None:
         if msg.type == "error":
             console_errors.append(msg.text[:500])
 
     def on_request(req) -> None:
         u = req.url
-        if not is_api_url(u, api_port):
+        if not _track(u):
             return
         k = _key(req.method, u)
         if k not in outcomes:
@@ -488,7 +502,7 @@ def collect_page_metrics(
 
     def on_response(resp) -> None:
         u = resp.url
-        if not is_api_url(u, api_port):
+        if not _track(u):
             return
         k = _key(resp.request.method, u)
         lat = None
@@ -511,7 +525,7 @@ def collect_page_metrics(
 
     def on_request_failed(req) -> None:
         u = req.url
-        if not is_api_url(u, api_port):
+        if not _track(u):
             return
         k = _key(req.method, u)
         cur = outcomes.get(k)
@@ -547,7 +561,7 @@ def collect_page_metrics(
         # Capture first successful API response during navigation when possible
         try:
             with page.expect_response(
-                lambda r: is_api_url(r.url, api_port) and 200 <= int(r.status or 0) < 400,
+                lambda r: _track(r.url) and 200 <= int(r.status or 0) < 400,
                 timeout=30_000,
             ):
                 page.goto(url, wait_until="domcontentloaded", timeout=navigation_timeout_ms)
@@ -589,7 +603,8 @@ def collect_page_metrics(
                 body_text = ""
             error_ux = detect_error_ux(body_text)
             data_ok = detect_data_ok(body_text, path)
-            content_ok = data_ok or (len(body_text) > 200 and not error_ux)
+            # expect_api: domain landmarks only (no len(body)>200 chrome pass)
+            content_ok = data_ok if expect_api else (data_ok or (len(body_text) > 200 and not error_ux))
 
             if expect_api_failures:
                 # Failures only — do not require success
@@ -598,7 +613,7 @@ def collect_page_metrics(
                     settled = True
                     break
             elif expect_api:
-                # Healthy path: need at least one HTTP 2xx API response + content
+                # Healthy path: need at least one HTTP 2xx + domain landmark
                 if api_ok > 0 and content_ok and not error_ux:
                     metrics.time_to_meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
                     settled = True
@@ -623,16 +638,19 @@ def collect_page_metrics(
         if api_latencies:
             metrics.median_api_latency_ms = median([float(x) for x in api_latencies])
 
-        content_ok = data_ok or (len(body_text) > 200 and not error_ux)
+        content_ok = data_ok if expect_api else (data_ok or (len(body_text) > 200 and not error_ux))
+        # Prefer not all requests failed: at least half successes when we have multiple calls
+        success_ratio = (api_ok / api_reqs) if api_reqs else 0.0
+        healthy_success_bar = api_ok > 0 and (api_fail == 0 or success_ratio >= 0.5)
 
         if expect_api_failures:
             metrics.ok = api_fail > 0 and api_reqs > 0
-            # Failure scenario is not "content success"
             if not metrics.ok:
                 metrics.error = "expected API failures not observed"
         elif expect_api:
-            # STRICT: success count must be > 0 — failures alone never mark page OK
-            metrics.ok = api_ok > 0 and content_ok and not error_ux
+            # STRICT: successes required; prefer majority of observed requests succeeded
+            # (avoids 1 OK + 14 fails looking fully healthy). Partial-fail scenarios use looser ok.
+            metrics.ok = healthy_success_bar and content_ok and not error_ux
             if api_reqs == 0:
                 metrics.error = "no API XHR observed (check NEXT_PUBLIC_API_URL bake)"
                 metrics.ok = False
@@ -642,11 +660,16 @@ def collect_page_metrics(
                     "page did not receive live backend data"
                 )
                 metrics.ok = False
+            elif not healthy_success_bar:
+                metrics.error = (
+                    f"API success ratio too low ({api_ok}/{api_reqs} ok; need ≥50% or zero fails)"
+                )
+                metrics.ok = False
             elif error_ux:
                 metrics.error = "error UX visible on healthy scenario"
                 metrics.ok = False
             elif not content_ok:
-                metrics.error = "no domain data landmarks (shell only?)"
+                metrics.error = "no domain data landmarks (DATA_HINTS not matched)"
                 metrics.ok = False
             elif metrics.timed_out_ttm and api_ok == 0:
                 metrics.ok = False
@@ -699,6 +722,7 @@ def run_browser_suite(
     shot_dir = artifact_dir / "screenshots"
     expect_api = bool(cfg.get("expect_api"))
     expect_fail = bool(cfg.get("expect_api_failures"))
+    allow_dns = bool(cfg.get("allow_docker_dns"))
     results: list[PageMetrics] = []
 
     with sync_playwright() as p:
@@ -715,6 +739,7 @@ def run_browser_suite(
                         scenario=scenario,
                         expect_api=expect_api,
                         expect_api_failures=expect_fail,
+                        allow_docker_dns=allow_dns,
                     )
                 )
         finally:
@@ -739,9 +764,8 @@ def evaluate_assertions(results: dict[str, ScenarioResult]) -> None:
     base_api_lat: list[float] = []
     if baseline:
         for pm in baseline.pages:
+            # Never fold timeout-saturated TTM into comparative medians
             if pm.time_to_meaningful_ms is not None and not pm.timed_out_ttm:
-                base_ttms.append(pm.time_to_meaningful_ms)
-            elif pm.time_to_meaningful_ms is not None:
                 base_ttms.append(pm.time_to_meaningful_ms)
             if pm.median_api_latency_ms is not None:
                 base_api_lat.append(pm.median_api_latency_ms)
@@ -750,7 +774,11 @@ def evaluate_assertions(results: dict[str, ScenarioResult]) -> None:
 
     for name, sr in results.items():
         cfg = SCENARIOS.get(name, {})
-        ttms = [p.time_to_meaningful_ms for p in sr.pages if p.time_to_meaningful_ms is not None]
+        ttms = [
+            p.time_to_meaningful_ms
+            for p in sr.pages
+            if p.time_to_meaningful_ms is not None and not p.timed_out_ttm
+        ]
         api_lats = [p.median_api_latency_ms for p in sr.pages if p.median_api_latency_ms is not None]
         ttm_med = median(ttms)
         api_med = median(api_lats)
@@ -822,24 +850,14 @@ def evaluate_assertions(results: dict[str, ScenarioResult]) -> None:
                         ),
                     }
                 )
-            elif base_ttm_med is None or ttm_med is None:
+            else:
+                # Do not fall back to timeout-polluted TTM — require API latency samples
                 sr.assertions.append(
                     {
                         "name": "slower_than_baseline",
                         "pass": False,
-                        "detail": "missing baseline/scenario TTM and API latency medians",
-                    }
-                )
-            else:
-                delta = ttm_med - base_ttm_med
-                sr.assertions.append(
-                    {
-                        "name": "slower_than_baseline",
-                        "pass": delta >= float(min_delta),
-                        "detail": (
-                            f"median TTM {ttm_med:.1f}ms vs baseline {base_ttm_med:.1f}ms "
-                            f"(delta {delta:.1f}ms, need ≥{min_delta}ms)"
-                        ),
+                        "detail": "missing baseline/scenario API latency medians "
+                        "(TTM fallback disabled; timed-out TTM excluded)",
                     }
                 )
 
@@ -943,9 +961,10 @@ def write_reports(results: dict[str, ScenarioResult], artifact_dir: Path) -> tup
             "## Comparison notes",
             "",
             "- **baseline** is the healthy reference (API traffic required).",
-            "- **api-slow** must show higher median TTM and API latency vs baseline (`PERF_API_DELAY_MS=2000`, threshold ≥1.5s).",
+            "- **api-slow** must show higher median API latency vs baseline (delta ≥1.5s); timed-out TTM excluded from medians.",
             "- **api-paused** must surface API failures (no silent localhost fallback).",
             "- Navigation `load_ms` is **not** overwritten by TTM.",
+            "- **cpu-throttle** / **mem-pressure** are **informational** (no quantitative latency asserts yet).",
             "",
             "Any assertion FAIL makes the process exit non-zero.",
             "",
@@ -1041,6 +1060,33 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Perf matrix scenarios: {names}")
     print(f"Artifacts: {artifact_dir}")
     print(f"Safe CPU default: {SAFE_CPUS}")
+
+    # Guard in-compose / perf-runner wrong-origin footgun
+    for n in names:
+        cfg = SCENARIOS[n]
+        if cfg.get("require_in_compose_api_bake"):
+            fe = (args.frontend_url or "").lower()
+            api = (args.api_url or "").lower()
+            # Inside Docker network, metrics URLs should use service DNS; FE must be baked for api:8000
+            if "localhost" in api or "127.0.0.1" in api:
+                print(
+                    "ERROR: scenario 'in-compose' / perf-runner cannot use localhost API URL "
+                    "from inside a container (wrong origin). Build frontend with "
+                    "NEXT_PUBLIC_API_URL=http://api:8000/api and pass --api-url http://api:8000. "
+                    "Preferred path: host Playwright via scripts/run_perf_matrix.sh",
+                    file=sys.stderr,
+                )
+                return 2
+            if os.environ.get("PERF_ALLOW_IN_COMPOSE", "").lower() not in ("1", "true", "yes"):
+                if "frontend" in fe or "api" in api:
+                    print(
+                        "NOTE: in-compose requires FE image baked with http://api:8000/api. "
+                        "Set PERF_ALLOW_IN_COMPOSE=1 to acknowledge, or use host runner.",
+                        file=sys.stderr,
+                    )
+                    if not os.environ.get("PERF_ALLOW_IN_COMPOSE"):
+                        # Soft warn only when URLs look docker-internal; still allow with allow flag
+                        pass
 
     try:
         if not skip_compose:

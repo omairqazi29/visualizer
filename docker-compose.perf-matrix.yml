@@ -93,7 +93,10 @@ services:
     # Do not depend_on api here — api-paused scenario starts frontend alone.
     depends_on: !reset []
 
-  # One-shot Playwright metrics runner (optional; host-side script is preferred for parallel stacks).
+  # Optional in-compose Playwright runner. REQUIRES frontend built with
+  # NEXT_PUBLIC_API_URL=http://api:8000/api (service DNS), NOT localhost host ports.
+  # Preferred path remains host: ./scripts/run_perf_matrix.sh
+  # Set PERF_ALLOW_IN_COMPOSE=1 to acknowledge the bake requirement.
   perf-runner:
     profiles: ["perf-runner"]
     build:
@@ -105,11 +108,15 @@ services:
       - ./artifacts/perf-matrix:/app/artifacts/perf-matrix
     environment:
       - PYTHONUNBUFFERED=1
-      - PERF_FRONTEND_URL=${PERF_FRONTEND_URL:-http://frontend:3000}
-      - PERF_API_URL=${PERF_API_URL:-http://api:8000}
+      - PERF_ALLOW_IN_COMPOSE=${PERF_ALLOW_IN_COMPOSE:-0}
+      - PERF_FRONTEND_URL=http://frontend:3000
+      - PERF_API_URL=http://api:8000
       - PERF_PAGE_SET=${PERF_PAGE_SET:-all}
-      - PERF_SCENARIO=${PERF_SCENARIO:-in-compose}
+      - PERF_SCENARIO=in-compose
       - PERF_ARTIFACT_DIR=/app/artifacts/perf-matrix
+    depends_on:
+      - api
+      - frontend
     entrypoint: ["python3", "scripts/perf_matrix.py"]
     command:
       - "--host-mode"
