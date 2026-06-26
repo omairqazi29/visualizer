@@ -40,7 +40,7 @@ export const getInventoryContext = () =>
   cached('inventory-context', () => api.get('/inventory-context').then(res => res.data));
 export const getNVCBacklog = () =>
   cached('nvc-backlog', () => api.get('/nvc-backlog').then(res => res.data));
-export const getVisaBulletinHistory = (category?: string, country?: string) =>
+export const getVisaBulletinHistory = (category?: string, country?: string): Promise<VBHistoryData> =>
   cached(`vb-history:${category}:${country}`, () =>
     api.get('/visa-bulletin-history', { params: { category, country } }).then(res => res.data));
 export const getDependentMultipliers = () =>
@@ -124,13 +124,31 @@ export interface PredictData {
   vb_current_dof: string | null;
   vb_fad_is_current: boolean;
   vb_dof_is_current: boolean;
-  vb_fad_remaining_months: number;
-  vb_dof_remaining_months: number;
-  // Status: "date" | "C" | "U" — distinguishes Current vs Unavailable nulls
-  vb_fad_status?: string | null;
-  vb_dof_status?: string | null;
-  vb_fad_unavailable?: boolean;
-  vb_dof_unavailable?: boolean;
+  // null when category Unavailable (unknown until numbers resume)
+  vb_fad_remaining_months: number | null;
+  vb_dof_remaining_months: number | null;
+  // Status: "date" | "C" | "U" — always present from API (may be null)
+  vb_fad_status: string | null;
+  vb_dof_status: string | null;
+  vb_fad_unavailable: boolean;
+  vb_dof_unavailable: boolean;
+}
+
+export interface VBHistoryRow {
+  bulletin_month: string;
+  category: string;
+  fad: string | null;
+  dof: string | null;
+  fad_status: string;
+  dof_status: string;
+  fad_unavailable: boolean;
+  dof_unavailable: boolean;
+}
+
+export interface VBHistoryData {
+  categories: string[];
+  total_rows: number;
+  history: VBHistoryRow[];
 }
 
 export interface DataSource {
@@ -415,30 +433,34 @@ export interface VBForecastPoint {
   fad_confidence_high: string | null;
 }
 
+export interface VBHistoricalRow {
+  bulletin_month: string;
+  category: string;
+  fad: string | null;
+  dof: string | null;
+  fad_status: string;
+  dof_status: string;
+  fad_unavailable: boolean;
+  dof_unavailable: boolean;
+}
+
+export interface VBLatestActual {
+  bulletin_month: string | null;
+  fad: string | null;
+  dof: string | null;
+  fad_status: string | null;
+  dof_status: string | null;
+  fad_unavailable: boolean;
+  dof_unavailable: boolean;
+  forecast_anchor_fad: string | null;
+}
+
 export interface VBForecastData {
   category: string;
   country: string;
   forecast: VBForecastPoint[];
-  historical: Array<{
-    bulletin_month: string;
-    category: string;
-    fad: string | null;
-    dof: string | null;
-    fad_status?: string;
-    dof_status?: string;
-    fad_unavailable?: boolean;
-    dof_unavailable?: boolean;
-  }>;
-  latest_actual: {
-    bulletin_month: string | null;
-    fad: string | null;
-    dof?: string | null;
-    fad_status?: string;
-    dof_status?: string;
-    fad_unavailable?: boolean;
-    dof_unavailable?: boolean;
-    forecast_anchor_fad?: string | null;
-  };
+  historical: VBHistoricalRow[];
+  latest_actual: VBLatestActual;
   stats: {
     recent_avg: number;
     recent_median: number;
@@ -447,7 +469,7 @@ export interface VBForecastData {
     seasonal_pattern: Record<string, number>;
     n_datapoints: number;
     retrogression_count: number;
-    unavailable_months?: number;
+    unavailable_months: number;
   };
   supply_factor: number;
   dof_gap_months: number;
@@ -474,6 +496,8 @@ export interface PredictorCompareData {
   vb_latest_fad: string | null;
   vb_latest_fad_status: string | null;
   vb_fad_unavailable: boolean;
+  vb_category_unavailable: boolean;
+  vb_assumes_numbers_resume: boolean;
   vb_supply_factor: number | null;
   vb_recent_avg_days_per_month: number | null;
   months_delta: number | null;

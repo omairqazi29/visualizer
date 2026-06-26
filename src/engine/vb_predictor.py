@@ -91,8 +91,6 @@ class VBPredictor:
                 "advancement_days": delta_days,
                 "calendar_month": cal_month,
                 "fiscal_month": _fiscal_month(cal_month),
-                "from_unavailable": bool(prev.get("fad_unavailable")),
-                "to_unavailable": bool(curr.get("fad_unavailable")),
             })
 
         return rates
@@ -180,8 +178,9 @@ class VBPredictor:
     def months_until_fad_reaches(self, priority_date: str | date, forecast_result: dict | None = None) -> dict:
         """Estimate months until forecasted FAD passes priority_date.
 
-        Returns {months_to_current, estimated_bulletin_month, confidence}.
-        If already current or no forecast, months_to_current=0 / None.
+        Returns months_to_current, estimated_bulletin_month, confidence, plus
+        category_unavailable / assumes_numbers_resume when latest FAD is U
+        (ETA is optimistic — assumes numbers resume at historical rates).
         """
         if isinstance(priority_date, str):
             pd_date = date.fromisoformat(priority_date)
@@ -190,16 +189,16 @@ class VBPredictor:
 
         result = forecast_result or self.forecast(months_ahead=60)
         status = self.vb.get_current_status(pd_date.isoformat())
+        category_unavailable = bool(status.get("fad_unavailable"))
 
-        if status.get("fad_unavailable"):
-            # Category closed — wait for numbers to resume; use forecast if any
-            pass
-        elif status.get("fad_is_current"):
+        if not category_unavailable and status.get("fad_is_current"):
             return {
                 "months_to_current": 0,
                 "estimated_bulletin_month": status.get("bulletin_month"),
                 "confidence": "high",
                 "already_current": True,
+                "category_unavailable": False,
+                "assumes_numbers_resume": False,
             }
 
         for i, pt in enumerate(result.get("forecast") or [], start=1):
@@ -207,13 +206,18 @@ class VBPredictor:
             if not pred:
                 continue
             if pd_date < date.fromisoformat(pred):
-                # Wider confidence bands → lower confidence further out
-                conf = "high" if i <= 6 else ("medium" if i <= 18 else "low")
+                # Under U, confidence is always low (resume assumption)
+                if category_unavailable:
+                    conf = "low"
+                else:
+                    conf = "high" if i <= 6 else ("medium" if i <= 18 else "low")
                 return {
                     "months_to_current": i,
                     "estimated_bulletin_month": pt["bulletin_month"],
                     "confidence": conf,
                     "already_current": False,
+                    "category_unavailable": category_unavailable,
+                    "assumes_numbers_resume": category_unavailable,
                 }
 
         return {
@@ -221,6 +225,8 @@ class VBPredictor:
             "estimated_bulletin_month": None,
             "confidence": "low",
             "already_current": False,
+            "category_unavailable": category_unavailable,
+            "assumes_numbers_resume": category_unavailable,
         }
 
     def forecast(
@@ -258,10 +264,11 @@ class VBPredictor:
                     "bulletin_month": None,
                     "fad": None,
                     "dof": None,
-                    "fad_status": "C",
-                    "dof_status": "C",
+                    "fad_status": "unknown",
+                    "dof_status": "unknown",
                     "fad_unavailable": False,
                     "dof_unavailable": False,
+                    "forecast_anchor_fad": None,
                 },
                 "stats": stats,
                 "supply_factor": 1.0,

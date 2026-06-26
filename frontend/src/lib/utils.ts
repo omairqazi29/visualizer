@@ -14,23 +14,31 @@ export function safeParseDate(dateStr: string | null | undefined): number | null
 
 /**
  * Display label for VB FAD/DOF cells.
- * Distinguishes Current ("C") vs Unavailable ("U") when status is provided;
- * null date without status falls back to "Current" for backward compatibility.
+ * Prefer passing fad_unavailable / status from the API so U is never mislabeled.
+ * Null date + missing status → "—" (not Current) to avoid U footgun.
  */
 export function formatVbCutoff(
   dateStr: string | null | undefined,
   status?: string | null,
-  opts?: { month?: "short" | "long"; unavailableLabel?: string; currentLabel?: string },
+  opts?: {
+    month?: "short" | "long";
+    unavailableLabel?: string;
+    currentLabel?: string;
+    unavailable?: boolean;
+  },
 ): string {
   const unavailableLabel = opts?.unavailableLabel ?? "Unavailable";
   const currentLabel = opts?.currentLabel ?? "Current";
-  if (status === "U" || status === "Unavailable") return unavailableLabel;
+  if (opts?.unavailable || status === "U" || status === "Unavailable") return unavailableLabel;
+  if (status === "invalid") return "—";
   if (!dateStr) {
-    if (status === "C" || status === "Current" || !status) return currentLabel;
-    return currentLabel;
+    if (status === "C" || status === "Current") return currentLabel;
+    if (status === "unknown") return "—";
+    // Missing status + null date: do not assume Current
+    return "—";
   }
   const d = new Date(dateStr);
-  if (!isFinite(d.getTime())) return currentLabel;
+  if (!isFinite(d.getTime())) return "—";
   return d.toLocaleDateString(undefined, {
     month: opts?.month ?? "short",
     day: "numeric",

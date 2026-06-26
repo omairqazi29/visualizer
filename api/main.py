@@ -8,7 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.parsers.inventory_parser import InventoryParser
 from src.parsers.pipeline_parser import PipelineParser
@@ -137,8 +137,9 @@ class PredictResponse(BaseModel):
     vb_current_dof: str | None = None
     vb_fad_is_current: bool = False
     vb_dof_is_current: bool = False
-    vb_fad_remaining_months: float = 0
-    vb_dof_remaining_months: float = 0
+    # None when category is Unavailable (unknown until numbers resume)
+    vb_fad_remaining_months: float | None = None
+    vb_dof_remaining_months: float | None = None
     # Status codes: "date" | "C" (Current) | "U" (Unavailable)
     vb_fad_status: str | None = None
     vb_dof_status: str | None = None
@@ -354,8 +355,8 @@ async def predict_pd(
             vb_current_dof=vb_status.get("current_dof"),
             vb_fad_is_current=vb_status.get("fad_is_current", False),
             vb_dof_is_current=vb_status.get("dof_is_current", False),
-            vb_fad_remaining_months=float(vb_status.get("fad_remaining_months") or 0),
-            vb_dof_remaining_months=float(vb_status.get("dof_remaining_months") or 0),
+            vb_fad_remaining_months=vb_status.get("fad_remaining_months"),
+            vb_dof_remaining_months=vb_status.get("dof_remaining_months"),
             vb_fad_status=vb_status.get("fad_status"),
             vb_dof_status=vb_status.get("dof_status"),
             vb_fad_unavailable=bool(vb_status.get("fad_unavailable", False)),
@@ -968,6 +969,20 @@ async def get_methodology():
                 "update_frequency": "Quarterly",
             },
             {
+                "name": "DOS Visa Bulletin History (India EB)",
+                "description": (
+                    "Final Action Date (FAD) and Date of Filing (DOF) history for India "
+                    "EB-1/EB-2/EB-3. Cells may be dated, Current (C), or Unavailable (U). "
+                    "Feeds VBPredictor trend forecasts and PD current-status checks. "
+                    "DemandModeler (/api/predict) is separate queue burn-down; "
+                    "compare via /api/predictor-compare or scripts/compare_predictors.py."
+                ),
+                "url": "https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin.html",
+                "coverage": "Oct 2015 – Jul 2026 (india_eb_history.csv; C/U codes supported)",
+                "update_frequency": "Monthly (Visa Bulletin publication)",
+            },
+
+            {
                 "name": "USCIS I-140 Receipts (New Filings)",
                 "description": "New I-140 petitions filed by country and EB category. Models queue growth rate — how fast new EB petitions enter the system. Separate from approved/pipeline data.",
                 "url": "https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data",
@@ -1058,7 +1073,7 @@ async def get_methodology():
                 "model_impact": "None. Model uses DOS consular IV data (ground truth). Ruling affects USCIS domestic processing, a separate pathway not measured by DOS.",
             },
         ],
-        last_verified="2026-06-01",
+        last_verified="2026-06-26",
     )
 
 
@@ -1067,9 +1082,9 @@ class VBHistoryRow(BaseModel):
     category: str
     fad: str | None
     dof: str | None
-    # "date" | "C" (Current) | "U" (Unavailable) — explicit so UI can label nulls
-    fad_status: str = "date"
-    dof_status: str = "date"
+    # "date" | "C" | "U" | "invalid" — required (no misleading "date" default for null fad)
+    fad_status: str
+    dof_status: str
     fad_unavailable: bool = False
     dof_unavailable: bool = False
 
@@ -1243,13 +1258,46 @@ class VBForecastPoint(BaseModel):
     fad_confidence_high: str | None = None
 
 
+class VBHistoricalRow(BaseModel):
+    bulletin_month: str
+    category: str
+    fad: str | None = None
+    dof: str | None = None
+    fad_status: str
+    dof_status: str
+    fad_unavailable: bool = False
+    dof_unavailable: bool = False
+
+
+class VBLatestActual(BaseModel):
+    bulletin_month: str | None = None
+    fad: str | None = None
+    dof: str | None = None
+    fad_status: str | None = None
+    dof_status: str | None = None
+    fad_unavailable: bool = False
+    dof_unavailable: bool = False
+    forecast_anchor_fad: str | None = None
+
+
+class VBAdvancementStats(BaseModel):
+    recent_avg: float = 0.0
+    recent_median: float = 0.0
+    recent_stdev: float = 15.0
+    overall_avg: float = 0.0
+    seasonal_pattern: dict = Field(default_factory=dict)
+    n_datapoints: int = 0
+    retrogression_count: int = 0
+    unavailable_months: int = 0
+
+
 class VBForecastResponse(BaseModel):
     category: str
     country: str
     forecast: list[VBForecastPoint]
-    historical: list[dict]    # Recent 12 months of actual VB data for chart context
-    latest_actual: dict
-    stats: dict
+    historical: list[VBHistoricalRow]
+    latest_actual: VBLatestActual
+    stats: VBAdvancementStats
     supply_factor: float
     dof_gap_months: float
     methodology: str
@@ -1259,58 +1307,86 @@ class VBForecastResponse(BaseModel):
 async def get_vb_forecast(
     category: str = Query("EB-1", description="EB category: EB-1, EB-2, or EB-3"),
     months_ahead: int = Query(24, description="Months to forecast (1-60)", ge=1, le=60),
-    apply_real_restrictions: bool = Query(False, description="Use restriction-boosted supply for forecast scaling"),
+    apply_real_restrictions: bool = Query(
+        False,
+        description="Scale advancement using restriction-boosted India EB-1 supply (EB-1 only)",
+    ),
 ):
     """Returns Visa Bulletin Final Action Date / Date of Filing forecasts.
 
     Uses historical VB advancement patterns to project future FAD/DOF movement
-    with confidence bands that widen over time.  Optionally scales advancement
-    rates using the restriction-boosted India EB-1 supply from the INA cascade.
+    with confidence bands that widen over time. Restriction scaling applies
+    only for category=EB-1 (India EB-1 supply from the INA cascade).
 
     Unavailable ("U") months are excluded from advancement stats; latest_actual
     includes fad_status/dof_status so clients can distinguish U vs Current vs date.
     """
+    from src.engine.predictor_compare import VALID_CATEGORIES
+
+    if category not in VALID_CATEGORIES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"category must be one of {sorted(VALID_CATEGORIES)}",
+        )
     try:
         predictor = VBPredictor(category=category)
 
+        # Only apply India EB-1 restriction boost for EB-1 forecasts
         supply = None
-        if apply_real_restrictions:
+        if apply_real_restrictions and category == "EB-1":
             calc = SupplyCalculator()
             breakdown = calc.get_supply_breakdown(apply_real_restrictions=True)
             supply = breakdown.india_eb1_supply
 
         result = predictor.forecast(months_ahead=months_ahead, annual_supply=supply)
 
-        # Recent 12 months of actual history for chart context
         full_history = predictor.vb.get_history(category=category)
         recent_history = full_history[-12:]
         historical = [
-            {
-                "bulletin_month": r["bulletin_month"],
-                "category": r.get("category", category),
-                "fad": r["fad"].isoformat() if r["fad"] else None,
-                "dof": r["dof"].isoformat() if r["dof"] else None,
-                "fad_status": r.get("fad_status", "date" if r.get("fad") else "C"),
-                "dof_status": r.get("dof_status", "date" if r.get("dof") else "C"),
-                "fad_unavailable": bool(r.get("fad_unavailable", False)),
-                "dof_unavailable": bool(r.get("dof_unavailable", False)),
-            }
+            VBHistoricalRow(
+                bulletin_month=r["bulletin_month"],
+                category=r.get("category", category),
+                fad=r["fad"].isoformat() if r["fad"] else None,
+                dof=r["dof"].isoformat() if r["dof"] else None,
+                fad_status=r.get("fad_status", "date" if r.get("fad") else "C"),
+                dof_status=r.get("dof_status", "date" if r.get("dof") else "C"),
+                fad_unavailable=bool(r.get("fad_unavailable", False)),
+                dof_unavailable=bool(r.get("dof_unavailable", False)),
+            )
             for r in recent_history
         ]
+
+        la = result["latest_actual"]
+        st = result["stats"]
+        # seasonal_pattern keys may be int; coerce to str for JSON stability
+        seasonal = {str(k): float(v) for k, v in (st.get("seasonal_pattern") or {}).items()}
 
         return VBForecastResponse(
             category=category,
             country="India",
             forecast=[VBForecastPoint(**pt) for pt in result["forecast"]],
             historical=historical,
-            latest_actual=result["latest_actual"],
-            stats=result["stats"],
+            latest_actual=VBLatestActual(**la),
+            stats=VBAdvancementStats(
+                recent_avg=float(st.get("recent_avg", 0)),
+                recent_median=float(st.get("recent_median", 0)),
+                recent_stdev=float(st.get("recent_stdev", 15)),
+                overall_avg=float(st.get("overall_avg", 0)),
+                seasonal_pattern=seasonal,
+                n_datapoints=int(st.get("n_datapoints", 0)),
+                retrogression_count=int(st.get("retrogression_count", 0)),
+                unavailable_months=int(st.get("unavailable_months", 0)),
+            ),
             supply_factor=result["supply_factor"],
             dof_gap_months=result["dof_gap_months"],
             methodology=result["methodology"],
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        import logging
+        logging.getLogger("api").exception("vb-forecast failed")
+        raise HTTPException(status_code=500, detail="vb forecast failed")
 
 
 # ── Predictor comparison (VB trend vs demand burn-down) ──────────────
@@ -1321,165 +1397,88 @@ class PredictorCompareResponse(BaseModel):
     priority_date: str
     category: str
     apply_real_restrictions: bool
-    # DemandModeler (queue / supply burn-down) — /api/predict path
     demand_months_to_clear: int | None = None
     demand_projected_clearance_date: str | None = None
     demand_backlog_ahead: int | None = None
     demand_annual_supply: int | None = None
     demand_confidence_score: float | None = None
-    # VBPredictor (historical FAD trend)
     vb_months_to_current: int | None = None
     vb_estimated_bulletin_month: str | None = None
     vb_confidence: str | None = None
     vb_latest_fad: str | None = None
     vb_latest_fad_status: str | None = None
     vb_fad_unavailable: bool = False
+    vb_category_unavailable: bool = False
+    vb_assumes_numbers_resume: bool = False
     vb_supply_factor: float | None = None
     vb_recent_avg_days_per_month: float | None = None
-    # Divergence analysis
-    months_delta: int | None = None  # demand - vb (positive => demand slower)
-    divergence_notes: list[str] = []
-    assumptions: dict = {}
+    months_delta: int | None = None
+    divergence_notes: list[str] = Field(default_factory=list)
+    assumptions: dict = Field(default_factory=dict)
+
+
+# Simple in-process cache for expensive compare (diagnostic endpoint)
+_COMPARE_CACHE: dict[tuple, tuple[float, dict]] = {}
+_COMPARE_CACHE_TTL_SEC = 120.0
 
 
 @app.get("/api/predictor-compare", response_model=PredictorCompareResponse)
 async def predictor_compare(
     priority_date: str = Query(..., description="Priority Date in YYYY-MM-DD format"),
-    category: str = Query("EB-1", description="EB category (currently EB-1 for demand path)"),
+    category: str = Query("EB-1", description="EB category: EB-1, EB-2, or EB-3"),
     apply_real_restrictions: bool = Query(
         False,
-        description="Apply real 91-country restrictions to supply for both engines",
+        description="Apply real 91-country restrictions (India EB-1 supply scaling for EB-1 only)",
     ),
 ):
     """Compare VBPredictor (FAD trend) vs DemandModeler (queue burn-down).
 
-    Useful for diagnosing divergence: trend extrapolation vs inventory/supply
-    equilibrium. Both use the same supply model when restrictions are applied.
+    Demand path is India EB-1 only. Restriction supply scaling applies to VB
+    forecasts only for EB-1. Results cached ~2 minutes per query key.
     """
+    import time
+    from src.engine.predictor_compare import VALID_CATEGORIES, build_predictor_compare
+
+    if category not in VALID_CATEGORIES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"category must be one of {sorted(VALID_CATEGORIES)}",
+        )
     try:
-        try:
-            pd_dt = datetime.strptime(priority_date, "%Y-%m-%d")
-        except ValueError:
-            raise HTTPException(
-                status_code=422, detail="priority_date must be in YYYY-MM-DD format"
-            )
+        datetime.strptime(priority_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail="priority_date must be in YYYY-MM-DD format"
+        )
 
-        notes: list[str] = []
-        assumptions: dict = {
-            "demand_engine": "DemandModeler — backlog ahead of PD / FY supply schedule",
-            "vb_engine": "VBPredictor — historical FAD advancement + seasonal pattern",
-            "category": category,
-        }
+    cache_key = (priority_date, category, apply_real_restrictions)
+    now = time.monotonic()
+    hit = _COMPARE_CACHE.get(cache_key)
+    if hit and (now - hit[0]) < _COMPARE_CACHE_TTL_SEC:
+        return PredictorCompareResponse(**hit[1])
 
-        # ── Demand path (mirrors /api/predict for EB-1 India) ──
-        demand_months = None
-        demand_clearance = None
-        demand_backlog = None
-        demand_supply = None
-        demand_score = None
-
-        if category != "EB-1":
-            notes.append(
-                f"DemandModeler path is implemented for India EB-1 only; "
-                f"category={category} returns VB-only comparison."
-            )
-        else:
-            inv_parser = InventoryParser.latest()
-            inv_stats_total = inv_parser.get_india_eb1_queue()
-            pipe_parser = PipelineParser.latest()
-            pipe_parser.load_data()
-            pipe_total = pipe_parser.get_india_eb1_backlog()
-            total_queue = inv_stats_total["total"] + pipe_total
-            inv_ahead = inv_parser.get_india_eb1_queue(
-                cutoff_month=pd_dt.month, cutoff_year=pd_dt.year
-            )
-            if pd_dt.year > 2023:
-                months_into_pipeline = (pd_dt.year - 2024) * 12 + pd_dt.month
-                pipeline_fraction = min(1.0, months_into_pipeline / 24.0)
-                backlog_ahead = inv_stats_total["total"] + int(pipe_total * pipeline_fraction)
-            else:
-                backlog_ahead = inv_ahead.get("mountain", inv_ahead["total"])
-
-            calc = SupplyCalculator()
-            monthly_dist = calc.dos_parser.get_monthly_distribution(
-                country="India", categories=["E11", "E12", "E13"]
-            )
-            fy_supply = calc.get_supply_by_fy(
-                apply_freeze=False, apply_real_restrictions=apply_real_restrictions
-            )
-            modeler = DemandModeler(
-                total_queue, monthly_distribution=monthly_dist, fy_supply=fy_supply
-            )
-            demand_supply = int(modeler.default_supply)
-            demand_score = float(
-                modeler.calculate_confidence_score(
-                    pd_dt, backlog_ahead=backlog_ahead, target_fy=2027
-                )
-            )
-            projection = modeler.project_clearance(backlog=backlog_ahead)
-            demand_months = int(projection["months_to_clear"])
-            demand_clearance = projection["clearance_date"].strftime("%Y-%m-%d")
-            demand_backlog = int(backlog_ahead)
-            assumptions["demand_total_queue"] = int(total_queue)
-            assumptions["demand_fy_supply_keys"] = sorted(fy_supply.keys())
-
-        # ── VB path ──
-        predictor = VBPredictor(category=category)
-        supply = None
-        if apply_real_restrictions:
-            calc = SupplyCalculator()
-            supply = calc.get_supply_breakdown(apply_real_restrictions=True).india_eb1_supply
-        vb_result = predictor.forecast(months_ahead=60, annual_supply=supply)
-        vb_reach = predictor.months_until_fad_reaches(priority_date, forecast_result=vb_result)
-        latest = vb_result.get("latest_actual") or {}
-        stats = vb_result.get("stats") or {}
-
-        vb_months = vb_reach.get("months_to_current")
-        if latest.get("fad_unavailable"):
-            notes.append(
-                "Latest VB FAD is Unavailable — trend forecast anchors on prior dated FAD; "
-                "demand path still burns queue (assumes numbers resume at FY supply rate)."
-            )
-        if vb_months is None and demand_months is not None:
-            notes.append(
-                "VB forecast did not reach PD within 60 months (slow/negative recent advancement "
-                "or deep retrogression); demand path may still clear via supply schedule."
-            )
-
-        months_delta = None
-        if demand_months is not None and vb_months is not None:
-            months_delta = int(demand_months) - int(vb_months)
-            if abs(months_delta) > 12:
-                notes.append(
-                    f"Large divergence ({months_delta:+d} mo): demand uses inventory queue + "
-                    "FY supply; VB uses historical FAD days/month (includes retrogressions)."
-                )
-
-        return PredictorCompareResponse(
+    try:
+        payload = build_predictor_compare(
             priority_date=priority_date,
             category=category,
             apply_real_restrictions=apply_real_restrictions,
-            demand_months_to_clear=demand_months,
-            demand_projected_clearance_date=demand_clearance,
-            demand_backlog_ahead=demand_backlog,
-            demand_annual_supply=demand_supply,
-            demand_confidence_score=demand_score,
-            vb_months_to_current=vb_months,
-            vb_estimated_bulletin_month=vb_reach.get("estimated_bulletin_month"),
-            vb_confidence=vb_reach.get("confidence"),
-            vb_latest_fad=latest.get("fad"),
-            vb_latest_fad_status=latest.get("fad_status"),
-            vb_fad_unavailable=bool(latest.get("fad_unavailable", False)),
-            vb_supply_factor=vb_result.get("supply_factor"),
-            vb_recent_avg_days_per_month=stats.get("recent_avg"),
-            months_delta=months_delta,
-            divergence_notes=notes,
-            assumptions=assumptions,
         )
+        # Drop CLI-only key not in response model
+        payload.pop("methodology_vb", None)
+        _COMPARE_CACHE[cache_key] = (now, payload)
+        # Bound cache size
+        if len(_COMPARE_CACHE) > 64:
+            oldest = min(_COMPARE_CACHE.items(), key=lambda kv: kv[1][0])
+            _COMPARE_CACHE.pop(oldest[0], None)
+        return PredictorCompareResponse(**payload)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        import logging
+        logging.getLogger("api").exception("predictor-compare failed")
+        raise HTTPException(status_code=500, detail="predictor comparison failed")
 
 
 # ── Oppenheim FAD Solver ──────────────────────────────

@@ -48,8 +48,20 @@ behavior are documented in `docs/POLICY_VERIFICATION.md` § Automated Data Inges
 - **DhsYearbookParser**: DHS Yearbook Table 7 — computes principal-to-total multipliers by EB category from actual admissions data (FY2015–FY2023). Methods: `get_multipliers()`, `get_latest_multipliers()`, `get_historical_multipliers()`, `get_average_multipliers()`, `get_category_detail()`, `get_summary()`.
 - **NVCParser**: NVC (National Visa Center) backlog — the hidden pipeline stage between I-140 approval and consular interview. Reads pre-extracted CSV data from DOS ARIVA PDFs (data/NVC/). Covers consular processing (CP) cases ONLY — disjoint from I-485 inventory (AOS). Includes derivatives (no multiplier). Methods: `get_eb_totals()`, `get_india_eb_nvc()`, `get_india_eb1_nvc()`, `get_eb_by_country()`, `get_iv_backlog()`, `get_yoy_comparison()`, `get_summary()`. Data: ARIVA Nov 2023 (260,660 EB worldwide; India 48,536 total, 2,426 EB-1). Monthly IV backlog report Sep 2024 (431k DQ cases, 385k pending scheduling).
 - **VisaBulletinParser**: Historical India EB FAD/DOF data from `data/visa_bulletin/india_eb_history.csv` (Oct 2015–present, EB-1/EB-2/EB-3). Parses dated cutoffs plus **C** (Current) and **U** (Unavailable) codes with explicit `fad_status`/`dof_status` fields so clients can distinguish null reasons. Computes DOF-FAD gap statistics (dated months only), current VB status for a given PD. Methods: `get_history()`, `get_all_categories_history()`, `compute_gaps()`, `get_dof_lead_months()`, `get_current_status()`.
-- **VBPredictor** (`src/engine/vb_predictor.py`): Month-by-month FAD/DOF forecast from historical advancement rates + seasonal fiscal-month patterns + optional supply scaling from `SupplyCalculator` baseline (not hardcoded). Excludes C/U transitions from advancement stats; anchors forecast on latest *dated* FAD when the latest bulletin is U. Side-by-side with demand burn-down via `/api/predictor-compare` and `scripts/compare_predictors.py`.
+- **VBPredictor** (`src/engine/vb_predictor.py`): Month-by-month FAD/DOF forecast from historical advancement rates + seasonal fiscal-month patterns + optional supply scaling from `SupplyCalculator` baseline (not hardcoded). Excludes C/U transitions from advancement stats (consecutive dated pairs only — multi-month spans across U are omitted, not prorated). Anchors forecast on latest *dated* FAD when the latest bulletin is U. Restriction **supply scaling applies only for EB-1** (India EB-1 numbers); EB-2/EB-3 keep `supply_factor=1.0`. Side-by-side with demand burn-down via `/api/predictor-compare`, `src/engine/predictor_compare.py`, and `scripts/compare_predictors.py`.
 - **DemandModeler** (`src/engine/demand.py`): Queue burn-down using live I-485 inventory + I-140 pipeline ahead of a priority date and per-FY India EB-1 supply from `supply.py`. Used by `/api/predict` and `/api/supply-demand`. Diverges from VBPredictor when FAD trend includes retrogression or Unavailable months while inventory still burns at FY supply.
+
+### Diagnosing VB vs demand divergence
+
+FAD-current ≠ queue-cleared. For a priority date near the Jul 2026 EB-1 FAD, VBPredictor may report already-current while DemandModeler still sees multi-thousand inventory ahead.
+
+| Mode | Command |
+|---|---|
+| Offline (preferred, no server) | `python scripts/compare_predictors.py --priority-date 2022-10-01` |
+| With restrictions boost (EB-1) | `python scripts/compare_predictors.py --priority-date 2023-06-01 --restrictions` |
+| Against running API | `python scripts/compare_predictors.py --priority-date 2022-10-01 --base-url http://localhost:8000` or `API_BASE_URL=…` |
+| Docker profile | `docker compose -f docker-compose.yml -f docker-compose.predictor-compare.yml --profile predictor-compare run --rm predictor-compare` (retries in script handle cold start) |
+| HTTP | `GET /api/predict`, `GET /api/vb-forecast`, `GET /api/predictor-compare` |
 - **I485FlowParser**: Monthly I-485 receipts vs. approvals from USCIS Congressional reports + quarterly performance data.
 - **ProcessingTimesParser**: USCIS processing times by service center for EB I-485.
 - **PERMParser**: DOL PERM Labor Certification data — leading indicator of EB-2/EB-3 I-140 filings.

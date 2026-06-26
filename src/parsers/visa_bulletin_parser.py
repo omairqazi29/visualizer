@@ -28,16 +28,19 @@ _CHINA_FILE = os.path.join(_DATA_DIR, "china_eb1_history.csv")
 STATUS_DATE = "date"
 STATUS_CURRENT = "C"
 STATUS_UNAVAILABLE = "U"
-# Treat these like Current for date math (no cutoff date)
-_NULL_DATE_CODES = frozenset({"C", "U", "CURRENT", "UNAVAILABLE", "N/A", "NA", ""})
+STATUS_INVALID = "invalid"
+_CURRENT_TOKENS = frozenset({"C", "CURRENT", "N/A", "NA", ""})
+_UNAVAILABLE_TOKENS = frozenset({"U", "UNAVAILABLE"})
 
 
 def _normalize_cell(raw) -> tuple[Optional[date], str]:
     """Parse a FAD/DOF cell into (date_or_none, status).
 
-    Status is one of: "date", "C" (Current), "U" (Unavailable).
+    Status is one of: "date", "C" (Current), "U" (Unavailable), "invalid".
     Both C and U yield date=None so callers can treat them uniformly for
     advancement math; status distinguishes the reason for the UI/API.
+    Unknown non-empty tokens are "invalid" (not silently Current) so bad
+    CSV rows surface in status fields instead of masquerading as Current.
     """
     if raw is None or (isinstance(raw, float) and pd.isna(raw)):
         return None, STATUS_CURRENT
@@ -45,16 +48,15 @@ def _normalize_cell(raw) -> tuple[Optional[date], str]:
     if not text:
         return None, STATUS_CURRENT
     upper = text.upper()
-    if upper in ("U", "UNAVAILABLE"):
+    if upper in _UNAVAILABLE_TOKENS:
         return None, STATUS_UNAVAILABLE
-    if upper in ("C", "CURRENT", "N/A", "NA"):
+    if upper in _CURRENT_TOKENS:
         return None, STATUS_CURRENT
     # Dated cutoff
     try:
         return datetime.strptime(text, "%Y-%m-%d").date(), STATUS_DATE
     except ValueError:
-        # Last resort: treat unknown tokens as Current (no crash)
-        return None, STATUS_CURRENT
+        return None, STATUS_INVALID
 
 
 def _row_from_cells(bulletin_month, category, fad_raw, dof_raw) -> dict:
@@ -240,26 +242,36 @@ class VisaBulletinParser:
         dof_unavail = latest["dof_unavailable"]
 
         # Unavailable = category closed — no PD is "current" for FAD
-        if fad_unavail:
+        if fad_unavail or fad_status == STATUS_UNAVAILABLE:
             fad_current = False
-            fad_remaining = None  # unknown until numbers resume
-        elif fad is None:  # Current (C)
-            fad_current = True
-            fad_remaining = 0.0
+            fad_remaining = None  # unknown until numbers resume — never coerce to 0
+        elif fad is None:  # Current (C) or invalid/empty treated as open
+            fad_current = fad_status != STATUS_INVALID
+            fad_remaining = 0.0 if fad_current else None
         else:
-            # Historical convention: PD must be *earlier than* FAD cutoff
+            # DOS convention: PD must be *earlier than* FAD cutoff (strict <)
             fad_current = pd_date < fad
-            fad_remaining = 0.0 if fad_current else round((pd_date - fad).days / 30.44, 1)
+            if fad_current:
+                fad_remaining = 0.0
+            else:
+                # PD on/after cutoff is not current; use min 0.1 mo so UI never
+                # shows contradictory "0 mo to go" while not current (PD == FAD).
+                days = (pd_date - fad).days
+                fad_remaining = max(0.1, round(days / 30.44, 1))
 
-        if dof_unavail:
+        if dof_unavail or dof_status == STATUS_UNAVAILABLE:
             dof_current = False
             dof_remaining = None
-        elif dof is None:  # Current (C)
-            dof_current = True
-            dof_remaining = 0.0
+        elif dof is None:
+            dof_current = dof_status != STATUS_INVALID
+            dof_remaining = 0.0 if dof_current else None
         else:
             dof_current = pd_date < dof
-            dof_remaining = 0.0 if dof_current else round((pd_date - dof).days / 30.44, 1)
+            if dof_current:
+                dof_remaining = 0.0
+            else:
+                days = (pd_date - dof).days
+                dof_remaining = max(0.1, round(days / 30.44, 1))
 
         return {
             "bulletin_month": latest["bulletin_month"],
@@ -272,9 +284,7 @@ class VisaBulletinParser:
             "dof_unavailable": dof_unavail,
             "fad_is_current": fad_current,
             "dof_is_current": dof_current,
-            "fad_remaining_months": fad_remaining if fad_remaining is not None else 0.0,
-            "dof_remaining_months": dof_remaining if dof_remaining is not None else 0.0,
-            # Explicit optional fields for API consumers that prefer null
-            "fad_remaining_months_or_null": fad_remaining,
-            "dof_remaining_months_or_null": dof_remaining,
+            # Nullable: None when Unavailable (unknown until numbers resume)
+            "fad_remaining_months": fad_remaining,
+            "dof_remaining_months": dof_remaining,
         }

@@ -25,13 +25,17 @@ function formatMonthLabel(dateStr: string | null | undefined): string {
   return formatIsoDate(normalized, dateStr, { month: 'short', year: '2-digit' });
 }
 
-function formatDateDisplay(dateStr: string | null | undefined, status?: string | null): string {
-  if (status === 'U' || (!dateStr && status === 'U')) return 'Unavailable';
-  if (!dateStr) return status === 'C' ? 'Current' : formatVbCutoff(dateStr, status);
-  const normalized = dateStr.length === 7 ? `${dateStr}-01` : dateStr;
-  const d = new Date(normalized);
-  if (!isFinite(d.getTime())) return formatVbCutoff(dateStr, status);
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+function formatDateDisplay(
+  dateStr: string | null | undefined,
+  status?: string | null,
+  unavailable?: boolean,
+): string {
+  if (unavailable || status === 'U') return 'Unavailable';
+  if (dateStr && dateStr.length === 7) {
+    // bulletin_month YYYY-MM
+    return formatIsoDate(`${dateStr}-01`, dateStr, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  return formatVbCutoff(dateStr, status, { unavailable });
 }
 
 function safeParse(dateStr: string | null | undefined): number | null {
@@ -193,18 +197,24 @@ export default function VBForecastPage() {
                   </div>
                   <div>
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Current FAD</span>
-                    <p className={`font-semibold ${data.latest_actual.fad_unavailable ? 'text-crimson-700' : 'text-navy-900'}`}>
-                      {formatDateDisplay(data.latest_actual.fad, data.latest_actual.fad_status)}
+                    <p className={`font-semibold ${data.latest_actual.fad_unavailable ? 'text-crimson-600' : 'text-navy-900'}`}>
+                      {formatDateDisplay(data.latest_actual.fad, data.latest_actual.fad_status, data.latest_actual.fad_unavailable)}
                     </p>
                   </div>
                   <div>
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Current DOF</span>
-                    <p className={`font-semibold ${data.latest_actual.dof_unavailable ? 'text-crimson-700' : 'text-emerald-700'}`}>
-                      {formatDateDisplay(data.latest_actual.dof, data.latest_actual.dof_status)}
+                    <p className={`font-semibold ${data.latest_actual.dof_unavailable ? 'text-crimson-600' : 'text-emerald-700'}`}>
+                      {formatDateDisplay(data.latest_actual.dof, data.latest_actual.dof_status, data.latest_actual.dof_unavailable)}
                     </p>
                   </div>
+                  {data.latest_actual.forecast_anchor_fad && data.latest_actual.fad_unavailable && (
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Forecast Anchor FAD</span>
+                      <p className="font-semibold text-slate-600">{formatDateDisplay(data.latest_actual.forecast_anchor_fad)}</p>
+                    </div>
+                  )}
                   {data.latest_actual.fad_unavailable && (
-                    <Badge variant="outline" className="text-xs border-crimson-300 text-crimson-700">FAD Unavailable</Badge>
+                    <Badge variant="outline" className="text-xs border-crimson-500 text-crimson-600">FAD Unavailable</Badge>
                   )}
                   <Badge variant="outline" className="text-xs">{data.category} &mdash; {data.country}</Badge>
                 </div>
