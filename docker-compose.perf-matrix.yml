@@ -76,11 +76,12 @@ services:
       dockerfile: Dockerfile
       args:
         # Must match API_HOST_PORT — runner always sets this; required for correct bake.
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL e.g. http://localhost:18000/api}
+        # Runner always sets this to match API_HOST_PORT before build/up.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
         REQUIRE_API_URL: "1"
     environment:
       # Runtime NEXT_PUBLIC_* does not retarget the baked client bundle — always --build.
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL e.g. http://localhost:18000/api}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
       - REQUIRE_API_URL=1
       - NODE_ENV=production
       - PERF_PAGE_SET=${PERF_PAGE_SET:-all}

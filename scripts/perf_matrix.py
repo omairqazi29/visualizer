@@ -459,119 +459,79 @@ def collect_page_metrics(
     expect_api_failures: bool,
     navigation_timeout_ms: int = 90_000,
 ) -> PageMetrics:
+    """Collect page metrics with a single authoritative API outcome map (no double-count)."""
     from playwright.sync_api import TimeoutError as PWTimeout
 
     context = browser.new_context()
     page = context.new_page()
     console_errors: list[str] = []
-    api_latencies: list[float] = []
-    seen_req_ids: set[str] = set()
-    api_reqs = 0
-    api_ok = 0
-    api_fail = 0
+    # key = method|url → {"status": "pending"|"ok"|"fail", "latency_ms": float|None}
+    outcomes: dict[str, dict[str, Any]] = {}
     sample_urls: list[str] = []
+
+    def _key(method: str, url: str) -> str:
+        return f"{method}|{url}"
 
     def on_console(msg) -> None:
         if msg.type == "error":
             console_errors.append(msg.text[:500])
 
-    def track_url(url: str) -> bool:
-        return is_api_url(url, api_port)
-
     def on_request(req) -> None:
-        nonlocal api_reqs
         u = req.url
-        if not track_url(u):
+        if not is_api_url(u, api_port):
             return
-        rid = req.url + "|" + req.method
-        if rid in seen_req_ids:
-            return
-        # Count on request so success is not missed if response listener misses
-        seen_req_ids.add(rid)
-        api_reqs += 1
-        if len(sample_urls) < 5:
-            sample_urls.append(u[:200])
+        k = _key(req.method, u)
+        if k not in outcomes:
+            outcomes[k] = {"status": "pending", "latency_ms": None}
+            if len(sample_urls) < 5:
+                sample_urls.append(u[:200])
 
     def on_response(resp) -> None:
-        nonlocal api_ok, api_fail
         u = resp.url
-        if not track_url(u):
+        if not is_api_url(u, api_port):
             return
+        k = _key(resp.request.method, u)
+        lat = None
         try:
             timing = resp.request.timing or {}
             te = float(timing.get("responseEnd") or 0)
             ts = float(timing.get("requestStart") or 0)
             if te and ts and te >= ts:
-                api_latencies.append(te - ts)
+                lat = te - ts
             elif te > 0:
-                api_latencies.append(te)
+                lat = te
         except Exception:
             pass
         st = int(resp.status or 0)
-        if st >= 400 or st == 0:
-            api_fail += 1
+        # Response is authoritative: overwrite pending/fail from aborted twins
+        if 200 <= st < 400:
+            outcomes[k] = {"status": "ok", "latency_ms": lat}
         else:
-            api_ok += 1
+            outcomes[k] = {"status": "fail", "latency_ms": lat}
 
     def on_request_failed(req) -> None:
-        nonlocal api_fail, api_reqs
         u = req.url
-        if not track_url(u):
+        if not is_api_url(u, api_port):
             return
-        key = req.url + "|" + req.method
-        if key not in seen_req_ids:
-            seen_req_ids.add(key)
-            api_reqs += 1
-        api_fail += 1
-        if len(sample_urls) < 5:
+        k = _key(req.method, u)
+        cur = outcomes.get(k)
+        # Do not overwrite a successful or failed HTTP response
+        if cur and cur.get("status") in ("ok", "fail"):
+            return
+        outcomes[k] = {"status": "fail", "latency_ms": None}
+        if len(sample_urls) < 5 and u[:200] not in sample_urls:
             sample_urls.append(u[:200])
 
-    def sync_perf_resources() -> None:
-        """Reconcile counts/latencies from Resource Timing (authoritative in Chromium)."""
-        nonlocal api_reqs, api_ok, api_fail
-        try:
-            entries = page.evaluate(
-                """(port) => {
-                  const out = [];
-                  for (const e of performance.getEntriesByType('resource')) {
-                    const u = e.name || '';
-                    if (!u.includes('/api')) continue;
-                    const portTok = ':' + port;
-                    if (!(u.includes(portTok))) continue;
-                    const dur = (e.responseEnd || 0) - (e.startTime || 0);
-                    const st = (typeof e.responseStatus === 'number') ? e.responseStatus : null;
-                    out.push({ url: u.slice(0, 200), dur, st });
-                  }
-                  return out;
-                }""",
-                api_port,
-            )
-        except Exception:
-            return
-        if not entries:
-            return
-        api_reqs = max(api_reqs, len(entries))
-        ok_n = 0
-        fail_n = 0
-        for e in entries:
-            st = e.get("st")
-            if st is None:
-                # completed transfer without status → treat as success if duration > 0
-                if float(e.get("dur") or 0) > 0:
-                    ok_n += 1
-                    api_latencies.append(float(e["dur"]))
-                continue
-            if int(st) >= 400:
-                fail_n += 1
-            else:
-                ok_n += 1
-                if float(e.get("dur") or 0) > 0:
-                    api_latencies.append(float(e["dur"]))
-        api_ok = max(api_ok, ok_n)
-        api_fail = max(api_fail, fail_n)
-        for e in entries[:5]:
-            if e.get("url") and e["url"] not in sample_urls:
-                sample_urls.append(e["url"])
+    def tally() -> tuple[int, int, int, list[float]]:
+        reqs = len(outcomes)
+        ok_n = sum(1 for v in outcomes.values() if v.get("status") == "ok")
+        fail_n = sum(1 for v in outcomes.values() if v.get("status") == "fail")
+        lats = [
+            float(v["latency_ms"])
+            for v in outcomes.values()
+            if v.get("status") == "ok" and v.get("latency_ms") is not None
+        ]
+        return reqs, ok_n, fail_n, lats
 
     page.on("console", on_console)
     page.on("request", on_request)
@@ -581,23 +541,20 @@ def collect_page_metrics(
     url = frontend_url.rstrip("/") + path
     t0 = time.perf_counter()
     metrics = PageMetrics(path=path, ok=False, final_url=url)
+    api_reqs = api_ok = api_fail = 0
 
     try:
-        # Prefer expect_response (works on older Playwright) over page.wait_for_response
+        # Capture first successful API response during navigation when possible
         try:
             with page.expect_response(
                 lambda r: is_api_url(r.url, api_port) and 200 <= int(r.status or 0) < 400,
-                timeout=25_000,
+                timeout=30_000,
             ):
                 page.goto(url, wait_until="domcontentloaded", timeout=navigation_timeout_ms)
         except PWTimeout:
             page.goto(url, wait_until="domcontentloaded", timeout=navigation_timeout_ms)
         try:
             page.wait_for_load_state("load", timeout=min(20_000, navigation_timeout_ms))
-        except PWTimeout:
-            pass
-        try:
-            page.wait_for_load_state("networkidle", timeout=8_000)
         except PWTimeout:
             pass
 
@@ -618,48 +575,46 @@ def collect_page_metrics(
             load_v = float(timing.get("load") or 0)
             metrics.load_ms = round(load_v, 1) if load_v > 0 else None
 
-        # Wait for API activity + data UI (or error UX for failure scenarios)
-        deadline = time.perf_counter() + 30.0
+        # Poll until success criteria or deadline (no networkidle — avoids 12–30s plateaus)
+        deadline = time.perf_counter() + 35.0
         data_ok = False
         error_ux = False
         body_text = ""
+        settled = False
         while time.perf_counter() < deadline:
-            sync_perf_resources()
+            api_reqs, api_ok, api_fail, _lats = tally()
             try:
                 body_text = page.evaluate("() => (document.body && document.body.innerText) || ''") or ""
             except Exception:
                 body_text = ""
             error_ux = detect_error_ux(body_text)
             data_ok = detect_data_ok(body_text, path)
-            # Looser content: substantial body without error banner
             content_ok = data_ok or (len(body_text) > 200 and not error_ux)
+
             if expect_api_failures:
+                # Failures only — do not require success
                 if api_fail > 0 and api_reqs > 0:
                     metrics.time_to_meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
+                    settled = True
                     break
             elif expect_api:
-                # Prefer: at least one successful API + content (not error-only shell)
-                if api_ok > 0 and content_ok:
+                # Healthy path: need at least one HTTP 2xx API response + content
+                if api_ok > 0 and content_ok and not error_ux:
                     metrics.time_to_meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
-                    break
-                # Resource timing shows completed API transfers even if status listener missed
-                if api_reqs >= 3 and api_ok > 0:
-                    metrics.time_to_meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
-                    break
-                if api_reqs > 0 and api_fail > 0 and (content_ok or error_ux):
-                    metrics.time_to_meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
+                    settled = True
                     break
             else:
-                if content_ok or error_ux:
+                if content_ok:
                     metrics.time_to_meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
+                    settled = True
                     break
-            page.wait_for_timeout(100)
-        else:
-            sync_perf_resources()
+            page.wait_for_timeout(150)
+
+        if not settled:
             metrics.timed_out_ttm = True
             metrics.time_to_meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
 
-        sync_perf_resources()
+        api_reqs, api_ok, api_fail, api_latencies = tally()
         metrics.api_request_count = api_reqs
         metrics.api_success_count = api_ok
         metrics.api_failed_count = api_fail
@@ -668,37 +623,40 @@ def collect_page_metrics(
         if api_latencies:
             metrics.median_api_latency_ms = median([float(x) for x in api_latencies])
 
+        content_ok = data_ok or (len(body_text) > 200 and not error_ux)
+
         if expect_api_failures:
-            metrics.ok = api_fail > 0 and metrics.api_request_count > 0
+            metrics.ok = api_fail > 0 and api_reqs > 0
+            # Failure scenario is not "content success"
             if not metrics.ok:
                 metrics.error = "expected API failures not observed"
         elif expect_api:
-            content_ok = data_ok or (len(body_text) > 200 and not error_ux)
-            if metrics.api_success_count == 0 and api_latencies:
-                metrics.api_success_count = max(metrics.api_success_count, len(api_latencies))
-            metrics.ok = (
-                metrics.api_request_count > 0
-                and (metrics.api_success_count > 0 or metrics.api_failed_count > 0)
-                and content_ok
-            )
-            if metrics.api_request_count == 0:
-                metrics.error = "no API XHR observed (check NEXT_PUBLIC_API_URL bake / listeners)"
+            # STRICT: success count must be > 0 — failures alone never mark page OK
+            metrics.ok = api_ok > 0 and content_ok and not error_ux
+            if api_reqs == 0:
+                metrics.error = "no API XHR observed (check NEXT_PUBLIC_API_URL bake)"
                 metrics.ok = False
-            elif metrics.api_success_count == 0 and metrics.api_failed_count == 0:
-                metrics.error = "API requests seen but no completed responses"
+            elif api_ok == 0:
+                metrics.error = (
+                    f"no successful API responses (fail={api_fail}, req={api_reqs}); "
+                    "page did not receive live backend data"
+                )
+                metrics.ok = False
+            elif error_ux:
+                metrics.error = "error UX visible on healthy scenario"
                 metrics.ok = False
             elif not content_ok:
                 metrics.error = "no domain data landmarks (shell only?)"
                 metrics.ok = False
+            elif metrics.timed_out_ttm and api_ok == 0:
+                metrics.ok = False
+                metrics.error = "TTM timed out without successful API"
         else:
-            metrics.ok = data_ok
-
-        if metrics.timed_out_ttm and metrics.ok:
-            # still ok but flag saturation
-            pass
+            metrics.ok = bool(data_ok)
     except Exception as e:
         metrics.error = str(e)[:800]
         metrics.ok = False
+        api_reqs, api_ok, api_fail, _ = tally()
         metrics.api_request_count = api_reqs
         metrics.api_success_count = api_ok
         metrics.api_failed_count = api_fail
@@ -801,6 +759,7 @@ def evaluate_assertions(results: dict[str, ScenarioResult]) -> None:
         total_api = sum(pm.api_request_count for pm in sr.pages)
 
         if cfg.get("expect_api") and sr.pages and not cfg.get("expect_api_failures"):
+            pages_with_success = sum(1 for pm in sr.pages if pm.api_success_count > 0)
             sr.assertions.append(
                 {
                     "name": "api_traffic_observed",
@@ -809,11 +768,22 @@ def evaluate_assertions(results: dict[str, ScenarioResult]) -> None:
                     f"{sum(1 for p in sr.pages if p.api_request_count > 0)}/{len(sr.pages)}",
                 }
             )
+            n_pages = len(sr.pages)
+            success_ratio = pages_with_success / n_pages if n_pages else 0.0
+            ok_ratio = ok_pages / n_pages if n_pages else 0.0
+            sr.assertions.append(
+                {
+                    "name": "majority_pages_api_success",
+                    "pass": success_ratio >= 0.7,
+                    "detail": f"{pages_with_success}/{n_pages} pages have api_success_count > 0 (need ≥70%)",
+                }
+            )
+            # ok_pages already requires api_success_count > 0 in collector for expect_api
             sr.assertions.append(
                 {
                     "name": "majority_pages_meaningful",
-                    "pass": ok_pages >= max(1, int(0.7 * len(sr.pages))),
-                    "detail": f"{ok_pages}/{len(sr.pages)} pages data-ok with API success",
+                    "pass": ok_ratio >= 0.7,
+                    "detail": f"{ok_pages}/{n_pages} pages OK (requires api_success_count>0 + content, need ≥70%)",
                 }
             )
 
@@ -838,20 +808,17 @@ def evaluate_assertions(results: dict[str, ScenarioResult]) -> None:
 
         min_delta = cfg.get("min_ttm_delta_vs_baseline_ms")
         if min_delta is not None:
-            # Prefer API latency delta when available (more sensitive to PERF_API_DELAY_MS)
+            # Prefer API latency **delta vs baseline** (not absolute alone)
             use_api = base_api_med is not None and api_med is not None
             if use_api:
                 delta = api_med - base_api_med
-                # Also accept absolute latency reflecting delay
-                abs_ok = api_med >= float(min_delta)
-                delta_ok = delta >= float(min_delta) * 0.5  # at least half threshold increase
                 sr.assertions.append(
                     {
                         "name": "slower_than_baseline",
-                        "pass": abs_ok or delta_ok,
+                        "pass": delta >= float(min_delta),
                         "detail": (
                             f"median API lat {api_med:.1f}ms vs baseline {base_api_med:.1f}ms "
-                            f"(delta {delta:.1f}ms); abs≥{min_delta} or delta≥{float(min_delta)*0.5:.0f}"
+                            f"(delta {delta:.1f}ms, need ≥{min_delta}ms)"
                         ),
                     }
                 )
@@ -878,12 +845,13 @@ def evaluate_assertions(results: dict[str, ScenarioResult]) -> None:
 
         min_api = cfg.get("min_api_latency_ms")
         if min_api is not None:
+            # Absolute floor still useful when delay is injected (must be slow in absolute terms)
             if api_med is None:
                 sr.assertions.append(
                     {
                         "name": "api_latency_reflects_delay",
                         "pass": False,
-                        "detail": "no median API latency observed",
+                        "detail": "no median API latency observed on successful responses",
                     }
                 )
             else:
@@ -891,7 +859,7 @@ def evaluate_assertions(results: dict[str, ScenarioResult]) -> None:
                     {
                         "name": "api_latency_reflects_delay",
                         "pass": api_med >= float(min_api),
-                        "detail": f"median API latency {api_med:.1f}ms (need ≥{min_api}ms)",
+                        "detail": f"median API latency {api_med:.1f}ms on successes (need ≥{min_api}ms)",
                     }
                 )
 
@@ -1187,6 +1155,10 @@ def main(argv: list[str] | None = None) -> int:
     for sr in results.values():
         if sr.compose_error:
             hard_fail = True
+            print(f"COMPOSE FAIL [{sr.name}]: {sr.compose_error}", file=sys.stderr)
+        if sr.health_error:
+            hard_fail = True
+            print(f"HEALTH FAIL [{sr.name}]: {sr.health_error}", file=sys.stderr)
         for a in sr.assertions:
             if not a["pass"]:
                 hard_fail = True

@@ -74,6 +74,7 @@ def test_evaluate_assertions_slower_than_baseline():
                     path="/waterfall",
                     ok=True,
                     api_request_count=2,
+                    api_success_count=2,
                     time_to_meaningful_ms=500.0,
                     median_api_latency_ms=100.0,
                 ),
@@ -90,8 +91,9 @@ def test_evaluate_assertions_slower_than_baseline():
                     path="/waterfall",
                     ok=True,
                     api_request_count=2,
+                    api_success_count=2,
                     time_to_meaningful_ms=600.0,
-                    median_api_latency_ms=100.0,  # same latency — fail delay asserts
+                    median_api_latency_ms=100.0,  # same latency — fail delta
                 ),
             ],
         ),
@@ -101,14 +103,56 @@ def test_evaluate_assertions_slower_than_baseline():
     assert slow_asserts["slower_than_baseline"]["pass"] is False
     assert slow_asserts["api_latency_reflects_delay"]["pass"] is False
 
+    # Absolute latency high but delta vs baseline still small → slower_than_baseline still fails
+    results["api-slow"].pages[0].median_api_latency_ms = 200.0
+    results["api-slow"].assertions.clear()
+    results["baseline"].assertions.clear()
+    pm.evaluate_assertions(results)
+    slow_asserts = {a["name"]: a for a in results["api-slow"].assertions}
+    assert slow_asserts["slower_than_baseline"]["pass"] is False  # delta 100 < 1500
+
     results["api-slow"].pages[0].median_api_latency_ms = 2000.0
     results["api-slow"].pages[0].time_to_meaningful_ms = 2500.0
     results["api-slow"].assertions.clear()
     results["baseline"].assertions.clear()
     pm.evaluate_assertions(results)
     slow_asserts = {a["name"]: a for a in results["api-slow"].assertions}
-    assert slow_asserts["slower_than_baseline"]["pass"] is True
+    assert slow_asserts["slower_than_baseline"]["pass"] is True  # delta 1900 >= 1500
     assert slow_asserts["api_latency_reflects_delay"]["pass"] is True
+
+
+def test_all_fail_pages_cannot_pass_majority_meaningful():
+    """Pages with only API failures must not count as OK for expect_api scenarios."""
+    results = {
+        "baseline": pm.ScenarioResult(
+            name="baseline",
+            project="p",
+            frontend_url="http://x",
+            api_url="http://y",
+            started=True,
+            pages=[
+                # Collector would set ok=False; simulate regression if ok were wrongly True
+                pm.PageMetrics(
+                    path="/supply-demand",
+                    ok=False,
+                    api_request_count=15,
+                    api_success_count=0,
+                    api_failed_count=15,
+                ),
+                pm.PageMetrics(
+                    path="/waterfall",
+                    ok=True,
+                    api_request_count=15,
+                    api_success_count=6,
+                    api_failed_count=0,
+                ),
+            ],
+        )
+    }
+    pm.evaluate_assertions(results)
+    names = {a["name"]: a for a in results["baseline"].assertions}
+    assert names["majority_pages_api_success"]["pass"] is False  # 1/2 < 70%
+    assert names["majority_pages_meaningful"]["pass"] is False  # 1/2 ok
 
 
 def test_api_failures_visible():
