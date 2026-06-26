@@ -5,10 +5,15 @@ computes the historical gap between Date of Filing (DOF) and Final Action
 Date (FAD) for India EB categories (EB-1, EB-2, EB-3).  This gap is used
 to estimate when the DOF will reach a given priority date, based on the
 model's FAD prediction.
+
+Date codes in the CSV:
+  - ISO date (YYYY-MM-DD): dated cutoff
+  - "C": Current (all priority dates are current — treated as no cutoff)
+  - "U": Unavailable (category closed for the month — no numbers issued)
 """
 
 import os
-from datetime import datetime
+from datetime import date, datetime
 from statistics import median
 from typing import Optional
 
@@ -18,6 +23,53 @@ _DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "visa_bu
 _DEFAULT_FILE = os.path.join(_DATA_DIR, "india_eb_history.csv")
 _LEGACY_FILE = os.path.join(_DATA_DIR, "india_eb1_history.csv")
 _CHINA_FILE = os.path.join(_DATA_DIR, "china_eb1_history.csv")
+
+# Status codes for FAD/DOF cells
+STATUS_DATE = "date"
+STATUS_CURRENT = "C"
+STATUS_UNAVAILABLE = "U"
+# Treat these like Current for date math (no cutoff date)
+_NULL_DATE_CODES = frozenset({"C", "U", "CURRENT", "UNAVAILABLE", "N/A", "NA", ""})
+
+
+def _normalize_cell(raw) -> tuple[Optional[date], str]:
+    """Parse a FAD/DOF cell into (date_or_none, status).
+
+    Status is one of: "date", "C" (Current), "U" (Unavailable).
+    Both C and U yield date=None so callers can treat them uniformly for
+    advancement math; status distinguishes the reason for the UI/API.
+    """
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return None, STATUS_CURRENT
+    text = str(raw).strip()
+    if not text:
+        return None, STATUS_CURRENT
+    upper = text.upper()
+    if upper in ("U", "UNAVAILABLE"):
+        return None, STATUS_UNAVAILABLE
+    if upper in ("C", "CURRENT", "N/A", "NA"):
+        return None, STATUS_CURRENT
+    # Dated cutoff
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").date(), STATUS_DATE
+    except ValueError:
+        # Last resort: treat unknown tokens as Current (no crash)
+        return None, STATUS_CURRENT
+
+
+def _row_from_cells(bulletin_month, category, fad_raw, dof_raw) -> dict:
+    fad, fad_status = _normalize_cell(fad_raw)
+    dof, dof_status = _normalize_cell(dof_raw)
+    return {
+        "bulletin_month": bulletin_month,
+        "category": category,
+        "fad": fad,
+        "dof": dof,
+        "fad_status": fad_status,
+        "dof_status": dof_status,
+        "fad_unavailable": fad_status == STATUS_UNAVAILABLE,
+        "dof_unavailable": dof_status == STATUS_UNAVAILABLE,
+    }
 
 
 class VisaBulletinParser:
@@ -48,6 +100,9 @@ class VisaBulletinParser:
     def get_history(self, category: Optional[str] = None) -> list[dict]:
         """Return rows as list of dicts with parsed dates, filtered by category.
 
+        Each row includes fad/dof (date or None) plus fad_status/dof_status
+        ("date" | "C" | "U") and fad_unavailable/dof_unavailable booleans.
+
         Args:
             category: Override the instance category for this call.
                       If None, uses self.category (default "EB-1").
@@ -58,14 +113,10 @@ class VisaBulletinParser:
             df = df[df["category"] == cat]
         rows = []
         for _, r in df.iterrows():
-            fad = r["final_action_date"]
-            dof = r["date_of_filing"]
-            rows.append({
-                "bulletin_month": r["bulletin_month"],
-                "category": cat,
-                "fad": None if fad == "C" else datetime.strptime(fad, "%Y-%m-%d").date(),
-                "dof": None if dof == "C" else datetime.strptime(dof, "%Y-%m-%d").date(),
-            })
+            rows.append(_row_from_cells(
+                r["bulletin_month"], cat,
+                r["final_action_date"], r["date_of_filing"],
+            ))
         return rows
 
     def get_all_categories_history(self) -> list[dict]:
@@ -73,27 +124,25 @@ class VisaBulletinParser:
         df = self._load()
         rows = []
         for _, r in df.iterrows():
-            fad = r["final_action_date"]
-            dof = r["date_of_filing"]
-            rows.append({
-                "bulletin_month": r["bulletin_month"],
-                "category": r.get("category", self.category),
-                "fad": None if fad == "C" else datetime.strptime(fad, "%Y-%m-%d").date(),
-                "dof": None if dof == "C" else datetime.strptime(dof, "%Y-%m-%d").date(),
-            })
+            rows.append(_row_from_cells(
+                r["bulletin_month"],
+                r.get("category", self.category),
+                r["final_action_date"], r["date_of_filing"],
+            ))
         return rows
 
     def compute_gaps(self, category: Optional[str] = None) -> list[dict]:
         """Compute DOF-FAD gap in months for each bulletin where both exist.
 
         Returns list of {bulletin_month, category, fad, dof, gap_months}.
-        Only includes months where both FAD and DOF are retrogressed (not Current).
+        Only includes months where both FAD and DOF are dated cutoffs
+        (skips Current and Unavailable months — no meaningful gap).
         """
         rows = self.get_history(category=category)
         gaps = []
         for r in rows:
             if r["fad"] is None or r["dof"] is None:
-                continue  # skip months where either is Current
+                continue  # skip Current / Unavailable
             gap_days = (r["dof"] - r["fad"]).days
             if gap_days < 0:
                 continue  # skip anomalous data
@@ -125,8 +174,13 @@ class VisaBulletinParser:
         """
         gaps = self.compute_gaps(category=category)
         if not gaps:
+            # Still surface latest dated FAD/DOF from full history when gaps empty
+            # (e.g. category currently Unavailable)
+            history = self.get_history(category=category)
+            latest_fad = next((r["fad"].isoformat() for r in reversed(history) if r["fad"]), None)
+            latest_dof = next((r["dof"].isoformat() for r in reversed(history) if r["dof"]), None)
             return {"median_gap": 0, "min_gap": 0, "max_gap": 0, "n_datapoints": 0,
-                    "latest_fad": None, "latest_dof": None}
+                    "latest_fad": latest_fad, "latest_dof": latest_dof}
 
         recent = gaps[-recent_n:]
         gap_values = [g["gap_months"] for g in recent]
@@ -150,39 +204,77 @@ class VisaBulletinParser:
         Returns dict with:
             bulletin_month: Latest bulletin month in data
             category: The EB category queried
-            current_fad: Current FAD cutoff (ISO date or None if Current)
-            current_dof: Current DOF cutoff (ISO date or None if Current)
-            fad_is_current: True if PD is before FAD (visa number available)
-            dof_is_current: True if PD is before DOF (can file I-485)
-            fad_remaining_months: Months of FAD advancement needed (0 if current)
-            dof_remaining_months: Months of DOF advancement needed (0 if current)
+            current_fad: Current FAD cutoff (ISO date or None if C/U)
+            current_dof: Current DOF cutoff (ISO date or None if C/U)
+            fad_status / dof_status: "date" | "C" | "U"
+            fad_unavailable / dof_unavailable: bool
+            fad_is_current: True if PD can receive a visa number this month
+            dof_is_current: True if PD can file I-485 this month
+            fad_remaining_months: Months of FAD advancement needed (0 if current; None if U)
+            dof_remaining_months: Months of DOF advancement needed (0 if current; None if U)
         """
-        from datetime import date
         pd_date = datetime.strptime(priority_date, "%Y-%m-%d").date() if isinstance(priority_date, str) else priority_date
         history = self.get_history(category=category)
-        latest = history[-1]
+        if not history:
+            return {
+                "bulletin_month": None,
+                "category": category or self.category,
+                "current_fad": None,
+                "current_dof": None,
+                "fad_status": STATUS_CURRENT,
+                "dof_status": STATUS_CURRENT,
+                "fad_unavailable": False,
+                "dof_unavailable": False,
+                "fad_is_current": False,
+                "dof_is_current": False,
+                "fad_remaining_months": None,
+                "dof_remaining_months": None,
+            }
 
+        latest = history[-1]
         fad = latest["fad"]
         dof = latest["dof"]
+        fad_status = latest["fad_status"]
+        dof_status = latest["dof_status"]
+        fad_unavail = latest["fad_unavailable"]
+        dof_unavail = latest["dof_unavailable"]
 
-        fad_current = fad is None or pd_date < fad
-        dof_current = dof is None or pd_date < dof
+        # Unavailable = category closed — no PD is "current" for FAD
+        if fad_unavail:
+            fad_current = False
+            fad_remaining = None  # unknown until numbers resume
+        elif fad is None:  # Current (C)
+            fad_current = True
+            fad_remaining = 0.0
+        else:
+            # Historical convention: PD must be *earlier than* FAD cutoff
+            fad_current = pd_date < fad
+            fad_remaining = 0.0 if fad_current else round((pd_date - fad).days / 30.44, 1)
 
-        fad_remaining = 0.0
-        if fad is not None and not fad_current:
-            fad_remaining = round((pd_date - fad).days / 30.44, 1)
-
-        dof_remaining = 0.0
-        if dof is not None and not dof_current:
-            dof_remaining = round((pd_date - dof).days / 30.44, 1)
+        if dof_unavail:
+            dof_current = False
+            dof_remaining = None
+        elif dof is None:  # Current (C)
+            dof_current = True
+            dof_remaining = 0.0
+        else:
+            dof_current = pd_date < dof
+            dof_remaining = 0.0 if dof_current else round((pd_date - dof).days / 30.44, 1)
 
         return {
             "bulletin_month": latest["bulletin_month"],
             "category": category or self.category,
             "current_fad": fad.isoformat() if fad else None,
             "current_dof": dof.isoformat() if dof else None,
+            "fad_status": fad_status,
+            "dof_status": dof_status,
+            "fad_unavailable": fad_unavail,
+            "dof_unavailable": dof_unavail,
             "fad_is_current": fad_current,
             "dof_is_current": dof_current,
-            "fad_remaining_months": fad_remaining,
-            "dof_remaining_months": dof_remaining,
+            "fad_remaining_months": fad_remaining if fad_remaining is not None else 0.0,
+            "dof_remaining_months": dof_remaining if dof_remaining is not None else 0.0,
+            # Explicit optional fields for API consumers that prefer null
+            "fad_remaining_months_or_null": fad_remaining,
+            "dof_remaining_months_or_null": dof_remaining,
         }
