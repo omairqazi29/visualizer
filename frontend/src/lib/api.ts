@@ -126,6 +126,11 @@ export interface PredictData {
   vb_dof_is_current: boolean;
   vb_fad_remaining_months: number;
   vb_dof_remaining_months: number;
+  // Status: "date" | "C" | "U" — distinguishes Current vs Unavailable nulls
+  vb_fad_status?: string | null;
+  vb_dof_status?: string | null;
+  vb_fad_unavailable?: boolean;
+  vb_dof_unavailable?: boolean;
 }
 
 export interface DataSource {
@@ -404,10 +409,10 @@ export const getI140Receipts = () =>
 // VB Forecast
 export interface VBForecastPoint {
   bulletin_month: string;
-  predicted_fad: string;
+  predicted_fad: string | null;
   predicted_dof: string | null;
-  fad_confidence_low: string;
-  fad_confidence_high: string;
+  fad_confidence_low: string | null;
+  fad_confidence_high: string | null;
 }
 
 export interface VBForecastData {
@@ -419,11 +424,20 @@ export interface VBForecastData {
     category: string;
     fad: string | null;
     dof: string | null;
+    fad_status?: string;
+    dof_status?: string;
+    fad_unavailable?: boolean;
+    dof_unavailable?: boolean;
   }>;
   latest_actual: {
-    bulletin_month: string;
-    fad: string;
-    dof?: string;
+    bulletin_month: string | null;
+    fad: string | null;
+    dof?: string | null;
+    fad_status?: string;
+    dof_status?: string;
+    fad_unavailable?: boolean;
+    dof_unavailable?: boolean;
+    forecast_anchor_fad?: string | null;
   };
   stats: {
     recent_avg: number;
@@ -433,6 +447,7 @@ export interface VBForecastData {
     seasonal_pattern: Record<string, number>;
     n_datapoints: number;
     retrogression_count: number;
+    unavailable_months?: number;
   };
   supply_factor: number;
   dof_gap_months: number;
@@ -442,6 +457,43 @@ export interface VBForecastData {
 export const getVBForecast = (category: string = 'EB-1', monthsAhead: number = 24, applyRealRestrictions: boolean = false) =>
   cached(`vb-forecast:${category}:${monthsAhead}:${applyRealRestrictions}`, () =>
     api.get('/vb-forecast', { params: { category, months_ahead: monthsAhead, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data));
+
+// Predictor comparison (VB trend vs demand burn-down)
+export interface PredictorCompareData {
+  priority_date: string;
+  category: string;
+  apply_real_restrictions: boolean;
+  demand_months_to_clear: number | null;
+  demand_projected_clearance_date: string | null;
+  demand_backlog_ahead: number | null;
+  demand_annual_supply: number | null;
+  demand_confidence_score: number | null;
+  vb_months_to_current: number | null;
+  vb_estimated_bulletin_month: string | null;
+  vb_confidence: string | null;
+  vb_latest_fad: string | null;
+  vb_latest_fad_status: string | null;
+  vb_fad_unavailable: boolean;
+  vb_supply_factor: number | null;
+  vb_recent_avg_days_per_month: number | null;
+  months_delta: number | null;
+  divergence_notes: string[];
+  assumptions: Record<string, unknown>;
+}
+
+export const getPredictorCompare = (
+  priorityDate: string,
+  category: string = 'EB-1',
+  applyRealRestrictions: boolean = false,
+) =>
+  cached(`predictor-compare:${priorityDate}:${category}:${applyRealRestrictions}`, () =>
+    api.get('/predictor-compare', {
+      params: {
+        priority_date: priorityDate,
+        category,
+        apply_real_restrictions: applyRealRestrictions,
+      },
+    }).then(res => res.data));
 
 // ---------------------------------------------------------------------------
 // Prefetch all endpoints at app startup — fire in parallel, results cached
