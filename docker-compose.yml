@@ -10,9 +10,8 @@ services:
       - .:/app
     environment:
       - PYTHONUNBUFFERED=1
-      # Opt-in perf simulation (default off). See docs/PERF_MATRIX.md
-      - PERF_API_DELAY_MS=${PERF_API_DELAY_MS:-0}
-      - PERF_API_FAIL_PATHS=${PERF_API_FAIL_PATHS:-}
+      # PERF_API_* lives only in docker-compose.perf-matrix.yml (not here) so normal
+      # `docker compose up` cannot inherit accidental host env fault-injection.
 
   frontend:
     build:
@@ -28,8 +27,9 @@ services:
       - /app/node_modules
       - /app/.next
     environment:
+      # NEXT_PUBLIC_* is baked at `next build`; runtime env does not retarget the client
+      # bundle — rebuild frontend after changing URL (see docs/PERF_MATRIX.md).
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
-      # Local compose default: allow dev fallback if build arg unset; set REQUIRE_API_URL=1 in perf-matrix
       - REQUIRE_API_URL=${REQUIRE_API_URL:-0}
     depends_on:
       - api

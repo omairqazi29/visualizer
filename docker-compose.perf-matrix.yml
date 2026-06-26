@@ -4,18 +4,18 @@
 # Design: one compose *project* per scenario (parallel via different -p names and
 # non-conflicting host ports). Scenario knobs are env vars (see docs/PERF_MATRIX.md).
 #
-# Env vars (operator-facing — set per parallel stack):
+# Env vars (operator-facing — set per parallel stack; PERF_* only in this overlay):
 #   API_HOST_PORT          Host port for API (default 8000)
 #   FRONTEND_HOST_PORT     Host port for frontend (default 3000)
-#   PERF_API_DELAY_MS      Artificial API latency in ms (default 0)
-#   PERF_API_FAIL_PATHS    Comma-separated path prefixes → 503 (default empty)
+#   PERF_API_ENABLE        Master gate for fault injection (set 1 for matrix)
+#   PERF_API_DELAY_MS      Artificial API latency in ms (default 0, cap 30000)
+#   PERF_API_FAIL_PATHS    Comma-separated /api/... prefixes → 503 (default empty)
 #   PERF_PAGE_SET          all | heavy | light — hint for runner page subset
-#   API_CPUS               CPU limit for api (e.g. 0.5) — cpu-throttle scenario
+#   API_CPUS               CPU limit (omit or set ≤ host CPUs; runner uses safe default)
 #   API_MEM_LIMIT          Memory limit for api (e.g. 256m) — mem-pressure
-#   FRONTEND_CPUS          CPU limit for frontend
-#   FRONTEND_MEM_LIMIT     Memory limit for frontend
-#   NEXT_PUBLIC_API_URL    Browser-reachable API base (must include /api suffix)
-#                          e.g. http://localhost:18000/api for host Playwright
+#   FRONTEND_CPUS / FRONTEND_MEM_LIMIT
+#   NEXT_PUBLIC_API_URL    REQUIRED for build — must match API_HOST_PORT
+#                          e.g. http://localhost:18000/api (baked at next build; runtime env ineffective)
 #
 # Profiles:
 #   perf-matrix   — optional label; runner uses explicit service list
@@ -31,31 +31,14 @@
 #       up --build -d api frontend
 #
 #   # api-slow (2s delay on non-health routes)
-#   API_HOST_PORT=18001 FRONTEND_HOST_PORT=13001 PERF_API_DELAY_MS=2000 \
+#   API_HOST_PORT=18001 FRONTEND_HOST_PORT=13001 \
+#     PERF_API_ENABLE=1 PERF_API_DELAY_MS=2000 \
 #     NEXT_PUBLIC_API_URL=http://localhost:18001/api \
 #     docker compose -p perf-api-slow \
 #       -f docker-compose.yml -f docker-compose.perf-matrix.yml \
 #       up --build -d api frontend
 #
-#   # cpu-throttle
-#   API_HOST_PORT=18002 FRONTEND_HOST_PORT=13002 API_CPUS=0.5 FRONTEND_CPUS=0.5 \
-#     NEXT_PUBLIC_API_URL=http://localhost:18002/api \
-#     docker compose -p perf-cpu-throttle \
-#       -f docker-compose.yml -f docker-compose.perf-matrix.yml \
-#       up --build -d api frontend
-#
-#   # mem-pressure
-#   API_HOST_PORT=18003 FRONTEND_HOST_PORT=13003 API_MEM_LIMIT=256m FRONTEND_MEM_LIMIT=384m \
-#     NEXT_PUBLIC_API_URL=http://localhost:18003/api \
-#     docker compose -p perf-mem-pressure \
-#       -f docker-compose.yml -f docker-compose.perf-matrix.yml \
-#       up --build -d api frontend
-#
-#   # api-paused — frontend only (backend unreachable; no silent HTTP fallbacks)
-#   FRONTEND_HOST_PORT=13004 NEXT_PUBLIC_API_URL=http://localhost:18999/api \
-#     docker compose -p perf-api-paused \
-#       -f docker-compose.yml -f docker-compose.perf-matrix.yml \
-#       up --build -d frontend
+#   # Prefer: python3.11 scripts/perf_matrix.py (sets all env correctly)
 #
 # Or run the full matrix via:
 #   python3 scripts/perf_matrix.py
@@ -67,13 +50,13 @@ services:
     # here or Compose merges duplicate host binds.
     environment:
       - PYTHONUNBUFFERED=1
+      - PERF_API_ENABLE=${PERF_API_ENABLE:-0}
       - PERF_API_DELAY_MS=${PERF_API_DELAY_MS:-0}
       - PERF_API_FAIL_PATHS=${PERF_API_FAIL_PATHS:-}
       - PERF_PAGE_SET=${PERF_PAGE_SET:-all}
-    # High defaults ≈ no throttle; set API_CPUS=0.5 / API_MEM_LIMIT=256m per scenario.
-    # Cap at host CPU count (Docker errors if cpus > available, e.g. >10 on this machine).
-    cpus: ${API_CPUS:-8.0}
-    mem_limit: ${API_MEM_LIMIT:-8g}
+    # Prefer runner-supplied API_CPUS (host-safe). Fallback 2.0 works on small laptops.
+    cpus: ${API_CPUS:-2.0}
+    mem_limit: ${API_MEM_LIMIT:-4g}
     healthcheck:
       test:
         [
@@ -92,16 +75,17 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Browser on host talks to published API_HOST_PORT (not the docker network name).
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+        # Must match API_HOST_PORT — runner always sets this; required for correct bake.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL e.g. http://localhost:18000/api}
         REQUIRE_API_URL: "1"
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+      # Runtime NEXT_PUBLIC_* does not retarget the baked client bundle — always --build.
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL e.g. http://localhost:18000/api}
       - REQUIRE_API_URL=1
       - NODE_ENV=production
       - PERF_PAGE_SET=${PERF_PAGE_SET:-all}
-    cpus: ${FRONTEND_CPUS:-8.0}
-    mem_limit: ${FRONTEND_MEM_LIMIT:-8g}
+    cpus: ${FRONTEND_CPUS:-2.0}
+    mem_limit: ${FRONTEND_MEM_LIMIT:-4g}
     # Image-baked build must not be shadowed by host bind mounts from base compose.
     # Compose Spec !reset clears merged sequence fields (requires Compose v2.24+).
     volumes: !reset []

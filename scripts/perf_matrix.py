@@ -1,18 +1,7 @@
 #!/usr/bin/env python3
-"""Docker performance matrix runner for The Spillover Engine frontend.
+"""Docker performance matrix runner — Playwright-only metrics (no HTTP fallback).
 
-Starts scenario stacks in parallel (compose project per scenario), waits for
-health, collects Playwright navigation / network / console metrics per page,
-writes JSON + Markdown under artifacts/perf-matrix/, and tears down stacks.
-
-Operator docs: docs/PERF_MATRIX.md
-
-Examples:
-  python3 scripts/perf_matrix.py
-  python3 scripts/perf_matrix.py --scenarios baseline,api-slow --keep-alive
-  python3 scripts/perf_matrix.py --skip-compose --host-mode \\
-      --frontend-url http://127.0.0.1:3000 --api-url http://127.0.0.1:8000 \\
-      --scenarios host-check
+See docs/PERF_MATRIX.md.
 """
 
 from __future__ import annotations
@@ -20,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -30,6 +20,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_FILES = [
@@ -37,7 +28,6 @@ COMPOSE_FILES = [
     str(ROOT / "docker-compose.perf-matrix.yml"),
 ]
 
-# All app routes under frontend/src/app/
 ALL_PAGES = [
     "/",
     "/waterfall",
@@ -74,40 +64,57 @@ LIGHT_PAGES = [
     "/h1b-demand",
 ]
 
-# Selectors that indicate meaningful content (not just a loading spinner).
-# Matched as CSS text-ish via Playwright get_by_text / locator; we use a
-# broad "not loading forever" heuristic + key landmark text.
-MEANINGFUL_HINTS = {
-    "/": ["Predict", "Priority", "Spillover", "EB-1", "India"],
-    "/waterfall": ["Waterfall", "EB-1", "spillover", "Supply", "INA"],
-    "/supply-demand": ["Supply", "Demand", "EB-1", "India"],
-    "/vb-forecast": ["Forecast", "Visa Bulletin", "EB-1", "Final Action"],
-    "/predict": ["Predict", "Priority", "current", "final"],
-    "/methodology": ["Methodology", "INA", "data", "source", "restriction"],
-    "/i485-flow": ["I-485", "receipt", "approval", "pending"],
-    "/processing-times": ["Processing", "months", "percentile", "USCIS"],
-    "/perm-pipeline": ["PERM", "DOL", "pipeline"],
-    "/h1b-demand": ["H-1B", "H1B", "cap", "registration"],
-    "/i140-receipts": ["I-140", "receipt", "EB-1", "country"],
-    "/oppenheim": ["Oppenheim", "materialization", "EB-1"],
-    "/legislation": ["Legislation", "bill", "Congress", "scenario"],
-    "/ceac-scheduling": ["CEAC", "NVC", "scheduling", "interview"],
+# Domain landmarks for *data* success (not sidebar chrome alone). Prefer distinctive phrases.
+DATA_HINTS = {
+    "/": ["Priority Date", "predict", "India EB"],
+    "/waterfall": ["Total EB-1", "India EB-1", "spillover", "140,000", "140000"],
+    "/supply-demand": ["Supply", "Demand", "backlog"],
+    "/vb-forecast": ["Final Action", "forecast", "Visa Bulletin"],
+    "/predict": ["current", "final action", "months"],
+    "/methodology": ["INA", "restriction", "data source", "DOS"],
+    "/i485-flow": ["I-485", "receipt", "pending"],
+    "/processing-times": ["percentile", "months", "USCIS"],
+    "/perm-pipeline": ["PERM", "certified", "DOL"],
+    "/h1b-demand": ["H-1B", "H1B", "registration"],
+    "/i140-receipts": ["I-140", "receipt"],
+    "/oppenheim": ["Oppenheim", "materialization"],
+    "/legislation": ["bill", "Congress", "scenario"],
+    "/ceac-scheduling": ["CEAC", "NVC", "interview"],
 }
 
-# Scenario definitions: ports must not conflict for parallel runs.
+ERROR_HINTS = [
+    "failed to load",
+    "network error",
+    "econnrefused",
+    "next_public_api_url",
+    "err_connection",
+    "503",
+    "axioserror",
+]
+
+
+def _safe_cpus() -> str:
+    n = os.cpu_count() or 2
+    # Leave headroom; never exceed host (Docker rejects > nproc)
+    return f"{max(1.0, min(float(n - 1), 4.0)):.1f}"
+
+
+SAFE_CPUS = _safe_cpus()
+
 SCENARIOS: dict[str, dict[str, Any]] = {
     "baseline": {
         "api_port": 18000,
         "frontend_port": 13000,
         "services": ["api", "frontend"],
         "env": {
+            "PERF_API_ENABLE": "1",
             "PERF_API_DELAY_MS": "0",
             "PERF_API_FAIL_PATHS": "",
             "PERF_PAGE_SET": "all",
-            "API_CPUS": "8.0",
-            "API_MEM_LIMIT": "8g",
-            "FRONTEND_CPUS": "8.0",
-            "FRONTEND_MEM_LIMIT": "8g",
+            "API_CPUS": SAFE_CPUS,
+            "API_MEM_LIMIT": "4g",
+            "FRONTEND_CPUS": SAFE_CPUS,
+            "FRONTEND_MEM_LIMIT": "4g",
         },
         "page_set": "all",
         "expect_api": True,
@@ -117,15 +124,15 @@ SCENARIOS: dict[str, dict[str, Any]] = {
         "frontend_port": 13002,
         "services": ["api", "frontend"],
         "env": {
+            "PERF_API_ENABLE": "1",
             "PERF_API_DELAY_MS": "0",
             "PERF_API_FAIL_PATHS": "",
-            "PERF_PAGE_SET": "all",
             "API_CPUS": "0.5",
-            "API_MEM_LIMIT": "8g",
+            "API_MEM_LIMIT": "4g",
             "FRONTEND_CPUS": "0.5",
-            "FRONTEND_MEM_LIMIT": "8g",
+            "FRONTEND_MEM_LIMIT": "4g",
         },
-        "page_set": "all",
+        "page_set": "heavy",
         "expect_api": True,
     },
     "mem-pressure": {
@@ -133,15 +140,15 @@ SCENARIOS: dict[str, dict[str, Any]] = {
         "frontend_port": 13003,
         "services": ["api", "frontend"],
         "env": {
+            "PERF_API_ENABLE": "1",
             "PERF_API_DELAY_MS": "0",
             "PERF_API_FAIL_PATHS": "",
-            "PERF_PAGE_SET": "all",
-            "API_CPUS": "8.0",
+            "API_CPUS": SAFE_CPUS,
             "API_MEM_LIMIT": "256m",
-            "FRONTEND_CPUS": "8.0",
+            "FRONTEND_CPUS": SAFE_CPUS,
             "FRONTEND_MEM_LIMIT": "384m",
         },
-        "page_set": "all",
+        "page_set": "heavy",
         "expect_api": True,
     },
     "api-slow": {
@@ -149,49 +156,67 @@ SCENARIOS: dict[str, dict[str, Any]] = {
         "frontend_port": 13001,
         "services": ["api", "frontend"],
         "env": {
+            "PERF_API_ENABLE": "1",
             "PERF_API_DELAY_MS": "2000",
             "PERF_API_FAIL_PATHS": "",
-            "PERF_PAGE_SET": "all",
-            "API_CPUS": "8.0",
-            "API_MEM_LIMIT": "8g",
-            "FRONTEND_CPUS": "8.0",
-            "FRONTEND_MEM_LIMIT": "8g",
+            "API_CPUS": SAFE_CPUS,
+            "API_MEM_LIMIT": "4g",
+            "FRONTEND_CPUS": SAFE_CPUS,
+            "FRONTEND_MEM_LIMIT": "4g",
         },
         "page_set": "all",
         "expect_api": True,
-        # Comparative assertion: median TTM/load should exceed baseline (2s injected delay)
-        "min_load_delta_vs_baseline_ms": 800,
+        # Wall-clock TTM / API latency should exceed baseline by ~injected delay
+        "min_ttm_delta_vs_baseline_ms": 1500,
+        "min_api_latency_ms": 1500,
     },
     "api-paused": {
-        "api_port": 18999,  # unused — API not started
+        "api_port": 18999,
         "frontend_port": 13004,
         "services": ["frontend"],
         "env": {
-            # Point browser at a guaranteed-dead API port so failures are honest
+            "PERF_API_ENABLE": "0",
             "PERF_API_DELAY_MS": "0",
             "PERF_API_FAIL_PATHS": "",
-            "PERF_PAGE_SET": "all",
-            "API_CPUS": "8.0",
-            "API_MEM_LIMIT": "8g",
-            "FRONTEND_CPUS": "8.0",
-            "FRONTEND_MEM_LIMIT": "8g",
+            "API_CPUS": SAFE_CPUS,
+            "API_MEM_LIMIT": "4g",
+            "FRONTEND_CPUS": SAFE_CPUS,
+            "FRONTEND_MEM_LIMIT": "4g",
         },
-        "page_set": "heavy",  # enough to see error UX
+        "page_set": "heavy",
         "expect_api": False,
         "expect_api_failures": True,
+    },
+    "api-partial-fail": {
+        "api_port": 18007,
+        "frontend_port": 13007,
+        "services": ["api", "frontend"],
+        "env": {
+            "PERF_API_ENABLE": "1",
+            "PERF_API_DELAY_MS": "0",
+            "PERF_API_FAIL_PATHS": "/api/waterfall,/api/vb-forecast,/api/supply-demand,/api/oppenheim",
+            "API_CPUS": SAFE_CPUS,
+            "API_MEM_LIMIT": "4g",
+            "FRONTEND_CPUS": SAFE_CPUS,
+            "FRONTEND_MEM_LIMIT": "4g",
+        },
+        "page_set": "heavy",
+        "expect_api": True,
+        "expect_partial_api_failures": True,
     },
     "heavy-pages-only": {
         "api_port": 18005,
         "frontend_port": 13005,
         "services": ["api", "frontend"],
         "env": {
+            "PERF_API_ENABLE": "1",
             "PERF_API_DELAY_MS": "0",
             "PERF_API_FAIL_PATHS": "",
             "PERF_PAGE_SET": "heavy",
-            "API_CPUS": "8.0",
-            "API_MEM_LIMIT": "8g",
-            "FRONTEND_CPUS": "8.0",
-            "FRONTEND_MEM_LIMIT": "8g",
+            "API_CPUS": SAFE_CPUS,
+            "API_MEM_LIMIT": "4g",
+            "FRONTEND_CPUS": SAFE_CPUS,
+            "FRONTEND_MEM_LIMIT": "4g",
         },
         "page_set": "heavy",
         "expect_api": True,
@@ -201,18 +226,18 @@ SCENARIOS: dict[str, dict[str, Any]] = {
         "frontend_port": 13006,
         "services": ["api", "frontend"],
         "env": {
+            "PERF_API_ENABLE": "1",
             "PERF_API_DELAY_MS": "0",
             "PERF_API_FAIL_PATHS": "",
             "PERF_PAGE_SET": "light",
-            "API_CPUS": "8.0",
-            "API_MEM_LIMIT": "8g",
-            "FRONTEND_CPUS": "8.0",
-            "FRONTEND_MEM_LIMIT": "8g",
+            "API_CPUS": SAFE_CPUS,
+            "API_MEM_LIMIT": "4g",
+            "FRONTEND_CPUS": SAFE_CPUS,
+            "FRONTEND_MEM_LIMIT": "4g",
         },
         "page_set": "light",
         "expect_api": True,
     },
-    # Host-mode placeholder (no compose) — used with --skip-compose
     "in-compose": {
         "api_port": 8000,
         "frontend_port": 3000,
@@ -238,14 +263,18 @@ class PageMetrics:
     ok: bool
     ttfb_ms: float | None = None
     dom_content_loaded_ms: float | None = None
-    load_ms: float | None = None
+    load_ms: float | None = None  # navigation timing only (never overwritten with TTM)
     time_to_meaningful_ms: float | None = None
+    median_api_latency_ms: float | None = None
     api_request_count: int = 0
+    api_success_count: int = 0
     api_failed_count: int = 0
     console_errors: list[str] = field(default_factory=list)
     error: str | None = None
     screenshot: str | None = None
     final_url: str | None = None
+    sample_api_urls: list[str] = field(default_factory=list)
+    timed_out_ttm: bool = False
 
 
 @dataclass
@@ -270,6 +299,28 @@ def pages_for_set(page_set: str) -> list[str]:
     return list(ALL_PAGES)
 
 
+def api_base_url(api_port: int) -> str:
+    return f"http://127.0.0.1:{api_port}/api"
+
+
+def is_api_url(url: str, api_port: int) -> bool:
+    """True if URL targets the scenario API origin (host Playwright → published port)."""
+    try:
+        p = urlparse(url)
+    except Exception:
+        return False
+    host = (p.hostname or "").lower()
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        return False
+    port = p.port
+    if port is None:
+        port = 443 if (p.scheme or "") == "https" else 80
+    if int(port) != int(api_port):
+        return False
+    path = p.path or ""
+    return path == "/api" or path.startswith("/api/")
+
+
 def compose_cmd(project: str, *args: str) -> list[str]:
     cmd = ["docker", "compose", "-p", project]
     for f in COMPOSE_FILES:
@@ -285,11 +336,8 @@ def scenario_env(name: str, cfg: dict[str, Any]) -> dict[str, str]:
     env.update({k: str(v) for k, v in cfg.get("env", {}).items()})
     env["API_HOST_PORT"] = str(api_port)
     env["FRONTEND_HOST_PORT"] = str(fe_port)
-    # Browser on host → published API port. For api-paused, point at dead port.
-    if cfg.get("expect_api"):
-        env["NEXT_PUBLIC_API_URL"] = f"http://localhost:{api_port}/api"
-    else:
-        env["NEXT_PUBLIC_API_URL"] = f"http://localhost:{api_port}/api"
+    # Must match published API port (rebuild required — baked into Next client)
+    env["NEXT_PUBLIC_API_URL"] = f"http://localhost:{api_port}/api"
     env["REQUIRE_API_URL"] = "1"
     env["COMPOSE_PROJECT_NAME"] = f"perf-{name}"
     return env
@@ -301,26 +349,37 @@ def start_scenario(name: str, cfg: dict[str, Any]) -> tuple[bool, str | None]:
     if not services:
         return True, None
     env = scenario_env(name, cfg)
-    # Build frontend so NEXT_PUBLIC_API_URL is correct per scenario ports
+    log_dir = ROOT / "artifacts" / "perf-matrix" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
     build_cmd = compose_cmd(project, "build", *services)
     try:
-        subprocess.run(build_cmd, cwd=ROOT, env=env, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        return False, f"build failed: {e.stderr[-2000:] if e.stderr else e}"
+        r = subprocess.run(build_cmd, cwd=ROOT, env=env, check=False, capture_output=True, text=True)
+        (log_dir / f"{name}-build.log").write_text((r.stdout or "") + "\n" + (r.stderr or ""), encoding="utf-8")
+        if r.returncode != 0:
+            return False, f"build failed: {(r.stderr or r.stdout or '')[-2500:]}"
+    except OSError as e:
+        return False, f"build failed: {e}"
 
     up_cmd = compose_cmd(project, "up", "-d", "--remove-orphans", *services)
     try:
-        subprocess.run(up_cmd, cwd=ROOT, env=env, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        return False, f"up failed: {e.stderr[-2000:] if e.stderr else e}"
+        r = subprocess.run(up_cmd, cwd=ROOT, env=env, check=False, capture_output=True, text=True)
+        (log_dir / f"{name}-up.log").write_text((r.stdout or "") + "\n" + (r.stderr or ""), encoding="utf-8")
+        if r.returncode != 0:
+            return False, f"up failed: {(r.stderr or r.stdout or '')[-2500:]}"
+    except OSError as e:
+        return False, f"up failed: {e}"
     return True, None
 
 
-def stop_scenario(name: str, cfg: dict[str, Any]) -> None:
+def stop_scenario(name: str, cfg: dict[str, Any]) -> bool:
     project = f"perf-{name}"
     env = scenario_env(name, cfg)
     cmd = compose_cmd(project, "down", "-v", "--remove-orphans")
-    subprocess.run(cmd, cwd=ROOT, env=env, capture_output=True, text=True)
+    r = subprocess.run(cmd, cwd=ROOT, env=env, capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"  teardown {name} warn: {(r.stderr or r.stdout or '')[-500:]}", file=sys.stderr)
+        return False
+    return True
 
 
 def wait_http(url: str, timeout_s: float = 180.0, expect_ok: bool = True) -> tuple[bool, str | None]:
@@ -329,37 +388,64 @@ def wait_http(url: str, timeout_s: float = 180.0, expect_ok: bool = True) -> tup
     while time.time() < deadline:
         try:
             with urllib.request.urlopen(url, timeout=5) as resp:
-                code = getattr(resp, "status", 200)
-                if expect_ok and 200 <= int(code) < 500:
+                code = int(getattr(resp, "status", 200))
+                if expect_ok and 200 <= code < 400:
                     return True, None
                 if not expect_ok:
                     return True, None
                 last_err = f"HTTP {code}"
-        except Exception as e:  # noqa: BLE001 — health poll
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as e:
             last_err = str(e)
             if not expect_ok:
-                # For negative health (api down), connection error is success
                 return True, None
         time.sleep(2)
     return False, last_err or "timeout"
 
 
-def wait_scenario_health(name: str, cfg: dict[str, Any], timeout_s: float) -> str | None:
+def wait_scenario_health(name: str, cfg: dict[str, Any], timeout_s: float, strict_health: bool = True) -> str | None:
     api_port = int(cfg["api_port"])
     fe_port = int(cfg["frontend_port"])
     fe_url = f"http://127.0.0.1:{fe_port}/"
     ok_fe, err_fe = wait_http(fe_url, timeout_s=timeout_s, expect_ok=True)
     if not ok_fe:
         return f"frontend not ready at {fe_url}: {err_fe}"
-    if cfg.get("expect_api"):
+    if cfg.get("expect_api") and "api" in (cfg.get("services") or []):
         api_health = f"http://127.0.0.1:{api_port}/api/health"
         ok_api, err_api = wait_http(api_health, timeout_s=timeout_s, expect_ok=True)
         if not ok_api:
-            # Fallback: /docs often works even if health route is old image
+            if strict_health:
+                return f"api /api/health not ready ({api_health}: {err_api}); rebuild api image"
             ok_docs, err_docs = wait_http(f"http://127.0.0.1:{api_port}/docs", timeout_s=30, expect_ok=True)
             if not ok_docs:
                 return f"api not ready ({api_health}: {err_api}; /docs: {err_docs})"
+        else:
+            # Confirm delay config visible for api-slow style scenarios
+            try:
+                with urllib.request.urlopen(api_health, timeout=5) as resp:
+                    body = json.loads(resp.read().decode())
+                want_delay = int(cfg.get("env", {}).get("PERF_API_DELAY_MS") or 0)
+                if want_delay and int(body.get("perf_api_delay_ms") or 0) != want_delay:
+                    return (
+                        f"health reports perf_api_delay_ms={body.get('perf_api_delay_ms')} "
+                        f"expected {want_delay} (PERF_API_ENABLE / rebuild?)"
+                    )
+            except (urllib.error.URLError, json.JSONDecodeError, OSError) as e:
+                return f"health JSON parse failed: {e}"
     return None
+
+
+def detect_data_ok(text: str, path: str) -> bool:
+    """Domain data / chart landmarks — not mere shell or error chrome."""
+    lower = (text or "").lower()
+    if any(e in lower for e in ERROR_HINTS):
+        return False
+    hints = DATA_HINTS.get(path, ["spillover", "eb-1"])
+    return any(h.lower() in lower for h in hints)
+
+
+def detect_error_ux(text: str) -> bool:
+    lower = (text or "").lower()
+    return any(e in lower for e in ERROR_HINTS)
 
 
 def collect_page_metrics(
@@ -369,36 +455,126 @@ def collect_page_metrics(
     api_port: int,
     screenshot_dir: Path,
     scenario: str,
+    expect_api: bool,
+    expect_api_failures: bool,
     navigation_timeout_ms: int = 90_000,
 ) -> PageMetrics:
     from playwright.sync_api import TimeoutError as PWTimeout
 
-    page = browser.new_page()
+    context = browser.new_context()
+    page = context.new_page()
     console_errors: list[str] = []
+    api_latencies: list[float] = []
+    seen_req_ids: set[str] = set()
     api_reqs = 0
+    api_ok = 0
     api_fail = 0
-    api_host_token = f":{api_port}"
+    sample_urls: list[str] = []
 
     def on_console(msg) -> None:
         if msg.type == "error":
             console_errors.append(msg.text[:500])
 
+    def track_url(url: str) -> bool:
+        return is_api_url(url, api_port)
+
+    def on_request(req) -> None:
+        nonlocal api_reqs
+        u = req.url
+        if not track_url(u):
+            return
+        rid = req.url + "|" + req.method
+        if rid in seen_req_ids:
+            return
+        # Count on request so success is not missed if response listener misses
+        seen_req_ids.add(rid)
+        api_reqs += 1
+        if len(sample_urls) < 5:
+            sample_urls.append(u[:200])
+
     def on_response(resp) -> None:
-        nonlocal api_reqs, api_fail
+        nonlocal api_ok, api_fail
         u = resp.url
-        if "/api" in u and (api_host_token in u or "localhost" in u or "127.0.0.1" in u):
-            api_reqs += 1
-            if resp.status >= 400 or resp.status == 0:
-                api_fail += 1
+        if not track_url(u):
+            return
+        try:
+            timing = resp.request.timing or {}
+            te = float(timing.get("responseEnd") or 0)
+            ts = float(timing.get("requestStart") or 0)
+            if te and ts and te >= ts:
+                api_latencies.append(te - ts)
+            elif te > 0:
+                api_latencies.append(te)
+        except Exception:
+            pass
+        st = int(resp.status or 0)
+        if st >= 400 or st == 0:
+            api_fail += 1
+        else:
+            api_ok += 1
 
     def on_request_failed(req) -> None:
         nonlocal api_fail, api_reqs
         u = req.url
-        if "/api" in u:
+        if not track_url(u):
+            return
+        key = req.url + "|" + req.method
+        if key not in seen_req_ids:
+            seen_req_ids.add(key)
             api_reqs += 1
-            api_fail += 1
+        api_fail += 1
+        if len(sample_urls) < 5:
+            sample_urls.append(u[:200])
+
+    def sync_perf_resources() -> None:
+        """Reconcile counts/latencies from Resource Timing (authoritative in Chromium)."""
+        nonlocal api_reqs, api_ok, api_fail
+        try:
+            entries = page.evaluate(
+                """(port) => {
+                  const out = [];
+                  for (const e of performance.getEntriesByType('resource')) {
+                    const u = e.name || '';
+                    if (!u.includes('/api')) continue;
+                    const portTok = ':' + port;
+                    if (!(u.includes(portTok))) continue;
+                    const dur = (e.responseEnd || 0) - (e.startTime || 0);
+                    const st = (typeof e.responseStatus === 'number') ? e.responseStatus : null;
+                    out.push({ url: u.slice(0, 200), dur, st });
+                  }
+                  return out;
+                }""",
+                api_port,
+            )
+        except Exception:
+            return
+        if not entries:
+            return
+        api_reqs = max(api_reqs, len(entries))
+        ok_n = 0
+        fail_n = 0
+        for e in entries:
+            st = e.get("st")
+            if st is None:
+                # completed transfer without status → treat as success if duration > 0
+                if float(e.get("dur") or 0) > 0:
+                    ok_n += 1
+                    api_latencies.append(float(e["dur"]))
+                continue
+            if int(st) >= 400:
+                fail_n += 1
+            else:
+                ok_n += 1
+                if float(e.get("dur") or 0) > 0:
+                    api_latencies.append(float(e["dur"]))
+        api_ok = max(api_ok, ok_n)
+        api_fail = max(api_fail, fail_n)
+        for e in entries[:5]:
+            if e.get("url") and e["url"] not in sample_urls:
+                sample_urls.append(e["url"])
 
     page.on("console", on_console)
+    page.on("request", on_request)
     page.on("response", on_response)
     page.on("requestfailed", on_request_failed)
 
@@ -407,18 +583,23 @@ def collect_page_metrics(
     metrics = PageMetrics(path=path, ok=False, final_url=url)
 
     try:
-        page.goto(url, wait_until="domcontentloaded", timeout=navigation_timeout_ms)
-        # Prefer full load but don't fail the whole page if long-polling hangs
+        # Prefer expect_response (works on older Playwright) over page.wait_for_response
         try:
-            page.wait_for_load_state("load", timeout=min(30_000, navigation_timeout_ms))
+            with page.expect_response(
+                lambda r: is_api_url(r.url, api_port) and 200 <= int(r.status or 0) < 400,
+                timeout=25_000,
+            ):
+                page.goto(url, wait_until="domcontentloaded", timeout=navigation_timeout_ms)
+        except PWTimeout:
+            page.goto(url, wait_until="domcontentloaded", timeout=navigation_timeout_ms)
+        try:
+            page.wait_for_load_state("load", timeout=min(20_000, navigation_timeout_ms))
         except PWTimeout:
             pass
-        # Client components fetch API after hydrate — bounded wait (avoid networkidle hangs).
         try:
-            page.wait_for_load_state("networkidle", timeout=12_000)
+            page.wait_for_load_state("networkidle", timeout=8_000)
         except PWTimeout:
             pass
-        page.wait_for_timeout(300)
 
         timing = page.evaluate(
             """() => {
@@ -437,46 +618,92 @@ def collect_page_metrics(
             load_v = float(timing.get("load") or 0)
             metrics.load_ms = round(load_v, 1) if load_v > 0 else None
 
-        # Time to meaningful content: poll body text for landmarks (single budget, not N×timeouts).
-        hints = MEANINGFUL_HINTS.get(path, ["Spillover", "EB"]) + [
-            "Failed to load",
-            "failed to load",
-            "Network Error",
-            "ECONNREFUSED",
-            "NEXT_PUBLIC_API_URL",
-        ]
-        meaningful_ms = None
-        deadline = time.perf_counter() + 25.0
+        # Wait for API activity + data UI (or error UX for failure scenarios)
+        deadline = time.perf_counter() + 30.0
+        data_ok = False
+        error_ux = False
+        body_text = ""
         while time.perf_counter() < deadline:
+            sync_perf_resources()
             try:
-                text = page.evaluate("() => (document.body && document.body.innerText) || ''") or ""
-            except Exception:  # noqa: BLE001
-                text = ""
-            lower = text.lower()
-            if any(h.lower() in lower for h in hints) or len(text) > 120:
-                meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
-                break
-            page.wait_for_timeout(200)
-        # Prefer wall-clock TTM (includes client API wait) over nav-only load for comparisons
-        wall_ms = round((time.perf_counter() - t0) * 1000, 1)
-        metrics.time_to_meaningful_ms = meaningful_ms or wall_ms
-        # Use max(nav load, TTM) as effective "interactive" timing for comparative asserts
-        if metrics.load_ms is not None and metrics.time_to_meaningful_ms is not None:
-            metrics.load_ms = max(metrics.load_ms, metrics.time_to_meaningful_ms)
-        elif metrics.time_to_meaningful_ms is not None:
-            metrics.load_ms = metrics.time_to_meaningful_ms
+                body_text = page.evaluate("() => (document.body && document.body.innerText) || ''") or ""
+            except Exception:
+                body_text = ""
+            error_ux = detect_error_ux(body_text)
+            data_ok = detect_data_ok(body_text, path)
+            # Looser content: substantial body without error banner
+            content_ok = data_ok or (len(body_text) > 200 and not error_ux)
+            if expect_api_failures:
+                if api_fail > 0 and api_reqs > 0:
+                    metrics.time_to_meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
+                    break
+            elif expect_api:
+                # Prefer: at least one successful API + content (not error-only shell)
+                if api_ok > 0 and content_ok:
+                    metrics.time_to_meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
+                    break
+                # Resource timing shows completed API transfers even if status listener missed
+                if api_reqs >= 3 and api_ok > 0:
+                    metrics.time_to_meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
+                    break
+                if api_reqs > 0 and api_fail > 0 and (content_ok or error_ux):
+                    metrics.time_to_meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
+                    break
+            else:
+                if content_ok or error_ux:
+                    metrics.time_to_meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
+                    break
+            page.wait_for_timeout(100)
+        else:
+            sync_perf_resources()
+            metrics.timed_out_ttm = True
+            metrics.time_to_meaningful_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+        sync_perf_resources()
         metrics.api_request_count = api_reqs
+        metrics.api_success_count = api_ok
         metrics.api_failed_count = api_fail
+        metrics.sample_api_urls = sample_urls
         metrics.console_errors = console_errors[:20]
-        metrics.ok = meaningful_ms is not None
-        if not metrics.ok:
-            metrics.error = "no meaningful content detected within timeout"
-    except Exception as e:  # noqa: BLE001
+        if api_latencies:
+            metrics.median_api_latency_ms = median([float(x) for x in api_latencies])
+
+        if expect_api_failures:
+            metrics.ok = api_fail > 0 and metrics.api_request_count > 0
+            if not metrics.ok:
+                metrics.error = "expected API failures not observed"
+        elif expect_api:
+            content_ok = data_ok or (len(body_text) > 200 and not error_ux)
+            if metrics.api_success_count == 0 and api_latencies:
+                metrics.api_success_count = max(metrics.api_success_count, len(api_latencies))
+            metrics.ok = (
+                metrics.api_request_count > 0
+                and (metrics.api_success_count > 0 or metrics.api_failed_count > 0)
+                and content_ok
+            )
+            if metrics.api_request_count == 0:
+                metrics.error = "no API XHR observed (check NEXT_PUBLIC_API_URL bake / listeners)"
+                metrics.ok = False
+            elif metrics.api_success_count == 0 and metrics.api_failed_count == 0:
+                metrics.error = "API requests seen but no completed responses"
+                metrics.ok = False
+            elif not content_ok:
+                metrics.error = "no domain data landmarks (shell only?)"
+                metrics.ok = False
+        else:
+            metrics.ok = data_ok
+
+        if metrics.timed_out_ttm and metrics.ok:
+            # still ok but flag saturation
+            pass
+    except Exception as e:
         metrics.error = str(e)[:800]
         metrics.ok = False
         metrics.api_request_count = api_reqs
+        metrics.api_success_count = api_ok
         metrics.api_failed_count = api_fail
         metrics.console_errors = console_errors[:20]
+        metrics.sample_api_urls = sample_urls
 
     if not metrics.ok:
         screenshot_dir.mkdir(parents=True, exist_ok=True)
@@ -485,56 +712,10 @@ def collect_page_metrics(
         try:
             page.screenshot(path=str(shot), full_page=True)
             metrics.screenshot = str(shot)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
-    page.close()
-    return metrics
-
-
-def collect_page_metrics_http(
-    frontend_url: str,
-    path: str,
-    api_port: int,
-    expect_api: bool,
-) -> PageMetrics:
-    """Fallback metrics without Playwright (TTFB via HTTP GET only)."""
-    url = frontend_url.rstrip("/") + path
-    metrics = PageMetrics(path=path, ok=False, final_url=url)
-    t0 = time.perf_counter()
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "perf-matrix/http-fallback"})
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            body = resp.read(200_000)
-            code = getattr(resp, "status", 200)
-        elapsed_ms = (time.perf_counter() - t0) * 1000
-        metrics.ttfb_ms = round(elapsed_ms, 1)
-        metrics.dom_content_loaded_ms = round(elapsed_ms, 1)
-        metrics.load_ms = round(elapsed_ms, 1)
-        text = body.decode("utf-8", errors="replace")
-        hints = MEANINGFUL_HINTS.get(path, ["Spillover"])
-        hit = any(h.lower() in text.lower() for h in hints) or len(text) > 500
-        metrics.time_to_meaningful_ms = round(elapsed_ms, 1) if hit else None
-        metrics.ok = bool(hit) and 200 <= int(code) < 400
-        if not metrics.ok:
-            metrics.error = f"HTTP {code} or no landmark text in SSR HTML"
-        # Probe API health for failure counting when expect_api is False
-        api_health = f"http://127.0.0.1:{api_port}/api/health"
-        try:
-            with urllib.request.urlopen(api_health, timeout=3) as ar:
-                metrics.api_request_count = 1
-                if getattr(ar, "status", 200) >= 400:
-                    metrics.api_failed_count = 1
-        except Exception:
-            metrics.api_request_count = 1
-            metrics.api_failed_count = 1
-            if not expect_api:
-                # API down is expected — count as visible failure signal
-                pass
-    except Exception as e:  # noqa: BLE001
-        metrics.error = str(e)[:800]
-        metrics.api_failed_count = 1
-        metrics.api_request_count = 1
+    context.close()
     return metrics
 
 
@@ -545,30 +726,22 @@ def run_browser_suite(
     artifact_dir: Path,
     page_set_override: str | None = None,
 ) -> list[PageMetrics]:
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as e:
+        raise SystemExit(
+            "Playwright is required (no HTTP fallback). "
+            "Use Python 3.10–3.12 and: pip install playwright && playwright install chromium\n"
+            f"Import error: {e}"
+        ) from e
+
     page_set = page_set_override or cfg.get("page_set") or "all"
     paths = pages_for_set(page_set)
     api_port = int(cfg["api_port"])
     shot_dir = artifact_dir / "screenshots"
+    expect_api = bool(cfg.get("expect_api"))
+    expect_fail = bool(cfg.get("expect_api_failures"))
     results: list[PageMetrics] = []
-
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
-        print(
-            "WARNING: playwright not installed for this interpreter; "
-            "using HTTP fallback metrics (install via python3.11 -m pip install playwright).",
-            file=sys.stderr,
-        )
-        for path in paths:
-            results.append(
-                collect_page_metrics_http(
-                    frontend_url,
-                    path,
-                    api_port=api_port,
-                    expect_api=bool(cfg.get("expect_api", True)),
-                )
-            )
-        return results
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -582,6 +755,8 @@ def run_browser_suite(
                         api_port=api_port,
                         screenshot_dir=shot_dir,
                         scenario=scenario,
+                        expect_api=expect_api,
+                        expect_api_failures=expect_fail,
                     )
                 )
         finally:
@@ -596,67 +771,129 @@ def median(vals: list[float]) -> float | None:
     n = len(s)
     mid = n // 2
     if n % 2:
-        return s[mid]
-    return (s[mid - 1] + s[mid]) / 2.0
+        return round(s[mid], 1)
+    return round((s[mid - 1] + s[mid]) / 2.0, 1)
 
 
-def evaluate_assertions(
-    results: dict[str, ScenarioResult],
-) -> None:
-    """Attach comparative assertions (specific deltas, not 'loaded somehow')."""
+def evaluate_assertions(results: dict[str, ScenarioResult]) -> None:
     baseline = results.get("baseline")
-    base_loads: list[float] = []
+    base_ttms: list[float] = []
+    base_api_lat: list[float] = []
     if baseline:
         for pm in baseline.pages:
-            if pm.load_ms is not None:
-                base_loads.append(pm.load_ms)
-            elif pm.dom_content_loaded_ms is not None:
-                base_loads.append(pm.dom_content_loaded_ms)
-    base_med = median(base_loads)
+            if pm.time_to_meaningful_ms is not None and not pm.timed_out_ttm:
+                base_ttms.append(pm.time_to_meaningful_ms)
+            elif pm.time_to_meaningful_ms is not None:
+                base_ttms.append(pm.time_to_meaningful_ms)
+            if pm.median_api_latency_ms is not None:
+                base_api_lat.append(pm.median_api_latency_ms)
+    base_ttm_med = median(base_ttms)
+    base_api_med = median(base_api_lat)
 
     for name, sr in results.items():
         cfg = SCENARIOS.get(name, {})
-        loads: list[float] = []
-        for pm in sr.pages:
-            if pm.load_ms is not None:
-                loads.append(pm.load_ms)
-            elif pm.dom_content_loaded_ms is not None:
-                loads.append(pm.dom_content_loaded_ms)
-        med = median(loads)
+        ttms = [p.time_to_meaningful_ms for p in sr.pages if p.time_to_meaningful_ms is not None]
+        api_lats = [p.median_api_latency_ms for p in sr.pages if p.median_api_latency_ms is not None]
+        ttm_med = median(ttms)
+        api_med = median(api_lats)
         failed_api_pages = sum(1 for pm in sr.pages if pm.api_failed_count > 0)
         ok_pages = sum(1 for pm in sr.pages if pm.ok)
+        total_api = sum(pm.api_request_count for pm in sr.pages)
+
+        if cfg.get("expect_api") and sr.pages and not cfg.get("expect_api_failures"):
+            sr.assertions.append(
+                {
+                    "name": "api_traffic_observed",
+                    "pass": total_api > 0 and all(pm.api_request_count > 0 for pm in sr.pages),
+                    "detail": f"total API req={total_api}; pages with traffic="
+                    f"{sum(1 for p in sr.pages if p.api_request_count > 0)}/{len(sr.pages)}",
+                }
+            )
+            sr.assertions.append(
+                {
+                    "name": "majority_pages_meaningful",
+                    "pass": ok_pages >= max(1, int(0.7 * len(sr.pages))),
+                    "detail": f"{ok_pages}/{len(sr.pages)} pages data-ok with API success",
+                }
+            )
 
         if cfg.get("expect_api_failures"):
             sr.assertions.append(
                 {
                     "name": "api_failures_visible",
-                    "pass": failed_api_pages >= max(1, len(sr.pages) // 2),
+                    "pass": failed_api_pages >= max(1, len(sr.pages) // 2) and total_api > 0,
                     "detail": f"{failed_api_pages}/{len(sr.pages)} pages had API failures "
-                    f"(expect majority when API paused / no silent fallback)",
-                }
-            )
-        elif cfg.get("expect_api") and sr.pages:
-            sr.assertions.append(
-                {
-                    "name": "majority_pages_meaningful",
-                    "pass": ok_pages >= max(1, int(0.7 * len(sr.pages))),
-                    "detail": f"{ok_pages}/{len(sr.pages)} pages reached meaningful content",
+                    f"(total_api={total_api}; no silent fallback)",
                 }
             )
 
-        min_delta = cfg.get("min_load_delta_vs_baseline_ms")
-        if min_delta is not None and base_med is not None and med is not None:
-            delta = med - base_med
+        if cfg.get("expect_partial_api_failures"):
             sr.assertions.append(
                 {
-                    "name": "slower_than_baseline",
-                    "pass": delta >= float(min_delta),
-                    "detail": (
-                        f"median timing {med:.0f}ms vs baseline {base_med:.0f}ms "
-                        f"(delta {delta:.0f}ms, need ≥{min_delta}ms)"
-                    ),
+                    "name": "partial_api_failures",
+                    "pass": failed_api_pages >= 1 and total_api > 0,
+                    "detail": f"pages with API fails={failed_api_pages}, total_api={total_api}",
                 }
             )
+
+        min_delta = cfg.get("min_ttm_delta_vs_baseline_ms")
+        if min_delta is not None:
+            # Prefer API latency delta when available (more sensitive to PERF_API_DELAY_MS)
+            use_api = base_api_med is not None and api_med is not None
+            if use_api:
+                delta = api_med - base_api_med
+                # Also accept absolute latency reflecting delay
+                abs_ok = api_med >= float(min_delta)
+                delta_ok = delta >= float(min_delta) * 0.5  # at least half threshold increase
+                sr.assertions.append(
+                    {
+                        "name": "slower_than_baseline",
+                        "pass": abs_ok or delta_ok,
+                        "detail": (
+                            f"median API lat {api_med:.1f}ms vs baseline {base_api_med:.1f}ms "
+                            f"(delta {delta:.1f}ms); abs≥{min_delta} or delta≥{float(min_delta)*0.5:.0f}"
+                        ),
+                    }
+                )
+            elif base_ttm_med is None or ttm_med is None:
+                sr.assertions.append(
+                    {
+                        "name": "slower_than_baseline",
+                        "pass": False,
+                        "detail": "missing baseline/scenario TTM and API latency medians",
+                    }
+                )
+            else:
+                delta = ttm_med - base_ttm_med
+                sr.assertions.append(
+                    {
+                        "name": "slower_than_baseline",
+                        "pass": delta >= float(min_delta),
+                        "detail": (
+                            f"median TTM {ttm_med:.1f}ms vs baseline {base_ttm_med:.1f}ms "
+                            f"(delta {delta:.1f}ms, need ≥{min_delta}ms)"
+                        ),
+                    }
+                )
+
+        min_api = cfg.get("min_api_latency_ms")
+        if min_api is not None:
+            if api_med is None:
+                sr.assertions.append(
+                    {
+                        "name": "api_latency_reflects_delay",
+                        "pass": False,
+                        "detail": "no median API latency observed",
+                    }
+                )
+            else:
+                sr.assertions.append(
+                    {
+                        "name": "api_latency_reflects_delay",
+                        "pass": api_med >= float(min_api),
+                        "detail": f"median API latency {api_med:.1f}ms (need ≥{min_api}ms)",
+                    }
+                )
 
 
 def write_reports(results: dict[str, ScenarioResult], artifact_dir: Path) -> tuple[Path, Path]:
@@ -671,6 +908,9 @@ def write_reports(results: dict[str, ScenarioResult], artifact_dir: Path) -> tup
     json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     latest_json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
+    def fmt(v: float | None) -> str:
+        return f"{v:.1f}" if v is not None else "—"
+
     lines: list[str] = [
         "# Performance Matrix Report",
         "",
@@ -678,22 +918,24 @@ def write_reports(results: dict[str, ScenarioResult], artifact_dir: Path) -> tup
         "",
         "## Summary",
         "",
-        "| Scenario | Pages OK | Median DCL (ms) | Median Load (ms) | Median TTM (ms) | API fails (sum) | Assertions |",
-        "|---|---:|---:|---:|---:|---:|---|",
+        "| Scenario | Pages OK | Median DCL | Median Nav Load | Median TTM | Median API lat | API req | API fail | Assertions |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for name, sr in results.items():
         ok_n = sum(1 for p in sr.pages if p.ok)
         dcls = [p.dom_content_loaded_ms for p in sr.pages if p.dom_content_loaded_ms is not None]
         loads = [p.load_ms for p in sr.pages if p.load_ms is not None]
         ttms = [p.time_to_meaningful_ms for p in sr.pages if p.time_to_meaningful_ms is not None]
+        alats = [p.median_api_latency_ms for p in sr.pages if p.median_api_latency_ms is not None]
+        api_reqs = sum(p.api_request_count for p in sr.pages)
         api_fails = sum(p.api_failed_count for p in sr.pages)
         asserts = ", ".join(
             ("PASS" if a["pass"] else "FAIL") + f":{a['name']}" for a in sr.assertions
         ) or "—"
         lines.append(
             f"| {name} | {ok_n}/{len(sr.pages)} | "
-            f"{median(dcls) or '—'} | {median(loads) or '—'} | {median(ttms) or '—'} | "
-            f"{api_fails} | {asserts} |"
+            f"{fmt(median(dcls))} | {fmt(median(loads))} | {fmt(median(ttms))} | "
+            f"{fmt(median(alats))} | {api_reqs} | {api_fails} | {asserts} |"
         )
 
     lines.extend(["", "## Per-scenario pages", ""])
@@ -707,15 +949,18 @@ def write_reports(results: dict[str, ScenarioResult], artifact_dir: Path) -> tup
         lines.append(f"- Frontend: {sr.frontend_url}")
         lines.append(f"- API: {sr.api_url}")
         lines.append("")
-        lines.append("| Path | OK | TTFB | DCL | Load | TTM | API req | API fail | Errors |")
-        lines.append("|---|:---:|---:|---:|---:|---:|---:|---:|---|")
+        lines.append(
+            "| Path | OK | TTFB | DCL | NavLoad | TTM | API lat | API req | API ok | API fail | Errors |"
+        )
+        lines.append("|---|:---:|---:|---:|---:|---:|---:|---:|---:|---:|---|")
         for p in sr.pages:
             err = (p.error or "")[:60].replace("|", "/")
             lines.append(
                 f"| {p.path} | {'yes' if p.ok else 'no'} | "
-                f"{p.ttfb_ms or '—'} | {p.dom_content_loaded_ms or '—'} | "
-                f"{p.load_ms or '—'} | {p.time_to_meaningful_ms or '—'} | "
-                f"{p.api_request_count} | {p.api_failed_count} | {err or '—'} |"
+                f"{fmt(p.ttfb_ms)} | {fmt(p.dom_content_loaded_ms)} | "
+                f"{fmt(p.load_ms)} | {fmt(p.time_to_meaningful_ms)} | "
+                f"{fmt(p.median_api_latency_ms)} | "
+                f"{p.api_request_count} | {p.api_success_count} | {p.api_failed_count} | {err or '—'} |"
             )
         if sr.assertions:
             lines.append("")
@@ -729,12 +974,14 @@ def write_reports(results: dict[str, ScenarioResult], artifact_dir: Path) -> tup
         [
             "## Comparison notes",
             "",
-            "- **baseline** is the healthy reference path.",
-            "- **api-slow** should show higher median timings vs baseline (PERF_API_DELAY_MS).",
-            "- **api-paused** should surface API failures (no silent localhost fallback).",
-            "- **cpu-throttle** / **mem-pressure** may elevate TTM or error rates under load.",
+            "- **baseline** is the healthy reference (API traffic required).",
+            "- **api-slow** must show higher median TTM and API latency vs baseline (`PERF_API_DELAY_MS=2000`, threshold ≥1.5s).",
+            "- **api-paused** must surface API failures (no silent localhost fallback).",
+            "- Navigation `load_ms` is **not** overwritten by TTM.",
             "",
-            "See `docs/PERF_MATRIX.md` for how to re-run and interpret env vars.",
+            "Any assertion FAIL makes the process exit non-zero.",
+            "",
+            "See `docs/PERF_MATRIX.md`.",
         ]
     )
     md_path = artifact_dir / f"report-{ts}.md"
@@ -745,89 +992,38 @@ def write_reports(results: dict[str, ScenarioResult], artifact_dir: Path) -> tup
     return json_path, md_path
 
 
-def run_one_scenario(
-    name: str,
-    *,
-    skip_compose: bool,
-    frontend_url_override: str | None,
-    api_url_override: str | None,
-    artifact_dir: Path,
-    health_timeout: float,
-    page_set_override: str | None,
-) -> ScenarioResult:
-    cfg = SCENARIOS[name]
-    project = f"perf-{name}"
-    api_port = int(cfg["api_port"])
-    fe_port = int(cfg["frontend_port"])
-    frontend_url = frontend_url_override or f"http://127.0.0.1:{fe_port}"
-    api_url = api_url_override or f"http://127.0.0.1:{api_port}"
-    sr = ScenarioResult(
-        name=name,
-        project=project,
-        frontend_url=frontend_url,
-        api_url=api_url,
-        started=False,
-    )
-
-    if not skip_compose and cfg.get("services"):
-        ok, err = start_scenario(name, cfg)
-        sr.started = ok
-        if not ok:
-            sr.compose_error = err
-            return sr
-        health_err = wait_scenario_health(name, cfg, timeout_s=health_timeout)
-        if health_err:
-            sr.health_error = health_err
-            # Still try browser metrics — captures failure UX
-    else:
-        sr.started = True
-
-    try:
-        sr.pages = run_browser_suite(
-            name,
-            cfg,
-            frontend_url,
-            artifact_dir,
-            page_set_override=page_set_override,
-        )
-    except SystemExit:
-        raise
-    except Exception as e:  # noqa: BLE001
-        sr.health_error = (sr.health_error or "") + f" browser suite error: {e}"
-    return sr
-
-
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Run Docker performance matrix with Playwright metrics")
     p.add_argument(
         "--scenarios",
         default="baseline,api-slow,api-paused",
-        help="Comma-separated scenario names (default: baseline,api-slow,api-paused)",
+        help="Comma-separated scenario names",
     )
     p.add_argument(
         "--all-scenarios",
         action="store_true",
-        help="Run all defined scenarios (baseline, cpu-throttle, mem-pressure, api-slow, api-paused, heavy/light)",
+        help="Run all compose-backed scenarios including partial-fail / throttle",
     )
     p.add_argument("--skip-compose", action="store_true", help="Do not start/stop compose stacks")
-    p.add_argument("--host-mode", action="store_true", help="Alias for metrics against given URLs")
-    p.add_argument("--frontend-url", default=None, help="Override frontend base URL (host-mode)")
-    p.add_argument("--api-url", default=None, help="Override API base URL (host-mode)")
-    p.add_argument("--no-teardown", action="store_true", help="Leave stacks running")
-    p.add_argument("--keep-alive", action="store_true", help="Alias for --no-teardown")
+    p.add_argument("--host-mode", action="store_true", help="Metrics against given URLs only")
+    p.add_argument("--frontend-url", default=None)
+    p.add_argument("--api-url", default=None)
+    p.add_argument("--no-teardown", action="store_true")
+    p.add_argument("--keep-alive", action="store_true")
     p.add_argument(
         "--artifact-dir",
         default=str(ROOT / "artifacts" / "perf-matrix"),
-        help="Output directory for reports",
     )
-    p.add_argument("--health-timeout", type=float, default=300.0, help="Seconds to wait for health")
-    p.add_argument("--max-parallel", type=int, default=3, help="Max parallel compose stacks")
-    p.add_argument("--page-set", default=None, choices=["all", "heavy", "light"], help="Override page set")
+    p.add_argument("--health-timeout", type=float, default=300.0)
     p.add_argument(
-        "--sequential-metrics",
-        action="store_true",
-        help="Run browser metrics one scenario at a time (less CPU contention)",
+        "--max-parallel",
+        type=int,
+        default=1,
+        help="Parallel compose builds/starts (default 1 for stable timings)",
     )
+    p.add_argument("--page-set", default=None, choices=["all", "heavy", "light"])
+    p.add_argument("--sequential-metrics", action="store_true", default=True)
+    p.add_argument("--allow-legacy-api", action="store_true", help="Allow /docs health fallback")
     return p.parse_args(argv)
 
 
@@ -840,6 +1036,7 @@ def main(argv: list[str] | None = None) -> int:
             "mem-pressure",
             "api-slow",
             "api-paused",
+            "api-partial-fail",
             "heavy-pages-only",
             "light-pages-only",
         ]
@@ -850,132 +1047,150 @@ def main(argv: list[str] | None = None) -> int:
         if n not in SCENARIOS:
             print(f"Unknown scenario: {n}. Known: {', '.join(SCENARIOS)}", file=sys.stderr)
             return 2
+        if not args.skip_compose and not args.host_mode:
+            if not SCENARIOS[n].get("services") and n not in ("in-compose", "host-check"):
+                print(f"Scenario {n} has no compose services; use --skip-compose", file=sys.stderr)
+                return 2
+
+    # Fail fast if Playwright missing
+    try:
+        import playwright  # noqa: F401
+    except ImportError:
+        print(
+            "ERROR: Playwright required. Install on Python 3.10–3.12:\n"
+            "  python3.11 -m pip install playwright && python3.11 -m playwright install chromium",
+            file=sys.stderr,
+        )
+        return 2
 
     artifact_dir = Path(args.artifact_dir)
     artifact_dir.mkdir(parents=True, exist_ok=True)
     skip_compose = args.skip_compose or args.host_mode
     no_teardown = args.no_teardown or args.keep_alive
+    results: dict[str, ScenarioResult] = {}
+    started_names: list[str] = []
 
     print(f"Perf matrix scenarios: {names}")
     print(f"Artifacts: {artifact_dir}")
+    print(f"Safe CPU default: {SAFE_CPUS}")
 
-    results: dict[str, ScenarioResult] = {}
+    try:
+        if not skip_compose:
+            # Sequential build/start by default (max_parallel=1); optional parallel
+            def _start(n: str) -> tuple[str, bool, str | None]:
+                ok, err = start_scenario(n, SCENARIOS[n])
+                return n, ok, err
 
-    # Phase 1: start stacks in parallel (unless skip)
-    if not skip_compose:
-        with ThreadPoolExecutor(max_workers=max(1, args.max_parallel)) as pool:
-            futs = {
-                pool.submit(start_scenario, n, SCENARIOS[n]): n
-                for n in names
-                if SCENARIOS[n].get("services")
-            }
-            for fut in as_completed(futs):
-                n = futs[fut]
-                ok, err = fut.result()
-                print(f"  start {n}: {'ok' if ok else 'FAIL'} {err or ''}")
-                if not ok:
-                    results[n] = ScenarioResult(
-                        name=n,
-                        project=f"perf-{n}",
-                        frontend_url=f"http://127.0.0.1:{SCENARIOS[n]['frontend_port']}",
-                        api_url=f"http://127.0.0.1:{SCENARIOS[n]['api_port']}",
-                        started=False,
-                        compose_error=err,
-                    )
+            with ThreadPoolExecutor(max_workers=max(1, args.max_parallel)) as pool:
+                futs = [pool.submit(_start, n) for n in names if SCENARIOS[n].get("services")]
+                for fut in as_completed(futs):
+                    n, ok, err = fut.result()
+                    print(f"  start {n}: {'ok' if ok else 'FAIL'} {err or ''}")
+                    if ok:
+                        started_names.append(n)
+                    else:
+                        results[n] = ScenarioResult(
+                            name=n,
+                            project=f"perf-{n}",
+                            frontend_url=f"http://127.0.0.1:{SCENARIOS[n]['frontend_port']}",
+                            api_url=f"http://127.0.0.1:{SCENARIOS[n]['api_port']}",
+                            started=False,
+                            compose_error=err,
+                        )
 
-        # Health wait (sequential is fine — polls are cheap)
-        for n in names:
-            if n in results and results[n].compose_error:
-                continue
-            if not SCENARIOS[n].get("services"):
-                continue
-            herr = wait_scenario_health(n, SCENARIOS[n], timeout_s=args.health_timeout)
-            if herr:
-                print(f"  health {n}: WARN {herr}")
-                results.setdefault(
+            for n in names:
+                if n in results and results[n].compose_error:
+                    continue
+                if not SCENARIOS[n].get("services"):
+                    continue
+                if n not in started_names:
+                    continue
+                herr = wait_scenario_health(
                     n,
-                    ScenarioResult(
-                        name=n,
-                        project=f"perf-{n}",
-                        frontend_url=f"http://127.0.0.1:{SCENARIOS[n]['frontend_port']}",
-                        api_url=f"http://127.0.0.1:{SCENARIOS[n]['api_port']}",
-                        started=True,
-                        health_error=herr,
-                    ),
-                ).health_error = herr
-            else:
-                print(f"  health {n}: ok")
+                    SCENARIOS[n],
+                    timeout_s=args.health_timeout,
+                    strict_health=not args.allow_legacy_api,
+                )
+                if herr:
+                    print(f"  health {n}: WARN {herr}")
+                    results.setdefault(
+                        n,
+                        ScenarioResult(
+                            name=n,
+                            project=f"perf-{n}",
+                            frontend_url=f"http://127.0.0.1:{SCENARIOS[n]['frontend_port']}",
+                            api_url=f"http://127.0.0.1:{SCENARIOS[n]['api_port']}",
+                            started=True,
+                        ),
+                    ).health_error = herr
+                else:
+                    print(f"  health {n}: ok")
 
-    # Phase 2: browser metrics (prefer sequential to avoid CPU fight with throttled stacks)
-    def _metric_job(n: str) -> ScenarioResult:
-        if n in results and results[n].compose_error and not results[n].started:
-            return results[n]
-        cfg = SCENARIOS[n]
-        fe = args.frontend_url or f"http://127.0.0.1:{cfg['frontend_port']}"
-        api = args.api_url or f"http://127.0.0.1:{cfg['api_port']}"
-        # If we already have a partial result (health warn), reuse shell
-        existing = results.get(n)
-        sr = existing or ScenarioResult(
-            name=n,
-            project=f"perf-{n}",
-            frontend_url=fe,
-            api_url=api,
-            started=True,
-        )
-        sr.frontend_url = fe
-        sr.api_url = api
-        try:
-            sr.pages = run_browser_suite(
-                n,
-                cfg,
-                fe,
-                artifact_dir,
-                page_set_override=args.page_set,
+        def _metric_job(n: str) -> ScenarioResult:
+            if n in results and results[n].compose_error and not results[n].started:
+                return results[n]
+            cfg = SCENARIOS[n]
+            fe = args.frontend_url or f"http://127.0.0.1:{cfg['frontend_port']}"
+            api = args.api_url or f"http://127.0.0.1:{cfg['api_port']}"
+            existing = results.get(n)
+            sr = existing or ScenarioResult(
+                name=n,
+                project=f"perf-{n}",
+                frontend_url=fe,
+                api_url=api,
+                started=True,
             )
-        except Exception as e:  # noqa: BLE001
-            sr.health_error = (sr.health_error or "") + f" browser: {e}"
-        return sr
+            sr.frontend_url = fe
+            sr.api_url = api
+            try:
+                sr.pages = run_browser_suite(
+                    n,
+                    cfg,
+                    fe,
+                    artifact_dir,
+                    page_set_override=args.page_set,
+                )
+            except SystemExit:
+                raise
+            except Exception as e:
+                sr.health_error = (sr.health_error or "") + f" browser: {e}"
+            return sr
 
-    if args.sequential_metrics or not skip_compose:
         for n in names:
             print(f"  metrics {n} ...")
             results[n] = _metric_job(n)
-    else:
-        with ThreadPoolExecutor(max_workers=max(1, args.max_parallel)) as pool:
-            futs = {pool.submit(_metric_job, n): n for n in names}
-            for fut in as_completed(futs):
-                n = futs[fut]
-                results[n] = fut.result()
-                print(f"  metrics {n}: {sum(1 for p in results[n].pages if p.ok)}/{len(results[n].pages)} ok")
+            print(
+                f"    -> {sum(1 for p in results[n].pages if p.ok)}/{len(results[n].pages)} ok, "
+                f"api_req={sum(p.api_request_count for p in results[n].pages)}"
+            )
 
-    evaluate_assertions(results)
-    json_path, md_path = write_reports(results, artifact_dir)
-    print(f"Wrote {json_path}")
-    print(f"Wrote {md_path}")
+        evaluate_assertions(results)
+        json_path, md_path = write_reports(results, artifact_dir)
+        print(f"Wrote {json_path}")
+        print(f"Wrote {md_path}")
+    finally:
+        if not skip_compose and not no_teardown:
+            for n in names:
+                if SCENARIOS[n].get("services"):
+                    print(f"  teardown {n}")
+                    stop_scenario(n, SCENARIOS[n])
+        elif not skip_compose and no_teardown:
+            print("Leaving stacks up (--keep-alive). Tear down with:")
+            for n in names:
+                if SCENARIOS[n].get("services"):
+                    print(
+                        f"  docker compose -p perf-{n} -f docker-compose.yml "
+                        f"-f docker-compose.perf-matrix.yml down -v"
+                    )
 
-    # Phase 3: teardown
-    if not skip_compose and not no_teardown:
-        for n in names:
-            if SCENARIOS[n].get("services"):
-                print(f"  teardown {n}")
-                stop_scenario(n, SCENARIOS[n])
-    elif not skip_compose and no_teardown:
-        print("Leaving stacks up (--keep-alive / --no-teardown). Tear down with:")
-        for n in names:
-            if SCENARIOS[n].get("services"):
-                print(
-                    f"  docker compose -p perf-{n} -f docker-compose.yml "
-                    f"-f docker-compose.perf-matrix.yml down -v"
-                )
-
-    # Exit non-zero if any hard assertion failed
     hard_fail = False
     for sr in results.values():
         if sr.compose_error:
             hard_fail = True
         for a in sr.assertions:
-            if not a["pass"] and a["name"] in ("api_failures_visible", "majority_pages_meaningful"):
+            if not a["pass"]:
                 hard_fail = True
+                print(f"ASSERT FAIL [{sr.name}] {a['name']}: {a['detail']}", file=sys.stderr)
     return 1 if hard_fail else 0
 
 

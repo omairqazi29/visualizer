@@ -1,6 +1,7 @@
 import sys
 import os
-import time
+import asyncio
+import logging
 from datetime import datetime, timedelta
 from typing import List
 
@@ -11,6 +12,10 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field
+
+_log = logging.getLogger("api.perf")
+# Cap artificial delay (ms) to limit lab self-DoS if env is mis-set.
+_PERF_DELAY_MAX_MS = 30_000
 
 from src.parsers.inventory_parser import InventoryParser
 from src.parsers.pipeline_parser import PipelineParser
@@ -70,36 +75,68 @@ app = FastAPI(title="The Spillover Engine API")
 
 
 # ---------------------------------------------------------------------------
-# Opt-in performance simulation controls (PERF_MATRIX / local diagnosis only).
-# Default off (0 / empty) — no impact on normal runs or production.
+# Opt-in performance simulation (PERF_MATRIX / local diagnosis only).
+# Active only when PERF_API_ENABLE=1 (or true/yes). Prefer setting vars in
+# docker-compose.perf-matrix.yml — not in normal production deploys.
 #
-#   PERF_API_DELAY_MS   — sleep N milliseconds before each response (default 0)
-#   PERF_API_FAIL_PATHS — comma-separated path prefixes that return 503
-#                         e.g. "/api/waterfall,/api/vb-forecast"
-# See docs/PERF_MATRIX.md for operator usage.
+#   PERF_API_ENABLE     — master gate (default off)
+#   PERF_API_DELAY_MS   — async sleep before each non-exempt response (cap 30s)
+#   PERF_API_FAIL_PATHS — comma-separated /api/... path prefixes → 503
+# See docs/PERF_MATRIX.md.
 # ---------------------------------------------------------------------------
+def _perf_enabled() -> bool:
+    return os.environ.get("PERF_API_ENABLE", "").strip().lower() in ("1", "true", "yes")
+
+
 def _perf_delay_ms() -> int:
+    if not _perf_enabled():
+        return 0
     try:
-        return max(0, int(os.environ.get("PERF_API_DELAY_MS", "0") or "0"))
+        raw = max(0, int(os.environ.get("PERF_API_DELAY_MS", "0") or "0"))
     except ValueError:
         return 0
+    if raw > _PERF_DELAY_MAX_MS:
+        _log.warning("PERF_API_DELAY_MS=%s capped to %s", raw, _PERF_DELAY_MAX_MS)
+        return _PERF_DELAY_MAX_MS
+    return raw
 
 
 def _perf_fail_prefixes() -> list[str]:
+    if not _perf_enabled():
+        return []
     raw = os.environ.get("PERF_API_FAIL_PATHS", "") or ""
-    return [p.strip() for p in raw.split(",") if p.strip()]
+    out: list[str] = []
+    for p in raw.split(","):
+        p = p.strip()
+        if not p:
+            continue
+        # Require /api/ segment-safe prefixes (no "/" DoS of all routes)
+        if not (p == "/api" or p.startswith("/api/")):
+            _log.warning("Ignoring PERF_API_FAIL_PATHS entry not under /api: %r", p)
+            continue
+        out.append(p)
+    return out
+
+
+def _path_matches_fail_prefix(path: str, prefix: str) -> bool:
+    """Segment-aware prefix match (avoids /api/w matching /api/waterfall via typo only when slash-bounded)."""
+    if path == prefix:
+        return True
+    bound = prefix if prefix.endswith("/") else prefix + "/"
+    return path.startswith(bound)
 
 
 class PerfSimulationMiddleware(BaseHTTPMiddleware):
-    """Env-gated latency injection and selective 503s for performance matrix runs."""
+    """Latency injection + selective 503s when PERF_API_ENABLE is set."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        if not _perf_enabled():
+            return await call_next(request)
         path = request.url.path
-        # Always allow health/docs through fail-path simulation so readiness checks work.
         exempt = path in ("/api/health", "/docs", "/openapi.json", "/redoc") or path.startswith("/docs")
         if not exempt:
             for prefix in _perf_fail_prefixes():
-                if path == prefix or path.startswith(prefix.rstrip("/") + "/") or path.startswith(prefix):
+                if _path_matches_fail_prefix(path, prefix):
                     return Response(
                         content='{"detail":"PERF_API_FAIL_PATHS simulated outage"}',
                         status_code=503,
@@ -107,10 +144,11 @@ class PerfSimulationMiddleware(BaseHTTPMiddleware):
                     )
         delay_ms = _perf_delay_ms()
         if delay_ms > 0 and not exempt:
-            time.sleep(delay_ms / 1000.0)
+            await asyncio.sleep(delay_ms / 1000.0)
         return await call_next(request)
 
 
+# Always registered; dispatch is a no-op unless PERF_API_ENABLE is set (request-time env).
 app.add_middleware(PerfSimulationMiddleware)
 
 # Enable CORS (allow localhost for dev + any origin for containerized deployments)
@@ -128,6 +166,7 @@ def health():
     """Lightweight readiness probe for compose / perf-matrix runners."""
     return {
         "status": "ok",
+        "perf_api_enable": _perf_enabled(),
         "perf_api_delay_ms": _perf_delay_ms(),
         "perf_api_fail_paths": _perf_fail_prefixes(),
     }
