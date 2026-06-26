@@ -1,0 +1,12 @@
+# Keep image builds Linux-native (host node_modules are often darwin-only).
+node_modules
+.next
+out
+.git
+*.md
+.DS_Store
+coverage
+.turbo
+playwright-report
+test-results
+tsconfig.tsbuildinfo

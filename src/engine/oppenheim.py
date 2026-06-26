@@ -378,7 +378,7 @@ class OppenheimSolver:
         if current_fad is None:
             return {
                 "calibrated_rate": self.materialization_rate,
-                "error": "No non-Current FAD in VB history",
+                "error": "No dated FAD in VB history",
             }
 
         # Interpolated demand at the actual FAD date

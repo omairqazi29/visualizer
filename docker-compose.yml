@@ -4,23 +4,32 @@ services:
       context: .
       dockerfile: api/Dockerfile
     ports:
-      - "8000:8000"
+      # Overridable for parallel perf-matrix stacks (see docker-compose.perf-matrix.yml)
+      - "${API_HOST_PORT:-8000}:8000"
     volumes:
       - .:/app
     environment:
       - PYTHONUNBUFFERED=1
+      # PERF_API_* lives only in docker-compose.perf-matrix.yml (not here) so normal
+      # `docker compose up` cannot inherit accidental host env fault-injection.
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+        REQUIRE_API_URL: ${REQUIRE_API_URL:-0}
     ports:
-      - "3000:3000"
+      - "${FRONTEND_HOST_PORT:-3000}:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
+      # NEXT_PUBLIC_* is baked at `next build`; runtime env does not retarget the client
+      # bundle — rebuild frontend after changing URL (see docs/PERF_MATRIX.md).
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+      - REQUIRE_API_URL=${REQUIRE_API_URL:-0}
     depends_on:
       - api

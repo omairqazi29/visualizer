@@ -1,14 +1,21 @@
 import sys
 import os
+import asyncio
+import logging
 from datetime import datetime, timedelta
 from typing import List
 
 # Add the project root to sys.path to import from src
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
+from pydantic import BaseModel, Field
+
+_log = logging.getLogger("api.perf")
+# Cap artificial delay (ms) to limit lab self-DoS if env is mis-set.
+_PERF_DELAY_MAX_MS = 30_000
 
 from src.parsers.inventory_parser import InventoryParser
 from src.parsers.pipeline_parser import PipelineParser
@@ -66,6 +73,84 @@ def _fy_quarter_label_from_path(filepath: str) -> str | None:
 
 app = FastAPI(title="The Spillover Engine API")
 
+
+# ---------------------------------------------------------------------------
+# Opt-in performance simulation (PERF_MATRIX / local diagnosis only).
+# Active only when PERF_API_ENABLE=1 (or true/yes). Prefer setting vars in
+# docker-compose.perf-matrix.yml — not in normal production deploys.
+#
+#   PERF_API_ENABLE     — master gate (default off)
+#   PERF_API_DELAY_MS   — async sleep before each non-exempt response (cap 30s)
+#   PERF_API_FAIL_PATHS — comma-separated /api/... path prefixes → 503
+# See docs/PERF_MATRIX.md.
+# ---------------------------------------------------------------------------
+def _perf_enabled() -> bool:
+    return os.environ.get("PERF_API_ENABLE", "").strip().lower() in ("1", "true", "yes")
+
+
+def _perf_delay_ms() -> int:
+    if not _perf_enabled():
+        return 0
+    try:
+        raw = max(0, int(os.environ.get("PERF_API_DELAY_MS", "0") or "0"))
+    except ValueError:
+        return 0
+    if raw > _PERF_DELAY_MAX_MS:
+        _log.warning("PERF_API_DELAY_MS=%s capped to %s", raw, _PERF_DELAY_MAX_MS)
+        return _PERF_DELAY_MAX_MS
+    return raw
+
+
+def _perf_fail_prefixes() -> list[str]:
+    if not _perf_enabled():
+        return []
+    raw = os.environ.get("PERF_API_FAIL_PATHS", "") or ""
+    out: list[str] = []
+    for p in raw.split(","):
+        p = p.strip()
+        if not p:
+            continue
+        # Require /api/ segment-safe prefixes (no "/" DoS of all routes)
+        if not (p == "/api" or p.startswith("/api/")):
+            _log.warning("Ignoring PERF_API_FAIL_PATHS entry not under /api: %r", p)
+            continue
+        out.append(p)
+    return out
+
+
+def _path_matches_fail_prefix(path: str, prefix: str) -> bool:
+    """Segment-aware prefix match (avoids /api/w matching /api/waterfall via typo only when slash-bounded)."""
+    if path == prefix:
+        return True
+    bound = prefix if prefix.endswith("/") else prefix + "/"
+    return path.startswith(bound)
+
+
+class PerfSimulationMiddleware(BaseHTTPMiddleware):
+    """Latency injection + selective 503s when PERF_API_ENABLE is set."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        if not _perf_enabled():
+            return await call_next(request)
+        path = request.url.path
+        exempt = path in ("/api/health", "/docs", "/openapi.json", "/redoc") or path.startswith("/docs")
+        if not exempt:
+            for prefix in _perf_fail_prefixes():
+                if _path_matches_fail_prefix(path, prefix):
+                    return Response(
+                        content='{"detail":"PERF_API_FAIL_PATHS simulated outage"}',
+                        status_code=503,
+                        media_type="application/json",
+                    )
+        delay_ms = _perf_delay_ms()
+        if delay_ms > 0 and not exempt:
+            await asyncio.sleep(delay_ms / 1000.0)
+        return await call_next(request)
+
+
+# Always registered; dispatch is a no-op unless PERF_API_ENABLE is set (request-time env).
+app.add_middleware(PerfSimulationMiddleware)
+
 # Enable CORS (allow localhost for dev + any origin for containerized deployments)
 app.add_middleware(
     CORSMiddleware,
@@ -74,6 +159,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/api/health")
+def health():
+    """Lightweight readiness probe for compose / perf-matrix runners."""
+    return {
+        "status": "ok",
+        "perf_api_enable": _perf_enabled(),
+        "perf_api_delay_ms": _perf_delay_ms(),
+        "perf_api_fail_paths": _perf_fail_prefixes(),
+    }
 
 
 # Pydantic response models for clean OpenAPI docs and validation
@@ -137,8 +233,14 @@ class PredictResponse(BaseModel):
     vb_current_dof: str | None = None
     vb_fad_is_current: bool = False
     vb_dof_is_current: bool = False
-    vb_fad_remaining_months: float = 0
-    vb_dof_remaining_months: float = 0
+    # None when category is Unavailable (unknown until numbers resume)
+    vb_fad_remaining_months: float | None = None
+    vb_dof_remaining_months: float | None = None
+    # Status codes: "date" | "C" (Current) | "U" (Unavailable)
+    vb_fad_status: str | None = None
+    vb_dof_status: str | None = None
+    vb_fad_unavailable: bool = False
+    vb_dof_unavailable: bool = False
 
 
 @app.get("/api/waterfall", response_model=WaterfallResponse)
@@ -349,8 +451,12 @@ async def predict_pd(
             vb_current_dof=vb_status.get("current_dof"),
             vb_fad_is_current=vb_status.get("fad_is_current", False),
             vb_dof_is_current=vb_status.get("dof_is_current", False),
-            vb_fad_remaining_months=vb_status.get("fad_remaining_months", 0),
-            vb_dof_remaining_months=vb_status.get("dof_remaining_months", 0),
+            vb_fad_remaining_months=vb_status.get("fad_remaining_months"),
+            vb_dof_remaining_months=vb_status.get("dof_remaining_months"),
+            vb_fad_status=vb_status.get("fad_status"),
+            vb_dof_status=vb_status.get("dof_status"),
+            vb_fad_unavailable=bool(vb_status.get("fad_unavailable", False)),
+            vb_dof_unavailable=bool(vb_status.get("dof_unavailable", False)),
         )
     except HTTPException:
         raise
@@ -959,6 +1065,20 @@ async def get_methodology():
                 "update_frequency": "Quarterly",
             },
             {
+                "name": "DOS Visa Bulletin History (India EB)",
+                "description": (
+                    "Final Action Date (FAD) and Date of Filing (DOF) history for India "
+                    "EB-1/EB-2/EB-3. Cells may be dated, Current (C), or Unavailable (U). "
+                    "Feeds VBPredictor trend forecasts and PD current-status checks. "
+                    "DemandModeler (/api/predict) is separate queue burn-down; "
+                    "compare via /api/predictor-compare or scripts/compare_predictors.py."
+                ),
+                "url": "https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin.html",
+                "coverage": "Oct 2015 – Jul 2026 (india_eb_history.csv; C/U codes supported)",
+                "update_frequency": "Monthly (Visa Bulletin publication)",
+            },
+
+            {
                 "name": "USCIS I-140 Receipts (New Filings)",
                 "description": "New I-140 petitions filed by country and EB category. Models queue growth rate — how fast new EB petitions enter the system. Separate from approved/pipeline data.",
                 "url": "https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data",
@@ -1049,7 +1169,7 @@ async def get_methodology():
                 "model_impact": "None. Model uses DOS consular IV data (ground truth). Ruling affects USCIS domestic processing, a separate pathway not measured by DOS.",
             },
         ],
-        last_verified="2026-06-01",
+        last_verified="2026-06-26",
     )
 
 
@@ -1058,6 +1178,11 @@ class VBHistoryRow(BaseModel):
     category: str
     fad: str | None
     dof: str | None
+    # "date" | "C" | "U" | "invalid" — required (no misleading "date" default for null fad)
+    fad_status: str
+    dof_status: str
+    fad_unavailable: bool = False
+    dof_unavailable: bool = False
 
 
 class VBHistoryResponse(BaseModel):
@@ -1080,6 +1205,7 @@ async def get_visa_bulletin_history(
     """Returns historical Visa Bulletin FAD/DOF data for India EB categories.
 
     Supports cross-category comparison for EB-1, EB-2, and EB-3.
+    Null fad/dof with fad_status/dof_status="U" means Unavailable (not Current).
     """
     try:
         vb = VisaBulletinParser(country=country)
@@ -1095,6 +1221,10 @@ async def get_visa_bulletin_history(
                 category=r["category"],
                 fad=r["fad"].isoformat() if r["fad"] else None,
                 dof=r["dof"].isoformat() if r["dof"] else None,
+                fad_status=r.get("fad_status", "date" if r.get("fad") else "C"),
+                dof_status=r.get("dof_status", "date" if r.get("dof") else "C"),
+                fad_unavailable=bool(r.get("fad_unavailable", False)),
+                dof_unavailable=bool(r.get("dof_unavailable", False)),
             ))
 
         categories = sorted(set(r.category for r in history))
@@ -1218,19 +1348,52 @@ async def get_i140_receipts():
 
 class VBForecastPoint(BaseModel):
     bulletin_month: str
-    predicted_fad: str
+    predicted_fad: str | None = None
     predicted_dof: str | None = None
-    fad_confidence_low: str
-    fad_confidence_high: str
+    fad_confidence_low: str | None = None
+    fad_confidence_high: str | None = None
+
+
+class VBHistoricalRow(BaseModel):
+    bulletin_month: str
+    category: str
+    fad: str | None = None
+    dof: str | None = None
+    fad_status: str
+    dof_status: str
+    fad_unavailable: bool = False
+    dof_unavailable: bool = False
+
+
+class VBLatestActual(BaseModel):
+    bulletin_month: str | None = None
+    fad: str | None = None
+    dof: str | None = None
+    fad_status: str | None = None
+    dof_status: str | None = None
+    fad_unavailable: bool = False
+    dof_unavailable: bool = False
+    forecast_anchor_fad: str | None = None
+
+
+class VBAdvancementStats(BaseModel):
+    recent_avg: float = 0.0
+    recent_median: float = 0.0
+    recent_stdev: float = 15.0
+    overall_avg: float = 0.0
+    seasonal_pattern: dict = Field(default_factory=dict)
+    n_datapoints: int = 0
+    retrogression_count: int = 0
+    unavailable_months: int = 0
 
 
 class VBForecastResponse(BaseModel):
     category: str
     country: str
     forecast: list[VBForecastPoint]
-    historical: list[dict]    # Recent 12 months of actual VB data for chart context
-    latest_actual: dict
-    stats: dict
+    historical: list[VBHistoricalRow]
+    latest_actual: VBLatestActual
+    stats: VBAdvancementStats
     supply_factor: float
     dof_gap_months: float
     methodology: str
@@ -1240,51 +1403,178 @@ class VBForecastResponse(BaseModel):
 async def get_vb_forecast(
     category: str = Query("EB-1", description="EB category: EB-1, EB-2, or EB-3"),
     months_ahead: int = Query(24, description="Months to forecast (1-60)", ge=1, le=60),
-    apply_real_restrictions: bool = Query(False, description="Use restriction-boosted supply for forecast scaling"),
+    apply_real_restrictions: bool = Query(
+        False,
+        description="Scale advancement using restriction-boosted India EB-1 supply (EB-1 only)",
+    ),
 ):
     """Returns Visa Bulletin Final Action Date / Date of Filing forecasts.
 
     Uses historical VB advancement patterns to project future FAD/DOF movement
-    with confidence bands that widen over time.  Optionally scales advancement
-    rates using the restriction-boosted India EB-1 supply from the INA cascade.
+    with confidence bands that widen over time. Restriction scaling applies
+    only for category=EB-1 (India EB-1 supply from the INA cascade).
+
+    Unavailable ("U") months are excluded from advancement stats; latest_actual
+    includes fad_status/dof_status so clients can distinguish U vs Current vs date.
     """
+    from src.engine.predictor_compare import VALID_CATEGORIES
+
+    if category not in VALID_CATEGORIES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"category must be one of {sorted(VALID_CATEGORIES)}",
+        )
     try:
         predictor = VBPredictor(category=category)
 
+        # Only apply India EB-1 restriction boost for EB-1 forecasts
         supply = None
-        if apply_real_restrictions:
+        if apply_real_restrictions and category == "EB-1":
             calc = SupplyCalculator()
             breakdown = calc.get_supply_breakdown(apply_real_restrictions=True)
             supply = breakdown.india_eb1_supply
 
         result = predictor.forecast(months_ahead=months_ahead, annual_supply=supply)
 
-        # Recent 12 months of actual history for chart context
         full_history = predictor.vb.get_history(category=category)
         recent_history = full_history[-12:]
         historical = [
-            {
-                "bulletin_month": r["bulletin_month"],
-                "category": r.get("category", category),
-                "fad": r["fad"].isoformat() if r["fad"] else None,
-                "dof": r["dof"].isoformat() if r["dof"] else None,
-            }
+            VBHistoricalRow(
+                bulletin_month=r["bulletin_month"],
+                category=r.get("category", category),
+                fad=r["fad"].isoformat() if r["fad"] else None,
+                dof=r["dof"].isoformat() if r["dof"] else None,
+                fad_status=r.get("fad_status", "date" if r.get("fad") else "C"),
+                dof_status=r.get("dof_status", "date" if r.get("dof") else "C"),
+                fad_unavailable=bool(r.get("fad_unavailable", False)),
+                dof_unavailable=bool(r.get("dof_unavailable", False)),
+            )
             for r in recent_history
         ]
+
+        la = result["latest_actual"]
+        st = result["stats"]
+        # seasonal_pattern keys may be int; coerce to str for JSON stability
+        seasonal = {str(k): float(v) for k, v in (st.get("seasonal_pattern") or {}).items()}
 
         return VBForecastResponse(
             category=category,
             country="India",
             forecast=[VBForecastPoint(**pt) for pt in result["forecast"]],
             historical=historical,
-            latest_actual=result["latest_actual"],
-            stats=result["stats"],
+            latest_actual=VBLatestActual(**la),
+            stats=VBAdvancementStats(
+                recent_avg=float(st.get("recent_avg", 0)),
+                recent_median=float(st.get("recent_median", 0)),
+                recent_stdev=float(st.get("recent_stdev", 15)),
+                overall_avg=float(st.get("overall_avg", 0)),
+                seasonal_pattern=seasonal,
+                n_datapoints=int(st.get("n_datapoints", 0)),
+                retrogression_count=int(st.get("retrogression_count", 0)),
+                unavailable_months=int(st.get("unavailable_months", 0)),
+            ),
             supply_factor=result["supply_factor"],
             dof_gap_months=result["dof_gap_months"],
             methodology=result["methodology"],
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        import logging
+        logging.getLogger("api").exception("vb-forecast failed")
+        raise HTTPException(status_code=500, detail="vb forecast failed")
+
+
+# ── Predictor comparison (VB trend vs demand burn-down) ──────────────
+
+
+class PredictorCompareResponse(BaseModel):
+    """Side-by-side VBPredictor vs DemandModeler for the same PD."""
+    priority_date: str
+    category: str
+    apply_real_restrictions: bool
+    demand_months_to_clear: int | None = None
+    demand_projected_clearance_date: str | None = None
+    demand_backlog_ahead: int | None = None
+    demand_annual_supply: int | None = None
+    demand_confidence_score: float | None = None
+    vb_months_to_current: int | None = None
+    vb_estimated_bulletin_month: str | None = None
+    vb_confidence: str | None = None
+    vb_latest_fad: str | None = None
+    vb_latest_fad_status: str | None = None
+    vb_fad_unavailable: bool = False
+    vb_category_unavailable: bool = False
+    vb_assumes_numbers_resume: bool = False
+    vb_supply_factor: float | None = None
+    vb_recent_avg_days_per_month: float | None = None
+    months_delta: int | None = None
+    divergence_notes: list[str] = Field(default_factory=list)
+    assumptions: dict = Field(default_factory=dict)
+
+
+# Simple in-process cache for expensive compare (diagnostic endpoint)
+_COMPARE_CACHE: dict[tuple, tuple[float, dict]] = {}
+_COMPARE_CACHE_TTL_SEC = 120.0
+
+
+@app.get("/api/predictor-compare", response_model=PredictorCompareResponse)
+async def predictor_compare(
+    priority_date: str = Query(..., description="Priority Date in YYYY-MM-DD format"),
+    category: str = Query("EB-1", description="EB category: EB-1, EB-2, or EB-3"),
+    apply_real_restrictions: bool = Query(
+        False,
+        description="Apply real 91-country restrictions (India EB-1 supply scaling for EB-1 only)",
+    ),
+):
+    """Compare VBPredictor (FAD trend) vs DemandModeler (queue burn-down).
+
+    Demand path is India EB-1 only. Restriction supply scaling applies to VB
+    forecasts only for EB-1. Results cached ~2 minutes per query key.
+    """
+    import time
+    from src.engine.predictor_compare import VALID_CATEGORIES, build_predictor_compare
+
+    if category not in VALID_CATEGORIES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"category must be one of {sorted(VALID_CATEGORIES)}",
+        )
+    try:
+        datetime.strptime(priority_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail="priority_date must be in YYYY-MM-DD format"
+        )
+
+    cache_key = (priority_date, category, apply_real_restrictions)
+    now = time.monotonic()
+    hit = _COMPARE_CACHE.get(cache_key)
+    if hit and (now - hit[0]) < _COMPARE_CACHE_TTL_SEC:
+        return PredictorCompareResponse(**hit[1])
+
+    try:
+        payload = build_predictor_compare(
+            priority_date=priority_date,
+            category=category,
+            apply_real_restrictions=apply_real_restrictions,
+        )
+        # Drop CLI-only key not in response model
+        payload.pop("methodology_vb", None)
+        _COMPARE_CACHE[cache_key] = (now, payload)
+        # Bound cache size
+        if len(_COMPARE_CACHE) > 64:
+            oldest = min(_COMPARE_CACHE.items(), key=lambda kv: kv[1][0])
+            _COMPARE_CACHE.pop(oldest[0], None)
+        return PredictorCompareResponse(**payload)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        import logging
+        logging.getLogger("api").exception("predictor-compare failed")
+        raise HTTPException(status_code=500, detail="predictor comparison failed")
 
 
 # ── Oppenheim FAD Solver ──────────────────────────────

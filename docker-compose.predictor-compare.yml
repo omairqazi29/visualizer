@@ -1,0 +1,33 @@
+# Optional profile: run predictor comparison job against the api service.
+# Do NOT use this file alone — requires docker-compose.yml for the api service.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.predictor-compare.yml \
+#     --profile predictor-compare run --rm predictor-compare
+#
+# Prefer in-process mode for reliability (no --base-url / omit API_BASE_URL):
+#   docker compose ... run --rm -e API_BASE_URL= predictor-compare
+#   (entrypoint still runs script; override command without --base-url)
+#
+# Default `docker compose up` is unchanged (profile-gated).
+# Note: main api service publishes 8000 on the host (same as normal stack).
+services:
+  predictor-compare:
+    profiles: ["predictor-compare"]
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Honored by scripts/compare_predictors.py when --base-url omitted
+      - API_BASE_URL=http://api:8000
+    depends_on:
+      - api
+    entrypoint: ["python", "scripts/compare_predictors.py"]
+    # Retries in script handle cold-start race (depends_on without healthcheck)
+    command:
+      - "--priority-date"
+      - "2022-10-01"

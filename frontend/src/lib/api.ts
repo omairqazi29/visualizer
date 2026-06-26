@@ -1,11 +1,68 @@
 import axios from 'axios';
 
-// Use runtime env var when provided (Docker / production), fall back to localhost for dev.
-const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+/**
+ * Resolve API base URL without silent multi-host fallbacks.
+ *
+ * - Production / Docker (`NODE_ENV=production` or `REQUIRE_API_URL=1`):
+ *   `NEXT_PUBLIC_API_URL` is required. Missing → no localhost mask; requests
+ *   fail via interceptor (visible error UI). We avoid throwing at module import
+ *   so `next build` prerender can complete, but we never invent alternate hosts.
+ * - Local dev only (`NODE_ENV !== 'production'` and not requiring API URL):
+ *   explicit documented fallback to `http://localhost:8000/api` for `npm run dev`.
+ *
+ * Never invent alternate hosts or retry to a different base URL.
+ */
+const MISSING_API_URL_MSG =
+  '[api] NEXT_PUBLIC_API_URL is required in production/Docker (or when REQUIRE_API_URL=1). ' +
+  'Refusing silent localhost fallback so API outages are visible.';
+
+function resolveApiBaseURL(): { baseURL: string; missingRequired: boolean } {
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  const requireUrl =
+    process.env.NODE_ENV === 'production' ||
+    process.env.REQUIRE_API_URL === '1' ||
+    process.env.REQUIRE_API_URL === 'true';
+
+  if (configured) {
+    return { baseURL: configured.replace(/\/$/, ''), missingRequired: false };
+  }
+
+  if (requireUrl) {
+    if (typeof console !== 'undefined') {
+      console.error(MISSING_API_URL_MSG);
+    }
+    // Empty base forces relative/invalid requests — interceptor rejects explicitly.
+    return { baseURL: '', missingRequired: true };
+  }
+
+  // Local `npm run dev` only — documented explicit fallback, not a multi-host retry.
+  const devFallback = 'http://localhost:8000/api';
+  if (typeof console !== 'undefined') {
+    console.warn(
+      `[api] NEXT_PUBLIC_API_URL unset; using dev fallback ${devFallback}. ` +
+        'Set NEXT_PUBLIC_API_URL (and REQUIRE_API_URL=1 in Docker) to avoid this.',
+    );
+  }
+  return { baseURL: devFallback, missingRequired: false };
+}
+
+const resolved = resolveApiBaseURL();
+const baseURL = resolved.baseURL;
 
 const api = axios.create({
-  baseURL,
+  baseURL: baseURL || undefined,
 });
+
+api.interceptors.request.use((config) => {
+  if (resolved.missingRequired || !baseURL) {
+    return Promise.reject(new Error(MISSING_API_URL_MSG));
+  }
+  return config;
+});
+
+/** Exported for tests / debugging — the single configured API origin (no alternates). */
+export const API_BASE_URL = baseURL;
+export const API_URL_MISSING_REQUIRED = resolved.missingRequired;
 
 // ---------------------------------------------------------------------------
 // In-memory request cache — deduplicates in-flight requests and caches results
@@ -40,7 +97,7 @@ export const getInventoryContext = () =>
   cached('inventory-context', () => api.get('/inventory-context').then(res => res.data));
 export const getNVCBacklog = () =>
   cached('nvc-backlog', () => api.get('/nvc-backlog').then(res => res.data));
-export const getVisaBulletinHistory = (category?: string, country?: string) =>
+export const getVisaBulletinHistory = (category?: string, country?: string): Promise<VBHistoryData> =>
   cached(`vb-history:${category}:${country}`, () =>
     api.get('/visa-bulletin-history', { params: { category, country } }).then(res => res.data));
 export const getDependentMultipliers = () =>
@@ -124,8 +181,31 @@ export interface PredictData {
   vb_current_dof: string | null;
   vb_fad_is_current: boolean;
   vb_dof_is_current: boolean;
-  vb_fad_remaining_months: number;
-  vb_dof_remaining_months: number;
+  // null when category Unavailable (unknown until numbers resume)
+  vb_fad_remaining_months: number | null;
+  vb_dof_remaining_months: number | null;
+  // Status: "date" | "C" | "U" — always present from API (may be null)
+  vb_fad_status: string | null;
+  vb_dof_status: string | null;
+  vb_fad_unavailable: boolean;
+  vb_dof_unavailable: boolean;
+}
+
+export interface VBHistoryRow {
+  bulletin_month: string;
+  category: string;
+  fad: string | null;
+  dof: string | null;
+  fad_status: string;
+  dof_status: string;
+  fad_unavailable: boolean;
+  dof_unavailable: boolean;
+}
+
+export interface VBHistoryData {
+  categories: string[];
+  total_rows: number;
+  history: VBHistoryRow[];
 }
 
 export interface DataSource {
@@ -404,27 +484,40 @@ export const getI140Receipts = () =>
 // VB Forecast
 export interface VBForecastPoint {
   bulletin_month: string;
-  predicted_fad: string;
+  predicted_fad: string | null;
   predicted_dof: string | null;
-  fad_confidence_low: string;
-  fad_confidence_high: string;
+  fad_confidence_low: string | null;
+  fad_confidence_high: string | null;
+}
+
+export interface VBHistoricalRow {
+  bulletin_month: string;
+  category: string;
+  fad: string | null;
+  dof: string | null;
+  fad_status: string;
+  dof_status: string;
+  fad_unavailable: boolean;
+  dof_unavailable: boolean;
+}
+
+export interface VBLatestActual {
+  bulletin_month: string | null;
+  fad: string | null;
+  dof: string | null;
+  fad_status: string | null;
+  dof_status: string | null;
+  fad_unavailable: boolean;
+  dof_unavailable: boolean;
+  forecast_anchor_fad: string | null;
 }
 
 export interface VBForecastData {
   category: string;
   country: string;
   forecast: VBForecastPoint[];
-  historical: Array<{
-    bulletin_month: string;
-    category: string;
-    fad: string | null;
-    dof: string | null;
-  }>;
-  latest_actual: {
-    bulletin_month: string;
-    fad: string;
-    dof?: string;
-  };
+  historical: VBHistoricalRow[];
+  latest_actual: VBLatestActual;
   stats: {
     recent_avg: number;
     recent_median: number;
@@ -433,6 +526,7 @@ export interface VBForecastData {
     seasonal_pattern: Record<string, number>;
     n_datapoints: number;
     retrogression_count: number;
+    unavailable_months: number;
   };
   supply_factor: number;
   dof_gap_months: number;
@@ -442,6 +536,45 @@ export interface VBForecastData {
 export const getVBForecast = (category: string = 'EB-1', monthsAhead: number = 24, applyRealRestrictions: boolean = false) =>
   cached(`vb-forecast:${category}:${monthsAhead}:${applyRealRestrictions}`, () =>
     api.get('/vb-forecast', { params: { category, months_ahead: monthsAhead, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data));
+
+// Predictor comparison (VB trend vs demand burn-down)
+export interface PredictorCompareData {
+  priority_date: string;
+  category: string;
+  apply_real_restrictions: boolean;
+  demand_months_to_clear: number | null;
+  demand_projected_clearance_date: string | null;
+  demand_backlog_ahead: number | null;
+  demand_annual_supply: number | null;
+  demand_confidence_score: number | null;
+  vb_months_to_current: number | null;
+  vb_estimated_bulletin_month: string | null;
+  vb_confidence: string | null;
+  vb_latest_fad: string | null;
+  vb_latest_fad_status: string | null;
+  vb_fad_unavailable: boolean;
+  vb_category_unavailable: boolean;
+  vb_assumes_numbers_resume: boolean;
+  vb_supply_factor: number | null;
+  vb_recent_avg_days_per_month: number | null;
+  months_delta: number | null;
+  divergence_notes: string[];
+  assumptions: Record<string, unknown>;
+}
+
+export const getPredictorCompare = (
+  priorityDate: string,
+  category: string = 'EB-1',
+  applyRealRestrictions: boolean = false,
+) =>
+  cached(`predictor-compare:${priorityDate}:${category}:${applyRealRestrictions}`, () =>
+    api.get('/predictor-compare', {
+      params: {
+        priority_date: priorityDate,
+        category,
+        apply_real_restrictions: applyRealRestrictions,
+      },
+    }).then(res => res.data));
 
 // ---------------------------------------------------------------------------
 // Prefetch all endpoints at app startup — fire in parallel, results cached

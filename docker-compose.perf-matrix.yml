@@ -1,0 +1,130 @@
+# Performance matrix overlay — profile-gated extras; does NOT alter normal
+# `docker compose up` (use this file only with -f and explicit profiles / runner).
+#
+# Design: one compose *project* per scenario (parallel via different -p names and
+# non-conflicting host ports). Scenario knobs are env vars (see docs/PERF_MATRIX.md).
+#
+# Env vars (operator-facing — set per parallel stack; PERF_* only in this overlay):
+#   API_HOST_PORT          Host port for API (default 8000)
+#   FRONTEND_HOST_PORT     Host port for frontend (default 3000)
+#   PERF_API_ENABLE        Master gate for fault injection (set 1 for matrix)
+#   PERF_API_DELAY_MS      Artificial API latency in ms (default 0, cap 30000)
+#   PERF_API_FAIL_PATHS    Comma-separated /api/... prefixes → 503 (default empty)
+#   PERF_PAGE_SET          all | heavy | light — hint for runner page subset
+#   API_CPUS               CPU limit (omit or set ≤ host CPUs; runner uses safe default)
+#   API_MEM_LIMIT          Memory limit for api (e.g. 256m) — mem-pressure
+#   FRONTEND_CPUS / FRONTEND_MEM_LIMIT
+#   NEXT_PUBLIC_API_URL    REQUIRED for build — must match API_HOST_PORT
+#                          e.g. http://localhost:18000/api (baked at next build; runtime env ineffective)
+#
+# Profiles:
+#   perf-matrix   — optional label; runner uses explicit service list
+#   perf-runner   — Playwright metrics collector (one-shot)
+#
+# Examples (parallel stacks — different project names + ports):
+#
+#   # baseline
+#   API_HOST_PORT=18000 FRONTEND_HOST_PORT=13000 \
+#     NEXT_PUBLIC_API_URL=http://localhost:18000/api \
+#     docker compose -p perf-baseline \
+#       -f docker-compose.yml -f docker-compose.perf-matrix.yml \
+#       up --build -d api frontend
+#
+#   # api-slow (2s delay on non-health routes)
+#   API_HOST_PORT=18001 FRONTEND_HOST_PORT=13001 \
+#     PERF_API_ENABLE=1 PERF_API_DELAY_MS=2000 \
+#     NEXT_PUBLIC_API_URL=http://localhost:18001/api \
+#     docker compose -p perf-api-slow \
+#       -f docker-compose.yml -f docker-compose.perf-matrix.yml \
+#       up --build -d api frontend
+#
+#   # Prefer: python3.11 scripts/perf_matrix.py (sets all env correctly)
+#
+# Or run the full matrix via:
+#   python3 scripts/perf_matrix.py
+#   python3 scripts/perf_matrix.py --scenarios baseline,api-slow --keep-alive
+
+services:
+  api:
+    # Ports come from docker-compose.yml (${API_HOST_PORT:-8000}) — do not redeclare
+    # here or Compose merges duplicate host binds.
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PERF_API_ENABLE=${PERF_API_ENABLE:-0}
+      - PERF_API_DELAY_MS=${PERF_API_DELAY_MS:-0}
+      - PERF_API_FAIL_PATHS=${PERF_API_FAIL_PATHS:-}
+      - PERF_PAGE_SET=${PERF_PAGE_SET:-all}
+    # Prefer runner-supplied API_CPUS (host-safe). Fallback 2.0 works on small laptops.
+    cpus: ${API_CPUS:-2.0}
+    mem_limit: ${API_MEM_LIMIT:-4g}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 18
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Must match API_HOST_PORT — runner always sets this; required for correct bake.
+        # Runner always sets this to match API_HOST_PORT before build/up.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+        REQUIRE_API_URL: "1"
+    environment:
+      # Runtime NEXT_PUBLIC_* does not retarget the baked client bundle — always --build.
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+      - REQUIRE_API_URL=1
+      - NODE_ENV=production
+      - PERF_PAGE_SET=${PERF_PAGE_SET:-all}
+    cpus: ${FRONTEND_CPUS:-2.0}
+    mem_limit: ${FRONTEND_MEM_LIMIT:-4g}
+    # Image-baked build must not be shadowed by host bind mounts from base compose.
+    # Compose Spec !reset clears merged sequence fields (requires Compose v2.24+).
+    volumes: !reset []
+    # Do not depend_on api here — api-paused scenario starts frontend alone.
+    depends_on: !reset []
+
+  # Optional in-compose Playwright runner. REQUIRES frontend built with
+  # NEXT_PUBLIC_API_URL=http://api:8000/api (service DNS), NOT localhost host ports.
+  # Preferred path remains host: ./scripts/run_perf_matrix.sh
+  # Set PERF_ALLOW_IN_COMPOSE=1 to acknowledge the bake requirement.
+  perf-runner:
+    profiles: ["perf-runner"]
+    build:
+      context: .
+      dockerfile: scripts/perf_runner.Dockerfile
+    working_dir: /app
+    volumes:
+      - .:/app
+      - ./artifacts/perf-matrix:/app/artifacts/perf-matrix
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PERF_ALLOW_IN_COMPOSE=${PERF_ALLOW_IN_COMPOSE:-0}
+      - PERF_FRONTEND_URL=http://frontend:3000
+      - PERF_API_URL=http://api:8000
+      - PERF_PAGE_SET=${PERF_PAGE_SET:-all}
+      - PERF_SCENARIO=in-compose
+      - PERF_ARTIFACT_DIR=/app/artifacts/perf-matrix
+    depends_on:
+      - api
+      - frontend
+    entrypoint: ["python3", "scripts/perf_matrix.py"]
+    command:
+      - "--host-mode"
+      - "--frontend-url"
+      - "http://frontend:3000"
+      - "--api-url"
+      - "http://api:8000"
+      - "--scenarios"
+      - "in-compose"
+      - "--skip-compose"
+      - "--no-teardown"

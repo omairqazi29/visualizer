@@ -253,3 +253,218 @@ def test_oppenheim_api_returns_200():
     assert "trajectory" in data
     assert len(data["trajectory"]) == 6
     assert data["calibration"]["calibrated_rate"] > 0
+
+
+# ── Unavailable ("U") resilience ─────────────────────────
+
+
+@pytest.mark.parametrize("raw,exp_date,exp_status", [
+    ("C", None, "C"),
+    ("CURRENT", None, "C"),
+    ("U", None, "U"),
+    ("UNAVAILABLE", None, "U"),
+    ("2022-10-15", __import__("datetime").date(2022, 10, 15), "date"),
+    ("", None, "C"),
+    (None, None, "C"),
+    ("bogus", None, "invalid"),
+    ("15OCT22", None, "invalid"),
+])
+def test_normalize_cell(raw, exp_date, exp_status):
+    from src.parsers.visa_bulletin_parser import _normalize_cell
+    d, s = _normalize_cell(raw)
+    assert d == exp_date and s == exp_status
+
+
+def test_get_current_status_empty_history_unknown(tmp_path):
+    """Empty CSV → fad_status unknown (aligned with VBPredictor empty path)."""
+    import csv
+    from src.parsers.visa_bulletin_parser import VisaBulletinParser
+    f = tmp_path / "empty_vb.csv"
+    with f.open("w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["bulletin_month", "category", "country", "final_action_date", "date_of_filing", "source"])
+    vb = VisaBulletinParser(file_path=str(f), category="EB-1")
+    status = vb.get_current_status("2020-01-01")
+    assert status["fad_status"] == "unknown"
+    assert status["dof_status"] == "unknown"
+    assert status["fad_is_current"] is False
+    assert status["fad_remaining_months"] is None
+
+
+def test_get_current_status_latest_fad_current(tmp_path):
+    """When latest FAD is C, any PD is current with remaining 0.0."""
+    import csv
+    from src.parsers.visa_bulletin_parser import VisaBulletinParser
+    f = tmp_path / "current_vb.csv"
+    with f.open("w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["bulletin_month", "category", "country", "final_action_date", "date_of_filing", "source"])
+        w.writerow(["2026-06", "EB-1", "India", "2022-12-15", "2023-12-01", "test"])
+        w.writerow(["2026-07", "EB-1", "India", "C", "C", "test"])
+    vb = VisaBulletinParser(file_path=str(f), category="EB-1")
+    status = vb.get_current_status("2025-06-01")
+    assert status["fad_status"] == "C"
+    assert status["fad_is_current"] is True
+    assert status["fad_remaining_months"] == 0.0
+    assert status["dof_is_current"] is True
+
+
+def test_forecast_all_unavailable_empty(tmp_path):
+    """History with only U/C FADs → empty forecast, structured methodology."""
+    import csv
+    from src.engine.vb_predictor import VBPredictor
+    from src.parsers.visa_bulletin_parser import VisaBulletinParser
+    f = tmp_path / "all_u_vb.csv"
+    with f.open("w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["bulletin_month", "category", "country", "final_action_date", "date_of_filing", "source"])
+        w.writerow(["2026-06", "EB-2", "India", "U", "2015-01-15", "test"])
+        w.writerow(["2026-07", "EB-2", "India", "U", "2015-01-15", "test"])
+    # Patch predictor to use fixture file
+    p = VBPredictor(category="EB-2")
+    p.vb = VisaBulletinParser(file_path=str(f), category="EB-2")
+    result = p.forecast(months_ahead=6)
+    assert result["forecast"] == []
+    assert result["latest_actual"]["fad_status"] == "U"
+    assert result["methodology"]
+    assert "cannot forecast" in result["methodology"].lower() or "Unavailable" in result["methodology"]
+
+
+def test_vb_parser_unavailable_status():
+    """Jul 2026 EB-2 India FAD is Unavailable — parser must not crash and must flag U."""
+    from src.parsers.visa_bulletin_parser import VisaBulletinParser
+    vb = VisaBulletinParser(category="EB-2")
+    history = vb.get_history()
+    assert history, "EB-2 history should be non-empty"
+    u_rows = [r for r in history if r.get("fad_unavailable") or r.get("fad_status") == "U"]
+    assert u_rows, "Expected at least one Unavailable FAD month (Jul 2026 EB-2)"
+    for r in u_rows:
+        assert r["fad"] is None
+        assert r["fad_status"] == "U"
+        assert r["fad_unavailable"] is True
+
+
+def test_vb_parser_historical_c_status():
+    """At least one EB-1 historical Current FAD parses as C with fad is None."""
+    from src.parsers.visa_bulletin_parser import VisaBulletinParser
+    vb = VisaBulletinParser(category="EB-1")
+    c_rows = [r for r in vb.get_history() if r.get("fad_status") == "C"]
+    assert c_rows, "EB-1 history includes Current months"
+    assert all(r["fad"] is None for r in c_rows)
+
+
+def test_vb_parser_current_status_unavailable_not_current():
+    """When FAD is U, PD is never 'current' and remaining months is null (not 0)."""
+    from src.parsers.visa_bulletin_parser import VisaBulletinParser
+    vb = VisaBulletinParser(category="EB-2")
+    status = vb.get_current_status("2010-01-01", category="EB-2")
+    assert status.get("fad_unavailable") is True
+    assert status["fad_is_current"] is False
+    assert status["current_fad"] is None
+    assert status["fad_status"] == "U"
+    assert status["fad_remaining_months"] is None
+
+
+def test_vb_parser_pd_equals_fad_not_current():
+    """DOS rule: PD must be earlier than FAD; equality is not current, remaining >= 0.1."""
+    from src.parsers.visa_bulletin_parser import VisaBulletinParser
+    vb = VisaBulletinParser(category="EB-1")
+    status = vb.get_current_status("2022-10-15")  # Jul 2026 FAD
+    assert status["fad_is_current"] is False
+    assert status["fad_remaining_months"] == 0.1
+
+
+def test_vb_predictor_eb2_unavailable_forecast_stable():
+    """VBPredictor for EB-2 (with U month) returns stable JSON, no exception."""
+    from src.engine.vb_predictor import VBPredictor
+    p = VBPredictor(category="EB-2")
+    rates = p.get_advancement_rates()
+    for r in rates:
+        assert r["fad"] is not None
+        assert r["prev_fad"] is not None
+    assert not any(r["bulletin_month"] == "2026-07" for r in rates)
+    stats = p.get_advancement_stats()
+    assert stats["unavailable_months"] >= 1
+    result = p.forecast(months_ahead=6)
+    la = result["latest_actual"]
+    assert la.get("fad_status") == "U"
+    assert la.get("fad_unavailable") is True
+    assert la.get("fad") is None
+    assert la.get("forecast_anchor_fad") == "2013-09-01"
+    assert "Unavailable" in result["methodology"]
+    assert len(result["forecast"]) == 6
+    for pt in result["forecast"]:
+        assert pt["predicted_fad"] is not None
+
+
+def test_vb_predictor_months_until_fad():
+    """months_until_fad_reaches returns structured result for a pre-FAD PD."""
+    from src.engine.vb_predictor import VBPredictor
+    p = VBPredictor(category="EB-1")
+    early = p.months_until_fad_reaches("2015-01-01")
+    assert early.get("already_current") is True or early.get("months_to_current") == 0
+    late = p.months_until_fad_reaches("2024-06-01")
+    assert "months_to_current" in late
+    assert "confidence" in late
+
+
+def test_months_until_when_fad_unavailable():
+    from src.engine.vb_predictor import VBPredictor
+    p = VBPredictor(category="EB-2")
+    early = p.months_until_fad_reaches("2010-01-01")
+    assert early.get("already_current") is not True
+    assert early.get("category_unavailable") is True
+    assert early.get("assumes_numbers_resume") is True
+    assert early.get("confidence") == "low"
+    assert "months_to_current" in early
+
+
+def test_vb_predictor_supply_factor_explicit_baseline():
+    from src.engine.vb_predictor import VBPredictor
+    p = VBPredictor(category="EB-1")
+    result = p.forecast(months_ahead=3, annual_supply=20_000, baseline_supply=10_000)
+    assert result["supply_factor"] == 2.0
+
+
+def test_predictor_compare_shared_module():
+    from src.engine.predictor_compare import build_predictor_compare
+    data = build_predictor_compare("2022-10-01", category="EB-1")
+    assert data["demand_months_to_clear"] is not None
+    assert data["vb_months_to_current"] is not None
+
+
+def test_vb_history_api_includes_status():
+    """Visa bulletin history exposes fad_status for U months."""
+    try:
+        from starlette.testclient import TestClient
+    except ImportError:
+        pytest.skip("starlette not installed")
+    from api.main import app
+    client = TestClient(app)
+    resp = client.get("/api/visa-bulletin-history", params={"category": "EB-2"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_rows"] > 0
+    u_rows = [r for r in data["history"] if r.get("fad_unavailable") or r.get("fad_status") == "U"]
+    assert u_rows, "EB-2 history should include Unavailable FAD row(s)"
+    assert u_rows[-1]["fad"] is None
+
+
+def test_vb_forecast_eb2_api_200():
+    """EB-2 forecast (with Unavailable latest FAD) returns 200, not 500."""
+    try:
+        from starlette.testclient import TestClient
+    except ImportError:
+        pytest.skip("starlette not installed")
+    from api.main import app
+    client = TestClient(app)
+    resp = client.get("/api/vb-forecast", params={
+        "category": "EB-2", "months_ahead": 6, "apply_real_restrictions": "true",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["latest_actual"]["fad_status"] == "U"
+    assert data["latest_actual"]["forecast_anchor_fad"] == "2013-09-01"
+    assert data["supply_factor"] == 1.0  # no EB-1 restriction boost on EB-2
+    assert "forecast" in data
+    assert "Unavailable" in data["methodology"]

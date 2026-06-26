@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getVBForecast, VBForecastData } from '@/lib/api';
+import { formatVbCutoff, safeParseDate, formatIsoDate } from '@/lib/utils';
 import {
   ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -17,20 +18,28 @@ function formatDateTick(ts: number): string {
   return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
-function formatMonthLabel(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit', timeZone: 'UTC' });
+function formatMonthLabel(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
+  // bulletin_month is YYYY-MM — append day for stable parse
+  const normalized = dateStr.length === 7 ? `${dateStr}-01` : dateStr;
+  return formatIsoDate(normalized, dateStr, { month: 'short', year: '2-digit' });
 }
 
-function formatDateDisplay(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+function formatDateDisplay(
+  dateStr: string | null | undefined,
+  status?: string | null,
+  unavailable?: boolean,
+): string {
+  if (unavailable || status === 'U') return 'Unavailable';
+  if (dateStr && dateStr.length === 7) {
+    // bulletin_month YYYY-MM
+    return formatIsoDate(`${dateStr}-01`, dateStr, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  return formatVbCutoff(dateStr, status, { unavailable });
 }
 
 function safeParse(dateStr: string | null | undefined): number | null {
-  if (!dateStr) return null;
-  const t = new Date(dateStr).getTime();
-  return isFinite(t) ? t : null;
+  return safeParseDate(dateStr);
 }
 
 export default function VBForecastPage() {
@@ -188,13 +197,24 @@ export default function VBForecastPage() {
                   </div>
                   <div>
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Current FAD</span>
-                    <p className="font-semibold text-navy-900">{formatDateDisplay(data.latest_actual.fad)}</p>
+                    <p className={`font-semibold ${data.latest_actual.fad_unavailable ? 'text-crimson-600' : 'text-navy-900'}`}>
+                      {formatDateDisplay(data.latest_actual.fad, data.latest_actual.fad_status, data.latest_actual.fad_unavailable)}
+                    </p>
                   </div>
-                  {data.latest_actual.dof && (
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Current DOF</span>
+                    <p className={`font-semibold ${data.latest_actual.dof_unavailable ? 'text-crimson-600' : 'text-emerald-700'}`}>
+                      {formatDateDisplay(data.latest_actual.dof, data.latest_actual.dof_status, data.latest_actual.dof_unavailable)}
+                    </p>
+                  </div>
+                  {data.latest_actual.forecast_anchor_fad && data.latest_actual.fad_unavailable && (
                     <div>
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Current DOF</span>
-                      <p className="font-semibold text-emerald-700">{formatDateDisplay(data.latest_actual.dof)}</p>
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Forecast Anchor FAD</span>
+                      <p className="font-semibold text-slate-600">{formatDateDisplay(data.latest_actual.forecast_anchor_fad)}</p>
                     </div>
+                  )}
+                  {data.latest_actual.fad_unavailable && (
+                    <Badge variant="outline" className="text-xs border-crimson-500 text-crimson-600">FAD Unavailable</Badge>
                   )}
                   <Badge variant="outline" className="text-xs">{data.category} &mdash; {data.country}</Badge>
                 </div>
