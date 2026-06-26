@@ -62,7 +62,7 @@ Each scenario is **one compose project** (`-p perf-<name>`) so stacks can run
 | `PERF_API_DELAY_MS` | `0` | Sleep before each API response (ms). Health/docs exempt |
 | `PERF_API_FAIL_PATHS` | *(empty)* | Comma-separated path prefixes → HTTP 503 (partial outage) |
 | `PERF_PAGE_SET` | `all` | Hint: `all` \| `heavy` \| `light` (runner also has `--page-set`) |
-| `API_CPUS` / `FRONTEND_CPUS` | `16.0` (≈ unlimited) | CPU quota for throttle scenarios (e.g. `0.5`) |
+| `API_CPUS` / `FRONTEND_CPUS` | `8.0` (≈ no throttle; must be ≤ host CPUs) | CPU quota for throttle scenarios (e.g. `0.5`) |
 | `API_MEM_LIMIT` / `FRONTEND_MEM_LIMIT` | `8g` | Memory ceiling (e.g. `256m` / `384m`) |
 
 ### Manual stack example

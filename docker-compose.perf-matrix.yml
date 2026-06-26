@@ -71,8 +71,8 @@ services:
       - PERF_API_FAIL_PATHS=${PERF_API_FAIL_PATHS:-}
       - PERF_PAGE_SET=${PERF_PAGE_SET:-all}
     # High defaults ≈ no throttle; set API_CPUS=0.5 / API_MEM_LIMIT=256m per scenario.
-    # (Compose rejects 0 for mem_limit; use explicit large defaults instead.)
-    cpus: ${API_CPUS:-16.0}
+    # Cap at host CPU count (Docker errors if cpus > available, e.g. >10 on this machine).
+    cpus: ${API_CPUS:-8.0}
     mem_limit: ${API_MEM_LIMIT:-8g}
     healthcheck:
       test:
@@ -100,7 +100,7 @@ services:
       - REQUIRE_API_URL=1
       - NODE_ENV=production
       - PERF_PAGE_SET=${PERF_PAGE_SET:-all}
-    cpus: ${FRONTEND_CPUS:-16.0}
+    cpus: ${FRONTEND_CPUS:-8.0}
     mem_limit: ${FRONTEND_MEM_LIMIT:-8g}
     # Image-baked build must not be shadowed by host bind mounts from base compose.
     # Compose Spec !reset clears merged sequence fields (requires Compose v2.24+).
