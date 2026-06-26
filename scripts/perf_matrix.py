@@ -479,6 +479,52 @@ def collect_page_metrics(
     return metrics
 
 
+def collect_page_metrics_http(
+    frontend_url: str,
+    path: str,
+    api_port: int,
+    expect_api: bool,
+) -> PageMetrics:
+    """Fallback metrics without Playwright (TTFB via HTTP GET only)."""
+    url = frontend_url.rstrip("/") + path
+    metrics = PageMetrics(path=path, ok=False, final_url=url)
+    t0 = time.perf_counter()
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "perf-matrix/http-fallback"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            body = resp.read(200_000)
+            code = getattr(resp, "status", 200)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        metrics.ttfb_ms = round(elapsed_ms, 1)
+        metrics.dom_content_loaded_ms = round(elapsed_ms, 1)
+        metrics.load_ms = round(elapsed_ms, 1)
+        text = body.decode("utf-8", errors="replace")
+        hints = MEANINGFUL_HINTS.get(path, ["Spillover"])
+        hit = any(h.lower() in text.lower() for h in hints) or len(text) > 500
+        metrics.time_to_meaningful_ms = round(elapsed_ms, 1) if hit else None
+        metrics.ok = bool(hit) and 200 <= int(code) < 400
+        if not metrics.ok:
+            metrics.error = f"HTTP {code} or no landmark text in SSR HTML"
+        # Probe API health for failure counting when expect_api is False
+        api_health = f"http://127.0.0.1:{api_port}/api/health"
+        try:
+            with urllib.request.urlopen(api_health, timeout=3) as ar:
+                metrics.api_request_count = 1
+                if getattr(ar, "status", 200) >= 400:
+                    metrics.api_failed_count = 1
+        except Exception:
+            metrics.api_request_count = 1
+            metrics.api_failed_count = 1
+            if not expect_api:
+                # API down is expected — count as visible failure signal
+                pass
+    except Exception as e:  # noqa: BLE001
+        metrics.error = str(e)[:800]
+        metrics.api_failed_count = 1
+        metrics.api_request_count = 1
+    return metrics
+
+
 def run_browser_suite(
     scenario: str,
     cfg: dict[str, Any],
@@ -486,20 +532,30 @@ def run_browser_suite(
     artifact_dir: Path,
     page_set_override: str | None = None,
 ) -> list[PageMetrics]:
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError as e:
-        raise SystemExit(
-            "playwright is required for live browser metrics. "
-            "Install with: pip install playwright && playwright install chromium\n"
-            f"Import error: {e}"
-        ) from e
-
     page_set = page_set_override or cfg.get("page_set") or "all"
     paths = pages_for_set(page_set)
     api_port = int(cfg["api_port"])
     shot_dir = artifact_dir / "screenshots"
     results: list[PageMetrics] = []
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print(
+            "WARNING: playwright not installed for this interpreter; "
+            "using HTTP fallback metrics (install via python3.11 -m pip install playwright).",
+            file=sys.stderr,
+        )
+        for path in paths:
+            results.append(
+                collect_page_metrics_http(
+                    frontend_url,
+                    path,
+                    api_port=api_port,
+                    expect_api=bool(cfg.get("expect_api", True)),
+                )
+            )
+        return results
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)

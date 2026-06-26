@@ -4,14 +4,19 @@ import axios from 'axios';
  * Resolve API base URL without silent multi-host fallbacks.
  *
  * - Production / Docker (`NODE_ENV=production` or `REQUIRE_API_URL=1`):
- *   `NEXT_PUBLIC_API_URL` is required. Missing → throw (surfaces in UI/console
- *   so perf tests and misconfigured deploys fail honestly — no localhost mask).
+ *   `NEXT_PUBLIC_API_URL` is required. Missing → no localhost mask; requests
+ *   fail via interceptor (visible error UI). We avoid throwing at module import
+ *   so `next build` prerender can complete, but we never invent alternate hosts.
  * - Local dev only (`NODE_ENV !== 'production'` and not requiring API URL):
  *   explicit documented fallback to `http://localhost:8000/api` for `npm run dev`.
  *
  * Never invent alternate hosts or retry to a different base URL.
  */
-function resolveApiBaseURL(): string {
+const MISSING_API_URL_MSG =
+  '[api] NEXT_PUBLIC_API_URL is required in production/Docker (or when REQUIRE_API_URL=1). ' +
+  'Refusing silent localhost fallback so API outages are visible.';
+
+function resolveApiBaseURL(): { baseURL: string; missingRequired: boolean } {
   const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
   const requireUrl =
     process.env.NODE_ENV === 'production' ||
@@ -19,18 +24,15 @@ function resolveApiBaseURL(): string {
     process.env.REQUIRE_API_URL === 'true';
 
   if (configured) {
-    return configured.replace(/\/$/, '');
+    return { baseURL: configured.replace(/\/$/, ''), missingRequired: false };
   }
 
   if (requireUrl) {
-    const msg =
-      '[api] NEXT_PUBLIC_API_URL is required in production/Docker (or when REQUIRE_API_URL=1). ' +
-      'Refusing silent localhost fallback so API outages are visible.';
-    // Surface in console for SSR and browser; callers still get failed requests if thrown late.
     if (typeof console !== 'undefined') {
-      console.error(msg);
+      console.error(MISSING_API_URL_MSG);
     }
-    throw new Error(msg);
+    // Empty base forces relative/invalid requests — interceptor rejects explicitly.
+    return { baseURL: '', missingRequired: true };
   }
 
   // Local `npm run dev` only — documented explicit fallback, not a multi-host retry.
@@ -41,17 +43,26 @@ function resolveApiBaseURL(): string {
         'Set NEXT_PUBLIC_API_URL (and REQUIRE_API_URL=1 in Docker) to avoid this.',
     );
   }
-  return devFallback;
+  return { baseURL: devFallback, missingRequired: false };
 }
 
-const baseURL = resolveApiBaseURL();
+const resolved = resolveApiBaseURL();
+const baseURL = resolved.baseURL;
 
 const api = axios.create({
-  baseURL,
+  baseURL: baseURL || undefined,
+});
+
+api.interceptors.request.use((config) => {
+  if (resolved.missingRequired || !baseURL) {
+    return Promise.reject(new Error(MISSING_API_URL_MSG));
+  }
+  return config;
 });
 
 /** Exported for tests / debugging — the single configured API origin (no alternates). */
 export const API_BASE_URL = baseURL;
+export const API_URL_MISSING_REQUIRED = resolved.missingRequired;
 
 // ---------------------------------------------------------------------------
 // In-memory request cache — deduplicates in-flight requests and caches results
