@@ -5,6 +5,18 @@ travel.state.gov / uscis.gov. A Docker mock serves government-style HTML index
 pages + minimal xlsx fixtures; the real `src/ingestion` scanner/fetcher runs
 against it via opt-in `INGESTION_*` env overrides.
 
+## Performance matrix (separate harness)
+
+For slow/broken **frontend page** reproduction under Docker constraints (CPU,
+memory, API latency, API-down), see **`docs/PERF_MATRIX.md`** and:
+
+```bash
+python3 scripts/perf_matrix.py --scenarios baseline,api-slow,api-paused
+```
+
+Opt-in API env vars (default off): `PERF_API_DELAY_MS`, `PERF_API_FAIL_PATHS`.
+Overlay: `docker-compose.perf-matrix.yml` (does not change normal `compose up`).
+
 > **Security warning:** Never set `INGESTION_*` in GitHub Actions, production,
 > or staging. These overrides redirect scans/downloads and extend the host
 > allowlist. Use only for local/e2e mock runs (this harness sets them explicitly).

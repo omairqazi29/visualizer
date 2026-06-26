@@ -1,11 +1,57 @@
 import axios from 'axios';
 
-// Use runtime env var when provided (Docker / production), fall back to localhost for dev.
-const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+/**
+ * Resolve API base URL without silent multi-host fallbacks.
+ *
+ * - Production / Docker (`NODE_ENV=production` or `REQUIRE_API_URL=1`):
+ *   `NEXT_PUBLIC_API_URL` is required. Missing → throw (surfaces in UI/console
+ *   so perf tests and misconfigured deploys fail honestly — no localhost mask).
+ * - Local dev only (`NODE_ENV !== 'production'` and not requiring API URL):
+ *   explicit documented fallback to `http://localhost:8000/api` for `npm run dev`.
+ *
+ * Never invent alternate hosts or retry to a different base URL.
+ */
+function resolveApiBaseURL(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  const requireUrl =
+    process.env.NODE_ENV === 'production' ||
+    process.env.REQUIRE_API_URL === '1' ||
+    process.env.REQUIRE_API_URL === 'true';
+
+  if (configured) {
+    return configured.replace(/\/$/, '');
+  }
+
+  if (requireUrl) {
+    const msg =
+      '[api] NEXT_PUBLIC_API_URL is required in production/Docker (or when REQUIRE_API_URL=1). ' +
+      'Refusing silent localhost fallback so API outages are visible.';
+    // Surface in console for SSR and browser; callers still get failed requests if thrown late.
+    if (typeof console !== 'undefined') {
+      console.error(msg);
+    }
+    throw new Error(msg);
+  }
+
+  // Local `npm run dev` only — documented explicit fallback, not a multi-host retry.
+  const devFallback = 'http://localhost:8000/api';
+  if (typeof console !== 'undefined') {
+    console.warn(
+      `[api] NEXT_PUBLIC_API_URL unset; using dev fallback ${devFallback}. ` +
+        'Set NEXT_PUBLIC_API_URL (and REQUIRE_API_URL=1 in Docker) to avoid this.',
+    );
+  }
+  return devFallback;
+}
+
+const baseURL = resolveApiBaseURL();
 
 const api = axios.create({
   baseURL,
 });
+
+/** Exported for tests / debugging — the single configured API origin (no alternates). */
+export const API_BASE_URL = baseURL;
 
 // ---------------------------------------------------------------------------
 // In-memory request cache — deduplicates in-flight requests and caches results

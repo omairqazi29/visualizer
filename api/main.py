@@ -1,13 +1,15 @@
 import sys
 import os
+import time
 from datetime import datetime, timedelta
 from typing import List
 
 # Add the project root to sys.path to import from src
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field
 
 from src.parsers.inventory_parser import InventoryParser
@@ -66,6 +68,51 @@ def _fy_quarter_label_from_path(filepath: str) -> str | None:
 
 app = FastAPI(title="The Spillover Engine API")
 
+
+# ---------------------------------------------------------------------------
+# Opt-in performance simulation controls (PERF_MATRIX / local diagnosis only).
+# Default off (0 / empty) — no impact on normal runs or production.
+#
+#   PERF_API_DELAY_MS   — sleep N milliseconds before each response (default 0)
+#   PERF_API_FAIL_PATHS — comma-separated path prefixes that return 503
+#                         e.g. "/api/waterfall,/api/vb-forecast"
+# See docs/PERF_MATRIX.md for operator usage.
+# ---------------------------------------------------------------------------
+def _perf_delay_ms() -> int:
+    try:
+        return max(0, int(os.environ.get("PERF_API_DELAY_MS", "0") or "0"))
+    except ValueError:
+        return 0
+
+
+def _perf_fail_prefixes() -> list[str]:
+    raw = os.environ.get("PERF_API_FAIL_PATHS", "") or ""
+    return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+class PerfSimulationMiddleware(BaseHTTPMiddleware):
+    """Env-gated latency injection and selective 503s for performance matrix runs."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        path = request.url.path
+        # Always allow health/docs through fail-path simulation so readiness checks work.
+        exempt = path in ("/api/health", "/docs", "/openapi.json", "/redoc") or path.startswith("/docs")
+        if not exempt:
+            for prefix in _perf_fail_prefixes():
+                if path == prefix or path.startswith(prefix.rstrip("/") + "/") or path.startswith(prefix):
+                    return Response(
+                        content='{"detail":"PERF_API_FAIL_PATHS simulated outage"}',
+                        status_code=503,
+                        media_type="application/json",
+                    )
+        delay_ms = _perf_delay_ms()
+        if delay_ms > 0 and not exempt:
+            time.sleep(delay_ms / 1000.0)
+        return await call_next(request)
+
+
+app.add_middleware(PerfSimulationMiddleware)
+
 # Enable CORS (allow localhost for dev + any origin for containerized deployments)
 app.add_middleware(
     CORSMiddleware,
@@ -74,6 +121,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/api/health")
+def health():
+    """Lightweight readiness probe for compose / perf-matrix runners."""
+    return {
+        "status": "ok",
+        "perf_api_delay_ms": _perf_delay_ms(),
+        "perf_api_fail_paths": _perf_fail_prefixes(),
+    }
 
 
 # Pydantic response models for clean OpenAPI docs and validation

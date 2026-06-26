@@ -4,23 +4,32 @@ services:
       context: .
       dockerfile: api/Dockerfile
     ports:
-      - "8000:8000"
+      # Overridable for parallel perf-matrix stacks (see docker-compose.perf-matrix.yml)
+      - "${API_HOST_PORT:-8000}:8000"
     volumes:
       - .:/app
     environment:
       - PYTHONUNBUFFERED=1
+      # Opt-in perf simulation (default off). See docs/PERF_MATRIX.md
+      - PERF_API_DELAY_MS=${PERF_API_DELAY_MS:-0}
+      - PERF_API_FAIL_PATHS=${PERF_API_FAIL_PATHS:-}
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+        REQUIRE_API_URL: ${REQUIRE_API_URL:-0}
     ports:
-      - "3000:3000"
+      - "${FRONTEND_HOST_PORT:-3000}:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+      # Local compose default: allow dev fallback if build arg unset; set REQUIRE_API_URL=1 in perf-matrix
+      - REQUIRE_API_URL=${REQUIRE_API_URL:-0}
     depends_on:
       - api
