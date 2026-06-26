@@ -1,0 +1,26 @@
+# Optional profile: run predictor comparison job against the api service.
+# Usage (requires main stack or at least api):
+#   docker compose -f docker-compose.yml -f docker-compose.predictor-compare.yml \
+#     --profile predictor-compare run --rm predictor-compare
+#
+# Does not alter default `docker compose up` (profile-gated).
+services:
+  predictor-compare:
+    profiles: ["predictor-compare"]
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - API_BASE_URL=http://api:8000
+    depends_on:
+      - api
+    entrypoint: ["python", "scripts/compare_predictors.py"]
+    command:
+      - "--priority-date"
+      - "2022-10-01"
+      - "--base-url"
+      - "http://api:8000"

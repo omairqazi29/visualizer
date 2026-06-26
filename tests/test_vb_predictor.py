@@ -253,3 +253,127 @@ def test_oppenheim_api_returns_200():
     assert "trajectory" in data
     assert len(data["trajectory"]) == 6
     assert data["calibration"]["calibrated_rate"] > 0
+
+
+# ── Unavailable ("U") resilience ─────────────────────────
+
+
+def test_vb_parser_unavailable_status():
+    """Jul 2026 EB-2 India FAD is Unavailable — parser must not crash and must flag U."""
+    from src.parsers.visa_bulletin_parser import VisaBulletinParser
+    vb = VisaBulletinParser(category="EB-2")
+    history = vb.get_history()
+    assert history, "EB-2 history should be non-empty"
+    # Find any U rows (Jul 2026 EB-2 FAD)
+    u_rows = [r for r in history if r.get("fad_unavailable") or r.get("fad_status") == "U"]
+    assert u_rows, "Expected at least one Unavailable FAD month (Jul 2026 EB-2)"
+    for r in u_rows:
+        assert r["fad"] is None
+        assert r["fad_status"] == "U"
+        assert r["fad_unavailable"] is True
+
+
+def test_vb_parser_current_status_unavailable_not_current():
+    """When FAD is U, PD is never 'current' for final action."""
+    from src.parsers.visa_bulletin_parser import VisaBulletinParser
+    vb = VisaBulletinParser(category="EB-2")
+    status = vb.get_current_status("2010-01-01", category="EB-2")
+    # Latest EB-2 FAD is U (Jul 2026) — even ancient PD is not current
+    if status.get("fad_unavailable"):
+        assert status["fad_is_current"] is False
+        assert status["current_fad"] is None
+        assert status["fad_status"] == "U"
+
+
+def test_vb_predictor_eb2_unavailable_forecast_stable():
+    """VBPredictor for EB-2 (with U month) returns stable JSON, no exception."""
+    from src.engine.vb_predictor import VBPredictor
+    p = VBPredictor(category="EB-2")
+    rates = p.get_advancement_rates()
+    # U months excluded — rates only for dated→dated transitions
+    for r in rates:
+        assert r["fad"] is not None
+        assert r["prev_fad"] is not None
+    stats = p.get_advancement_stats()
+    assert "unavailable_months" in stats
+    assert stats["unavailable_months"] >= 1
+    result = p.forecast(months_ahead=6)
+    assert "forecast" in result
+    assert "latest_actual" in result
+    la = result["latest_actual"]
+    assert "fad_status" in la
+    # Latest EB-2 is U — fad None, status U
+    assert la.get("fad_unavailable") is True or la.get("fad_status") == "U"
+    assert la.get("fad") is None
+    # Still produces forecast anchored on prior dated FAD
+    assert len(result["forecast"]) == 6
+    for pt in result["forecast"]:
+        assert pt["predicted_fad"] is not None
+
+
+def test_vb_predictor_months_until_fad():
+    """months_until_fad_reaches returns structured result for a pre-FAD PD."""
+    from src.engine.vb_predictor import VBPredictor
+    p = VBPredictor(category="EB-1")
+    # PD well before current FAD should already be current
+    early = p.months_until_fad_reaches("2015-01-01")
+    assert early.get("already_current") is True or early.get("months_to_current") == 0
+    # PD after FAD needs advancement
+    late = p.months_until_fad_reaches("2024-06-01")
+    assert "months_to_current" in late
+    assert "confidence" in late
+
+
+def test_predictor_compare_api():
+    """ /api/predictor-compare returns side-by-side fields without 500."""
+    try:
+        from starlette.testclient import TestClient
+    except ImportError:
+        pytest.skip("starlette not installed")
+    from api.main import app
+    client = TestClient(app)
+    resp = client.get(
+        "/api/predictor-compare",
+        params={"priority_date": "2022-10-01", "category": "EB-1"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["priority_date"] == "2022-10-01"
+    assert "demand_months_to_clear" in data
+    assert "vb_months_to_current" in data
+    assert "divergence_notes" in data
+    assert isinstance(data["divergence_notes"], list)
+
+
+def test_vb_history_api_includes_status():
+    """Visa bulletin history exposes fad_status for U months."""
+    try:
+        from starlette.testclient import TestClient
+    except ImportError:
+        pytest.skip("starlette not installed")
+    from api.main import app
+    client = TestClient(app)
+    resp = client.get("/api/visa-bulletin-history", params={"category": "EB-2"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_rows"] > 0
+    u_rows = [r for r in data["history"] if r.get("fad_unavailable") or r.get("fad_status") == "U"]
+    assert u_rows, "EB-2 history should include Unavailable FAD row(s)"
+    assert u_rows[-1]["fad"] is None
+
+
+def test_vb_forecast_eb2_api_200():
+    """EB-2 forecast (with Unavailable latest FAD) returns 200, not 500."""
+    try:
+        from starlette.testclient import TestClient
+    except ImportError:
+        pytest.skip("starlette not installed")
+    from api.main import app
+    client = TestClient(app)
+    resp = client.get("/api/vb-forecast", params={"category": "EB-2", "months_ahead": 6})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["latest_actual"].get("fad_status") in ("U", "date", "C")
+    # Forecast may be non-empty when prior dated FAD exists
+    assert "forecast" in data
+    assert "methodology" in data

@@ -75,3 +75,45 @@ def test_predict_with_real_restrictions(client):
 def test_predict_invalid_date(client):
     response = client.get("/api/predict?priority_date=bad-date")
     assert response.status_code == 422
+
+
+def test_predict_includes_vb_status_fields(client):
+    """Predict returns explicit fad/dof status for Jul 2026 VB (incl. U handling)."""
+    # PD before EB-1 FAD (15OCT22) — should be current on FAD for EB-1
+    response = client.get("/api/predict?priority_date=2022-09-01")
+    assert response.status_code == 200
+    data = response.json()
+    assert "vb_bulletin_month" in data
+    assert "vb_fad_status" in data
+    assert data["vb_fad_status"] in ("date", "C", "U", None)
+    assert "vb_fad_unavailable" in data
+    # PD after FAD
+    response2 = client.get("/api/predict?priority_date=2023-06-01")
+    assert response2.status_code == 200
+    data2 = response2.json()
+    assert data2.get("vb_fad_is_current") is False or data2.get("vb_fad_unavailable") is True
+
+
+def test_predictor_compare_endpoint(client):
+    response = client.get(
+        "/api/predictor-compare?priority_date=2022-10-01&apply_real_restrictions=true"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["demand_months_to_clear"] is not None
+    assert "vb_latest_fad_status" in data
+
+
+def test_visa_bulletin_history_jul_2026(client):
+    """Latest EB-1 history includes Jul 2026 retrogression; EB-2 has U."""
+    eb1 = client.get("/api/visa-bulletin-history?category=EB-1").json()
+    months = [r["bulletin_month"] for r in eb1["history"]]
+    assert "2026-07" in months
+    jul = next(r for r in eb1["history"] if r["bulletin_month"] == "2026-07")
+    assert jul["fad"] == "2022-10-15"
+
+    eb2 = client.get("/api/visa-bulletin-history?category=EB-2").json()
+    jul2 = next(r for r in eb2["history"] if r["bulletin_month"] == "2026-07")
+    assert jul2["fad"] is None
+    assert jul2["fad_status"] == "U"
+    assert jul2["fad_unavailable"] is True
