@@ -92,6 +92,32 @@ def _get_supply_calc() -> SupplyCalculator:
     return _SHARED_SUPPLY
 
 
+def _month_delta(start, end) -> int:
+    """Whole months from `start` to `end` (negative if end precedes start)."""
+    return (end.year - start.year) * 12 + (end.month - start.month)
+
+
+def _current_dof_anchor(category: str = "EB-1"):
+    """Latest India Dates-for-Filing cutoff, as a date, or None.
+
+    The I-140 pipeline is by definition people who could not file an I-485 —
+    i.e. priority dates later than this cutoff — so it is the natural anchor
+    for spreading the pipeline across priority dates. Returns None when the
+    category is Current/Unavailable or the history is unusable, in which case
+    callers fall back to a fixed window.
+    """
+    try:
+        history = VisaBulletinParser().get_history(category=category)
+        if not history:
+            return None
+        latest = history[-1]
+        if latest.get("dof_unavailable"):
+            return None
+        return latest.get("dof")
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _cache_get(key: str) -> Any | None:
     return _RESPONSE_CACHE.get(key)
 
@@ -313,6 +339,14 @@ class PredictResponse(BaseModel):
     vb_dof_is_current: bool = False
     vb_fad_remaining_months: float = 0
     vb_dof_remaining_months: float = 0
+    # How backlog_ahead was built (the pipeline share is modeled, not observed)
+    inventory_ahead: int = 0
+    pipeline_total: int = 0
+    pipeline_counted_ahead: int = 0
+    pipeline_fraction: float = 0
+    pipeline_anchor_dof: str | None = None
+    pipeline_window_months: int = 0
+    pipeline_overlap_removed: int = 0
 
 
 @app.get("/api/waterfall", response_model=WaterfallResponse)
@@ -446,6 +480,18 @@ async def predict_pd(
         False,
         description="Apply real 2025-2026 restrictions: 39-country Proclamation ban 10949/10998 (India excluded; ignored if apply_freeze=true)",
     ),
+    net_pipeline_overlap: bool = Query(
+        False,
+        description=(
+            "Remove the I-485 'Awaiting Availability' population from the I-140 "
+            "pipeline before counting it as backlog. USCIS's 'Approved Petitions "
+            "Awaiting Visa Availability' report is defined against the Final Action "
+            "Dates chart and does not exclude people who already filed an I-485 off "
+            "the Dates for Filing chart, so those people plausibly appear in both "
+            "the inventory and the pipeline. Off by default: the overlap is inferred "
+            "from the report's definition, not stated by USCIS."
+        ),
+    ),
 ):
     try:
         try:
@@ -469,16 +515,58 @@ async def predict_pd(
             cutoff_month=pd_dt.month, cutoff_year=pd_dt.year
         )
 
-        if pd_dt.year > 2023:
-            months_into_pipeline = (pd_dt.year - 2024) * 12 + pd_dt.month
-            pipeline_fraction = min(1.0, months_into_pipeline / 24.0)
-            backlog_ahead = inv_stats_total["total"] + int(
-                pipe_total * pipeline_fraction
+        # --- How much of the I-140 pipeline sits ahead of this PD? ---
+        # USCIS's "Approved Petitions Awaiting Visa Availability" report gives a
+        # country x category total with NO priority-date dimension, so the split
+        # has to be modeled. Anchor it to live data rather than literals: the
+        # pipeline is people who could not file an I-485, i.e. PDs later than the
+        # current Dates for Filing cutoff, spread from that cutoff to today.
+        pipeline_anchor_dof = None
+        pipeline_window_months = 0
+        pipeline_fraction = 0.0
+        pipeline_overlap_removed = 0
+        pipeline_effective = pipe_total
+
+        if net_pipeline_overlap:
+            # I-485s filed off the DOF chart but still awaiting a number are
+            # counted by BOTH reports (the I-140 report keys off the FAD chart
+            # and excludes only people who already became LPR/USC).
+            try:
+                by_status = inv_parser.get_india_eb1_by_visa_status()
+                pipeline_overlap_removed = min(
+                    pipe_total, int(by_status.get("Awaiting Availability", 0))
+                )
+                pipeline_effective = pipe_total - pipeline_overlap_removed
+            except Exception:
+                pipeline_overlap_removed = 0
+                pipeline_effective = pipe_total
+
+        dof_anchor = _current_dof_anchor()
+        if dof_anchor is not None:
+            pipeline_anchor_dof = dof_anchor.strftime("%Y-%m-%d")
+            today = datetime.today()
+            pipeline_window_months = max(
+                1, _month_delta(dof_anchor, today)
             )
+            months_into_pipeline = _month_delta(dof_anchor, pd_dt)
+        else:
+            # No usable VB history: fall back to the original fixed window.
+            pipeline_window_months = 24
+            months_into_pipeline = (pd_dt.year - 2024) * 12 + pd_dt.month
+
+        if pd_dt.year > 2023:
+            pipeline_fraction = max(
+                0.0, min(1.0, months_into_pipeline / pipeline_window_months)
+            )
+            pipeline_counted_ahead = int(pipeline_effective * pipeline_fraction)
+            backlog_ahead = inv_stats_total["total"] + pipeline_counted_ahead
         else:
             # Use 'mountain' (PDs strictly before cutoff_year per parser design) for
             # backlog ahead of this PD. Fixes prior use of full 'total' which
             # overstated queue for pre-2024 PDs and reduced prediction accuracy.
+            # A PD at or before the DOF cutoff has no pipeline ahead of it — the
+            # pipeline is by definition people who could not yet file.
+            pipeline_counted_ahead = 0
             backlog_ahead = inv_ahead.get("mountain", inv_ahead["total"])
 
         # Supply side via centralized calculator (per-FY schedule)
@@ -527,6 +615,13 @@ async def predict_pd(
             vb_bulletin_month=vb_status.get("bulletin_month"),
             vb_current_fad=vb_status.get("current_fad"),
             vb_current_dof=vb_status.get("current_dof"),
+            inventory_ahead=int(backlog_ahead - pipeline_counted_ahead),
+            pipeline_total=int(pipe_total),
+            pipeline_counted_ahead=int(pipeline_counted_ahead),
+            pipeline_fraction=round(float(pipeline_fraction), 4),
+            pipeline_anchor_dof=pipeline_anchor_dof,
+            pipeline_window_months=int(pipeline_window_months),
+            pipeline_overlap_removed=int(pipeline_overlap_removed),
             vb_fad_is_current=vb_status.get("fad_is_current", False),
             vb_dof_is_current=vb_status.get("dof_is_current", False),
             vb_fad_remaining_months=vb_status.get("fad_remaining_months", 0),

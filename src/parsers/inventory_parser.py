@@ -250,6 +250,48 @@ class InventoryParser(BaseParser):
     # Legacy method (unchanged interface)
     # ──────────────────────────────────────────────
 
+    def get_india_eb1_by_visa_status(self) -> dict:
+        """India EB-1 pending I-485 persons split by USCIS 'Visa Status'.
+
+        USCIS marks each pending I-485 as 'Available' (priority date current on
+        the Final Action Dates chart) or 'Awaiting Availability' (filed off the
+        Dates for Filing chart, still waiting for a number).
+
+        The 'Awaiting Availability' group is the overlap with the I-140
+        "Approved Petitions Awaiting Visa Availability" report, which is also
+        defined against the FAD chart and does not exclude people who already
+        have an I-485 on file. Counts are persons (principal + derivatives),
+        matching the rest of the inventory — no multiplier.
+        """
+        if self.df is None:
+            self.load_india_eb1()
+
+        pref_col = self._find_pref_col(self.df)
+        status_col = next(
+            (c for c in self.df.columns if "visa status" in str(c).lower()), None
+        )
+        if status_col is None:
+            return {}
+
+        eb1_mask = self.df[pref_col].astype(str).str.contains(
+            "1st", case=False, na=False
+        ) | self.df[pref_col].astype(str).str.contains("EB1", case=False, na=False)
+        eb1_df = self.df[eb1_mask]
+
+        year_cols = [
+            c
+            for c in self.df.columns
+            if "Priority Date Year" in str(c) or "Prior Years" in str(c)
+        ]
+
+        out: dict[str, int] = {}
+        for status, group in eb1_df.groupby(eb1_df[status_col].astype(str).str.strip()):
+            total = 0
+            for col in year_cols:
+                total += int(group[col].apply(_parse_val).sum())
+            out[status] = total
+        return out
+
     def get_india_eb1_queue(
         self, cutoff_month: int = None, cutoff_year: int = None
     ) -> dict:

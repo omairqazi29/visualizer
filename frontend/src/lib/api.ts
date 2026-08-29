@@ -33,9 +33,9 @@ export const getWaterfallData = (applyFreeze: boolean = false, applyRealRestrict
 export const getSupplyDemandData = (applyFreeze: boolean = false, applyRealRestrictions: boolean = false) =>
   cached(`supply-demand:${applyFreeze}:${applyRealRestrictions}`, () =>
     api.get('/supply-demand', { params: { apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data));
-export const predictPD = (priorityDate: string, applyFreeze: boolean = false, applyRealRestrictions: boolean = false) =>
-  cached(`predict:${priorityDate}:${applyFreeze}:${applyRealRestrictions}`, () =>
-    api.get('/predict', { params: { priority_date: priorityDate, apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions } }).then(res => res.data));
+export const predictPD = (priorityDate: string, applyFreeze: boolean = false, applyRealRestrictions: boolean = false, netPipelineOverlap: boolean = false) =>
+  cached(`predict:${priorityDate}:${applyFreeze}:${applyRealRestrictions}:${netPipelineOverlap}`, () =>
+    api.get('/predict', { params: { priority_date: priorityDate, apply_freeze: applyFreeze, apply_real_restrictions: applyRealRestrictions, net_pipeline_overlap: netPipelineOverlap } }).then(res => res.data));
 export const getMethodology = () =>
   cached('methodology', () => api.get('/methodology').then(res => res.data));
 export const getInventoryContext = () =>
@@ -128,6 +128,16 @@ export interface PredictData {
   vb_dof_is_current: boolean;
   vb_fad_remaining_months: number;
   vb_dof_remaining_months: number;
+  // How backlog_ahead was built. inventory_ahead is observed (USCIS I-485
+  // inventory by priority date); the pipeline share is modeled, because the
+  // I-140 "awaiting visa availability" report has no priority-date dimension.
+  inventory_ahead: number;
+  pipeline_total: number;
+  pipeline_counted_ahead: number;
+  pipeline_fraction: number;
+  pipeline_anchor_dof: string | null;
+  pipeline_window_months: number;
+  pipeline_overlap_removed: number;
 }
 
 export interface DataSource {

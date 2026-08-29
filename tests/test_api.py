@@ -75,3 +75,49 @@ def test_predict_with_real_restrictions(client):
 def test_predict_invalid_date(client):
     response = client.get("/api/predict?priority_date=bad-date")
     assert response.status_code == 422
+
+
+def test_predict_pipeline_share_is_anchored_to_live_dof(client):
+    """The I-140 pipeline share must derive from the live DOF, not 2024/24 literals.
+
+    USCIS's "Approved Petitions Awaiting Visa Availability" report has no
+    priority-date dimension, so the share ahead of a given PD is modeled. It is
+    anchored to the current Dates-for-Filing cutoff (the pipeline is people who
+    could not file) and spread to today, so the window widens as time passes
+    instead of staying pinned to a hardcoded 24 months.
+    """
+    r = client.get("/api/predict?priority_date=2025-01-01&apply_real_restrictions=true")
+    assert r.status_code == 200
+    d = r.json()
+
+    assert d["pipeline_anchor_dof"], "expected a DOF anchor from VB history"
+    assert d["pipeline_window_months"] > 24, (
+        "window should have grown past the old hardcoded 24 months"
+    )
+    assert 0.0 < d["pipeline_fraction"] < 1.0
+    # backlog_ahead must decompose into observed inventory + modeled pipeline.
+    assert d["inventory_ahead"] + d["pipeline_counted_ahead"] == d["backlog_ahead"]
+    assert d["pipeline_counted_ahead"] <= d["pipeline_total"]
+
+
+def test_predict_pd_at_or_before_dof_has_no_pipeline_ahead(client):
+    """The pipeline is by definition people who could not yet file an I-485."""
+    r = client.get("/api/predict?priority_date=2015-01-01&apply_real_restrictions=true")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["pipeline_counted_ahead"] == 0
+
+
+def test_predict_net_pipeline_overlap_reduces_backlog(client):
+    """Opt-in overlap netting must shrink the queue, never grow it."""
+    base = client.get("/api/predict?priority_date=2025-01-01&apply_real_restrictions=true").json()
+    netted = client.get(
+        "/api/predict?priority_date=2025-01-01&apply_real_restrictions=true&net_pipeline_overlap=true"
+    ).json()
+
+    assert base["pipeline_overlap_removed"] == 0, "must be off by default"
+    assert netted["pipeline_overlap_removed"] > 0
+    assert netted["backlog_ahead"] < base["backlog_ahead"]
+    assert netted["months_to_clear"] <= base["months_to_clear"]
+    # Same observed inventory either way — only the modeled pipeline changes.
+    assert netted["inventory_ahead"] == base["inventory_ahead"]
