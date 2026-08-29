@@ -176,6 +176,42 @@ def find_latest(pattern: str, data_dir: str = "data") -> Optional[Path]:
     return candidates[0] if candidates else None
 
 
+def find_all(pattern: str, data_dir: str = "data") -> list[Path]:
+    """Return every file matching the glob, oldest first by the same key as find_latest.
+
+    Where find_latest answers "what is current", this answers "what history is on
+    disk". Files whose names carry no parseable date sort first (key (0, 0, ...)),
+    ordered by mtime.
+    """
+    dir_path = Path(data_dir)
+    if not dir_path.is_dir():
+        return []
+
+    if pattern.startswith(str(dir_path)) or pattern.startswith(data_dir):
+        pattern = Path(pattern).name
+
+    candidates = list(dir_path.glob(pattern))
+    if not candidates:
+        candidates = [
+            p
+            for p in dir_path.iterdir()
+            if p.is_file()
+            and p.suffix.lower() == ".xlsx"
+            and fnmatch.fnmatch(p.name.lower(), pattern.lower())
+        ]
+    return sorted(candidates, key=_file_sort_key)
+
+
+def get_inventory_paths(data_dir: str = "data") -> list[Path]:
+    """Every EB inventory snapshot on disk, oldest first."""
+    return find_all("eb_inventory*.xlsx", data_dir)
+
+
+def date_from_filename(path: Path) -> Optional[Tuple[int, int]]:
+    """Public accessor for the (year, month) parsed from a data filename."""
+    return _parse_date_from_filename(path)
+
+
 def get_latest_inventory_path(data_dir: str = "data") -> str:
     """Convenience: latest eb_inventory*.xlsx or the well-known fallback name."""
     p = find_latest("eb_inventory*.xlsx", data_dir)
@@ -248,6 +284,9 @@ def get_latest_i140_receipts_path(data_dir: str = "data") -> str:
 __all__ = [
     "MONTHS_MAP",
     "find_latest",
+    "find_all",
+    "get_inventory_paths",
+    "date_from_filename",
     "get_latest_inventory_path",
     "get_latest_pipeline_path",
     "get_dos_dir",

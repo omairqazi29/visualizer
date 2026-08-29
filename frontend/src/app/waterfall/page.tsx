@@ -206,7 +206,7 @@ export default function WaterfallPage() {
             onClick={() => setMode('current')}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${mode === 'current' ? 'bg-crimson-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
           >
-            Current Policy (91 countries)
+            Current Policy (39 countries)
           </button>
         </div>
       </div>
@@ -215,7 +215,7 @@ export default function WaterfallPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>{isBaseline ? 'Baseline INA Cascade' : 'Current Policy Cascade (91-Country Restrictions)'}</CardTitle>
+              <CardTitle>{isBaseline ? 'Baseline INA Cascade' : 'Current Policy Cascade (39-Country Restrictions)'}</CardTitle>
               <CardDescription>
                 {isBaseline
                   ? 'Standard INA flow: EB base + FB spillover \u2192 28.6% to EB-1 \u2192 India gets its share.'
@@ -340,7 +340,7 @@ export default function WaterfallPage() {
             <CardHeader>
               <CardTitle className="text-base">Country-Level DOS IV Savings Breakdown</CardTitle>
               <CardDescription>
-                Per-country visa savings from the 91-country restrictions (Proclamation ban + DOS IV pause).
+                Per-country visa savings from the 39-country Proclamation restrictions.
                 Shows which restricted countries contribute the most unused visas that spill over to India EB-1.
               </CardDescription>
             </CardHeader>

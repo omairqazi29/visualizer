@@ -63,10 +63,33 @@ class VisaBulletinParser:
             rows.append({
                 "bulletin_month": r["bulletin_month"],
                 "category": cat,
-                "fad": None if fad == "C" else datetime.strptime(fad, "%Y-%m-%d").date(),
-                "dof": None if dof == "C" else datetime.strptime(dof, "%Y-%m-%d").date(),
+                "fad": self._parse_vb_date(fad),
+                "dof": self._parse_vb_date(dof),
+                "fad_unavailable": self._is_unavailable(fad),
+                "dof_unavailable": self._is_unavailable(dof),
             })
         return rows
+
+    @staticmethod
+    def _is_unavailable(value) -> bool:
+        """True when Visa Bulletin marks the category Unavailable (U)."""
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            return False
+        return str(value).strip().upper() in {"U", "UNAVAILABLE"}
+
+    @staticmethod
+    def _parse_vb_date(value):
+        """Parse FAD/DOF cell: date, Current (C), or Unavailable (U).
+
+        Returns datetime.date for cutoff dates, None for C/U/blank.
+        Unavailable means no numbers for the month (distinct from Current).
+        """
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            return None
+        s = str(value).strip()
+        if not s or s.upper() in {"C", "U", "UNAVAILABLE", "CURRENT"}:
+            return None
+        return datetime.strptime(s, "%Y-%m-%d").date()
 
     def get_all_categories_history(self) -> list[dict]:
         """Return all rows across all categories with parsed dates."""
@@ -78,8 +101,10 @@ class VisaBulletinParser:
             rows.append({
                 "bulletin_month": r["bulletin_month"],
                 "category": r.get("category", self.category),
-                "fad": None if fad == "C" else datetime.strptime(fad, "%Y-%m-%d").date(),
-                "dof": None if dof == "C" else datetime.strptime(dof, "%Y-%m-%d").date(),
+                "fad": self._parse_vb_date(fad),
+                "dof": self._parse_vb_date(dof),
+                "fad_unavailable": self._is_unavailable(fad),
+                "dof_unavailable": self._is_unavailable(dof),
             })
         return rows
 
@@ -164,9 +189,20 @@ class VisaBulletinParser:
 
         fad = latest["fad"]
         dof = latest["dof"]
+        fad_unavail = latest.get("fad_unavailable", False)
+        dof_unavail = latest.get("dof_unavailable", False)
 
-        fad_current = fad is None or pd_date < fad
-        dof_current = dof is None or pd_date < dof
+        # C (Current) → fad is None and not unavailable → everyone current
+        # U (Unavailable) → fad is None and unavailable → nobody current
+        # date cutoff → PD before cutoff is current
+        if fad_unavail:
+            fad_current = False
+        else:
+            fad_current = fad is None or pd_date < fad
+        if dof_unavail:
+            dof_current = False
+        else:
+            dof_current = dof is None or pd_date < dof
 
         fad_remaining = 0.0
         if fad is not None and not fad_current:

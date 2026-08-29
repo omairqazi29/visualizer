@@ -293,7 +293,8 @@ class SupplyCalculator:
         India gets INDIA_OVERSUBSCRIBED_SHARE (80%) of additional EB-1,
         not 100% — China is also oversubscribed.
 
-        apply_real_restrictions: 91-country real policy (Proclamation + DOS IV pause).
+        apply_real_restrictions: 39-country real policy (Proclamations 10949/10998).
+            The 75-country DOS IV pause was vacated Aug 21, 2026 (CLINIC v. Rubio).
         apply_freeze: Hypothetical freeze on DEFAULT_RESTRICTED_COUNTRIES.
 
         Note: This method uses only the LATEST fiscal year's DOS data for
@@ -306,9 +307,15 @@ class SupplyCalculator:
 
         eb_base = EB_BASE_LIMIT
 
-        # --- Scope to latest FY for annual statutory comparison ---
+        # --- Scope to the latest COMPLETE FY for annual statutory comparison ---
+        # Never use a partial FY here: statutory limits are annual, so N months of
+        # usage against the 226,000 FB limit would manufacture phantom spillover.
+        complete_fys = dos_parser.get_complete_fys()
         available_fys = dos_parser.get_available_fys()
-        if available_fys:
+        if complete_fys:
+            latest_fy = max(complete_fys)
+            fy_df = self._filter_fy(dos_parser.df, latest_fy)
+        elif available_fys:
             latest_fy = max(available_fys)
             fy_df = self._filter_fy(dos_parser.df, latest_fy)
         else:
@@ -440,8 +447,10 @@ class SupplyCalculator:
         self._ensure_dos_loaded()
         dos = self.dos_parser
 
-        # Determine which FYs have data
-        available_fys = dos.get_available_fys()
+        # Determine which FYs have data. Partial fiscal years are excluded — a
+        # per-FY supply figure derived from a fraction of a year's issuances is
+        # meaningless against annual statutory limits (see get_complete_fys()).
+        available_fys = dos.get_complete_fys() or dos.get_available_fys()
         if not available_fys:
             breakdown = self.get_supply_breakdown(apply_freeze, apply_real_restrictions)
             return {2025: breakdown.india_eb1_supply}

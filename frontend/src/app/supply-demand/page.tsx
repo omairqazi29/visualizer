@@ -13,7 +13,7 @@ export default function SupplyDemandPage() {
   useEffect(() => {
     Promise.all([
       getSupplyDemandData(false, false),  // Baseline (no restrictions)
-      getSupplyDemandData(false, true)    // Current policy (91-country real restrictions)
+      getSupplyDemandData(false, true)    // Current policy (39-country real restrictions)
     ])
       .then(([std, frz]) => {
         setStandardData(std);
@@ -58,7 +58,7 @@ export default function SupplyDemandPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight text-navy-900">Backlog Comparison</h2>
-        <p className="text-slate-500">Comparing baseline (no restrictions) vs. current 91-country administrative policy.</p>
+        <p className="text-slate-500">Comparing baseline (no restrictions) vs. current 39-country administrative policy.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -122,7 +122,7 @@ export default function SupplyDemandPage() {
       <Card className="p-6">
         <CardHeader>
           <CardTitle>The Restriction Delta</CardTitle>
-          <CardDescription>How current 91-country restrictions accelerate India EB-1 backlog clearance vs. baseline.</CardDescription>
+          <CardDescription>How current 39-country restrictions accelerate India EB-1 backlog clearance vs. baseline.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-[450px] mt-4">
@@ -159,7 +159,7 @@ export default function SupplyDemandPage() {
                 <Area 
                   type="monotone" 
                   dataKey="freezeBacklog" 
-                  name="Current Policy (91 countries)"
+                  name="Current Policy (39 countries)"
                   stroke="#BF0A30" 
                   strokeWidth={3}
                   fillOpacity={1} 

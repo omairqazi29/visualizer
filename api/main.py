@@ -1,7 +1,10 @@
 import sys
 import os
+import time
+import logging
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Any, Callable
 
 # Add the project root to sys.path to import from src
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -9,6 +12,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+logger = logging.getLogger("spillover.api")
 
 from src.parsers.inventory_parser import InventoryParser
 from src.parsers.pipeline_parser import PipelineParser
@@ -26,6 +31,9 @@ from src.parsers.perm_parser import PERMParser
 from src.parsers.h1b_parser import H1BParser
 from src.parsers.ceac_parser import CEACParser
 from src.parsers.i140_receipts_parser import I140ReceiptsParser
+from src.parsers.i140_radp_parser import I140RADPParser
+from src.parsers.all_forms_parser import AllFormsParser
+from src.parsers.dhs_newadj_parser import DHSNewAdjParser
 from src.constants import ACTUAL_RESTRICTED_COUNTRIES, DEFAULT_INDIA_EB1_SUPPLY, FB_STATUTORY_LIMIT
 from src.data_discovery import get_latest_inventory_path, get_latest_pipeline_path, _parse_date_from_filename, MONTHS_MAP
 
@@ -64,7 +72,173 @@ def _fy_quarter_label_from_path(filepath: str) -> str | None:
     return _date_label_from_path(filepath)
 
 
-app = FastAPI(title="The Spillover Engine API")
+# ---------------------------------------------------------------------------
+# Process-local warm cache
+# Government data is static for a process lifetime — compute once at startup
+# (and on first miss), serve thereafter. Multi-worker uvicorn: each worker
+# warms its own cache during lifespan.
+# ---------------------------------------------------------------------------
+_RESPONSE_CACHE: dict[str, Any] = {}
+_SHARED_SUPPLY: SupplyCalculator | None = None
+
+
+def _get_supply_calc() -> SupplyCalculator:
+    """Reuse one SupplyCalculator (DOS Excel load is the expensive part)."""
+    global _SHARED_SUPPLY
+    if _SHARED_SUPPLY is None:
+        _SHARED_SUPPLY = SupplyCalculator()
+        # Force DOS load at acquisition time so first request isn't the hit.
+        _SHARED_SUPPLY._ensure_dos_loaded()
+    return _SHARED_SUPPLY
+
+
+def _cache_get(key: str) -> Any | None:
+    return _RESPONSE_CACHE.get(key)
+
+
+def _cache_set(key: str, value: Any) -> Any:
+    _RESPONSE_CACHE[key] = value
+    return value
+
+
+def _cached_call(key: str, fn: Callable[[], Any]) -> Any:
+    hit = _cache_get(key)
+    if hit is not None:
+        return hit
+    return _cache_set(key, fn())
+
+
+def _warm_startup_cache() -> None:
+    """Precompute heavy endpoints so page opens hit RAM, not disk/pandas."""
+    t0 = time.perf_counter()
+    logger.info("Warming startup cache…")
+    try:
+        calc = _get_supply_calc()
+        # Force inventory discovery + load once
+        InventoryParser.latest()
+
+        for apply_real in (False, True):
+            for apply_freeze in (False,):
+                key = f"waterfall:{apply_freeze}:{apply_real}"
+                bd = calc.get_supply_breakdown(
+                    apply_freeze=apply_freeze,
+                    apply_real_restrictions=apply_real,
+                )
+                _cache_set(
+                    key,
+                    WaterfallResponse(
+                        eb_base_limit=bd.eb_base_limit,
+                        fb_spillover=bd.fb_spillover,
+                        total_eb_pool=bd.total_eb_pool,
+                        eb1_from_pool=bd.eb1_from_pool,
+                        eb45_spillover=bd.eb45_spillover,
+                        total_eb1=bd.total_eb1,
+                        india_eb1_baseline=bd.india_eb1_baseline,
+                        india_eb1_supply=bd.india_eb1_supply,
+                        non_india_eb1=bd.non_india_eb1,
+                        fb_savings=bd.fb_savings,
+                        eb1_savings=bd.eb1_savings,
+                        eb45_savings=bd.eb45_savings,
+                        eb23_savings=bd.eb23_savings,
+                        fb_savings_by_country=bd.fb_savings_by_country,
+                        eb1_savings_by_country=bd.eb1_savings_by_country,
+                        eb45_savings_by_country=bd.eb45_savings_by_country,
+                        eb23_savings_by_country=bd.eb23_savings_by_country,
+                        india_oversubscribed_share=bd.india_oversubscribed_share,
+                        non_india_eb1_demand=bd.non_india_eb1_demand,
+                        eb45_total_usage=bd.eb45_total_usage,
+                    ),
+                )
+
+        # VB forecast (baseline + restrictions)
+        for apply_real in (False, True):
+            pred = VBPredictor(category="EB-1")
+            supply = None
+            if apply_real:
+                supply = calc.get_supply_breakdown(
+                    apply_real_restrictions=True
+                ).india_eb1_supply
+            result = pred.forecast(months_ahead=24, annual_supply=supply)
+            full_history = pred.vb.get_history(category="EB-1")
+            recent = full_history[-12:]
+            historical = [
+                {
+                    "bulletin_month": r["bulletin_month"],
+                    "category": r.get("category", "EB-1"),
+                    "fad": r["fad"].isoformat() if r["fad"] else None,
+                    "dof": r["dof"].isoformat() if r["dof"] else None,
+                }
+                for r in recent
+            ]
+            _cache_set(
+                f"vb-forecast:EB-1:24:{apply_real}",
+                VBForecastResponse(
+                    category="EB-1",
+                    country="India",
+                    forecast=[VBForecastPoint(**pt) for pt in result["forecast"]],
+                    historical=historical,
+                    latest_actual=result["latest_actual"],
+                    stats=result["stats"],
+                    supply_factor=result["supply_factor"],
+                    dof_gap_months=result["dof_gap_months"],
+                    methodology=result["methodology"],
+                ),
+            )
+
+        # Oppenheim (restrictions on + off, 12 months)
+        for apply_real in (True, False):
+            solver = OppenheimSolver(
+                category="EB-1", apply_real_restrictions=apply_real
+            )
+            cal = solver.calibrate()
+            rate = cal.get("calibrated_rate", 0.65)
+            solver.materialization_rate = rate
+            next_fad = solver.predict_next_fad()
+            traj = solver.predict_trajectory(months_ahead=12)
+            _cache_set(
+                f"oppenheim:EB-1:12:None:{apply_real}",
+                OppenheimResponse(
+                    category="EB-1",
+                    country="India",
+                    calibration=cal,
+                    next_fad=next_fad,
+                    trajectory=[OppenheimPredictionPoint(**pt) for pt in traj],
+                    methodology=next_fad.get("methodology", ""),
+                ),
+            )
+
+        # Lighter secondary endpoints used by overview / sidebar
+        try:
+            from src.parsers.i485_parser import I485FlowParser as _I485
+
+            flow = _I485("data/USCIS_I485")
+            _cache_set("i485-flow", flow.get_eb_summary())
+        except Exception as e:  # noqa: BLE001
+            logger.warning("i485-flow warm skipped: %s", e)
+
+        elapsed = time.perf_counter() - t0
+        logger.info(
+            "Startup cache warm complete in %.1fs (%d keys)",
+            elapsed,
+            len(_RESPONSE_CACHE),
+        )
+        print(
+            f"[spillover] startup cache ready in {elapsed:.1f}s "
+            f"({len(_RESPONSE_CACHE)} keys)",
+            flush=True,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Startup cache warm failed: %s", e)
+        print(f"[spillover] startup cache FAILED: {e}", flush=True)
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    _warm_startup_cache()
+    yield
+
+
+app = FastAPI(title="The Spillover Engine API", lifespan=_lifespan)
 
 # Enable CORS (allow localhost for dev + any origin for containerized deployments)
 app.add_middleware(
@@ -149,36 +323,42 @@ async def get_waterfall_data(
     ),
     apply_real_restrictions: bool = Query(
         False,
-        description="Apply real 2025-2026 restrictions: 39-country Proclamation ban + 75-country DOS IV pause (91 countries total; India excluded; ignored if apply_freeze=true)",
+        description="Apply real 2025-2026 restrictions: 39-country Proclamation ban 10949/10998 (India excluded; ignored if apply_freeze=true). The 75-country DOS IV pause was vacated Aug 21, 2026 and is no longer applied.",
     ),
 ):
     try:
-        calc = SupplyCalculator()
-        breakdown = calc.get_supply_breakdown(
-            apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions
-        )
-        return WaterfallResponse(
-            eb_base_limit=breakdown.eb_base_limit,
-            fb_spillover=breakdown.fb_spillover,
-            total_eb_pool=breakdown.total_eb_pool,
-            eb1_from_pool=breakdown.eb1_from_pool,
-            eb45_spillover=breakdown.eb45_spillover,
-            total_eb1=breakdown.total_eb1,
-            india_eb1_baseline=breakdown.india_eb1_baseline,
-            india_eb1_supply=breakdown.india_eb1_supply,
-            non_india_eb1=breakdown.non_india_eb1,
-            fb_savings=breakdown.fb_savings,
-            eb1_savings=breakdown.eb1_savings,
-            eb45_savings=breakdown.eb45_savings,
-            eb23_savings=breakdown.eb23_savings,
-            fb_savings_by_country=breakdown.fb_savings_by_country,
-            eb1_savings_by_country=breakdown.eb1_savings_by_country,
-            eb45_savings_by_country=breakdown.eb45_savings_by_country,
-            eb23_savings_by_country=breakdown.eb23_savings_by_country,
-            india_oversubscribed_share=breakdown.india_oversubscribed_share,
-            non_india_eb1_demand=breakdown.non_india_eb1_demand,
-            eb45_total_usage=breakdown.eb45_total_usage,
-        )
+        cache_key = f"waterfall:{apply_freeze}:{apply_real_restrictions}"
+
+        def _compute() -> WaterfallResponse:
+            calc = _get_supply_calc()
+            breakdown = calc.get_supply_breakdown(
+                apply_freeze=apply_freeze,
+                apply_real_restrictions=apply_real_restrictions,
+            )
+            return WaterfallResponse(
+                eb_base_limit=breakdown.eb_base_limit,
+                fb_spillover=breakdown.fb_spillover,
+                total_eb_pool=breakdown.total_eb_pool,
+                eb1_from_pool=breakdown.eb1_from_pool,
+                eb45_spillover=breakdown.eb45_spillover,
+                total_eb1=breakdown.total_eb1,
+                india_eb1_baseline=breakdown.india_eb1_baseline,
+                india_eb1_supply=breakdown.india_eb1_supply,
+                non_india_eb1=breakdown.non_india_eb1,
+                fb_savings=breakdown.fb_savings,
+                eb1_savings=breakdown.eb1_savings,
+                eb45_savings=breakdown.eb45_savings,
+                eb23_savings=breakdown.eb23_savings,
+                fb_savings_by_country=breakdown.fb_savings_by_country,
+                eb1_savings_by_country=breakdown.eb1_savings_by_country,
+                eb45_savings_by_country=breakdown.eb45_savings_by_country,
+                eb23_savings_by_country=breakdown.eb23_savings_by_country,
+                india_oversubscribed_share=breakdown.india_oversubscribed_share,
+                non_india_eb1_demand=breakdown.non_india_eb1_demand,
+                eb45_total_usage=breakdown.eb45_total_usage,
+            )
+
+        return _cached_call(cache_key, _compute)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -191,7 +371,7 @@ async def get_supply_demand_data(
     ),
     apply_real_restrictions: bool = Query(
         False,
-        description="Apply real 2025-2026 restrictions: 91 countries (Proclamation ban + DOS IV pause; India excluded; ignored if apply_freeze=true)",
+        description="Apply real 2025-2026 restrictions: 39-country Proclamation ban 10949/10998 (India excluded; ignored if apply_freeze=true)",
     ),
 ):
     try:
@@ -206,7 +386,7 @@ async def get_supply_demand_data(
         total_queue = int(inv_stats["total"] + pipe_total)
 
         # Supply side via centralized calculator
-        calc = SupplyCalculator()
+        calc = _get_supply_calc()
         breakdown = calc.get_supply_breakdown(
             apply_freeze=apply_freeze, apply_real_restrictions=apply_real_restrictions
         )
@@ -264,7 +444,7 @@ async def predict_pd(
     ),
     apply_real_restrictions: bool = Query(
         False,
-        description="Apply real 2025-2026 restrictions: 91 countries (Proclamation ban + DOS IV pause; India excluded; ignored if apply_freeze=true)",
+        description="Apply real 2025-2026 restrictions: 39-country Proclamation ban 10949/10998 (India excluded; ignored if apply_freeze=true)",
     ),
 ):
     try:
@@ -302,7 +482,7 @@ async def predict_pd(
             backlog_ahead = inv_ahead.get("mountain", inv_ahead["total"])
 
         # Supply side via centralized calculator (per-FY schedule)
-        calc = SupplyCalculator()
+        calc = _get_supply_calc()
         monthly_dist = calc.dos_parser.get_monthly_distribution(
             country="India", categories=["E11", "E12", "E13"]
         )
@@ -663,8 +843,11 @@ async def get_perm_pipeline():
     this models the "pipeline of future demand" entering the EB system.
 
     Data source: DOL OFLC Performance Data (quarterly disclosure files).
+
+    Response-cached: the aggregations group over ~1.2M case rows (FY2015+), which
+    costs seconds per call even once the corpus itself is cached in memory.
     """
-    try:
+    def _compute():
         parser = PERMParser()
         return PERMPipelineResponse(
             by_fy=[PERMFYData(**d) for d in parser.get_certified_by_fy()],
@@ -674,6 +857,9 @@ async def get_perm_pipeline():
             top_countries=[PERMTopCountry(**d) for d in parser.get_top_countries()],
             summary=parser.get_summary(),
         )
+
+    try:
+        return _cached_call("perm-pipeline", _compute)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -801,7 +987,7 @@ async def get_legislation():
         total_queue = int(inv_stats["total"] + pipe_total)
 
         # --- Supply side ---
-        calc = SupplyCalculator()
+        calc = _get_supply_calc()
         breakdown = calc.get_supply_breakdown()
         baseline_supply = breakdown.india_eb1_supply
 
@@ -1034,13 +1220,19 @@ async def get_methodology():
                 "policy": "Presidential Proclamations 10949/10998",
                 "description": "Suspend immigrant visa entry for 39 countries (security/vetting)",
                 "status": "In effect",
-                "model_impact": "Part of ACTUAL_RESTRICTED_COUNTRIES union (91 total). Zeroes consular IV usage from listed countries to compute spillover savings from DOS data.",
+                "model_impact": "The entire ACTUAL_RESTRICTED_COUNTRIES set (39 total) since the IV pause was vacated. Zeroes consular IV usage from listed countries to compute spillover savings from DOS data.",
             },
             {
                 "policy": "DOS 75-Country IV Pause (Public Charge)",
                 "description": "Pauses consular immigrant visa issuance for 75 countries at high risk of public benefits reliance (eff. Jan 21, 2026)",
-                "status": "In effect — lawsuit pending (CLINIC v. Rubio, S.D.N.Y.)",
-                "model_impact": "Part of ACTUAL_RESTRICTED_COUNTRIES union (91 total). Directly halts consular IV issuances — the exact data source the model measures. Adds major countries: Brazil, Pakistan, Bangladesh, Egypt, Ethiopia, Colombia, Ghana, Iraq, etc.",
+                "status": "VACATED Aug 21, 2026 — CLINIC v. Rubio (S.D.N.Y., Judge Vargas). DOS confirmed the pause is 'no longer in effect' (travel.state.gov, updated Aug 28, 2026).",
+                "model_impact": "Removed from ACTUAL_RESTRICTED_COUNTRIES (now 39, was 91). The 52 IV-pause-only countries (Brazil, Pakistan, Bangladesh, Egypt, Ethiopia, Colombia, Ghana, Iraq, etc.) resume consular IV issuance, which reduces modeled spillover savings. Retained as DOS_IV_PAUSE_COUNTRIES_2026 for FY2026 historical attribution — it was in force Jan 21 to Aug 21, 2026.",
+            },
+            {
+                "policy": "DOS Immigrant Visa Interview Pause (public charge retraining)",
+                "description": "DOS paused scheduling of immigrant visa interviews worldwide while consular officers are retrained on public-charge guidance following the CLINIC v. Rubio vacatur",
+                "status": "In effect (announced late Aug 2026) — no stated end date",
+                "model_impact": "None modeled. A scheduling delay, not a numerical restriction; it shifts issuance timing within/between fiscal years rather than zeroing country demand. Watch FY2026 Q4 DOS issuance data for a timing dip.",
             },
             {
                 "policy": "USCIS Adjudicative Hold (PM-602-0192/0194)",
@@ -1049,7 +1241,7 @@ async def get_methodology():
                 "model_impact": "None. Model uses DOS consular IV data (ground truth). Ruling affects USCIS domestic processing, a separate pathway not measured by DOS.",
             },
         ],
-        last_verified="2026-06-01",
+        last_verified="2026-08-29",
     )
 
 
@@ -1249,40 +1441,44 @@ async def get_vb_forecast(
     rates using the restriction-boosted India EB-1 supply from the INA cascade.
     """
     try:
-        predictor = VBPredictor(category=category)
+        cache_key = f"vb-forecast:{category}:{months_ahead}:{apply_real_restrictions}"
 
-        supply = None
-        if apply_real_restrictions:
-            calc = SupplyCalculator()
-            breakdown = calc.get_supply_breakdown(apply_real_restrictions=True)
-            supply = breakdown.india_eb1_supply
+        def _compute() -> VBForecastResponse:
+            predictor = VBPredictor(category=category)
+            supply = None
+            if apply_real_restrictions:
+                breakdown = _get_supply_calc().get_supply_breakdown(
+                    apply_real_restrictions=True
+                )
+                supply = breakdown.india_eb1_supply
 
-        result = predictor.forecast(months_ahead=months_ahead, annual_supply=supply)
+            result = predictor.forecast(
+                months_ahead=months_ahead, annual_supply=supply
+            )
+            full_history = predictor.vb.get_history(category=category)
+            recent_history = full_history[-12:]
+            historical = [
+                {
+                    "bulletin_month": r["bulletin_month"],
+                    "category": r.get("category", category),
+                    "fad": r["fad"].isoformat() if r["fad"] else None,
+                    "dof": r["dof"].isoformat() if r["dof"] else None,
+                }
+                for r in recent_history
+            ]
+            return VBForecastResponse(
+                category=category,
+                country="India",
+                forecast=[VBForecastPoint(**pt) for pt in result["forecast"]],
+                historical=historical,
+                latest_actual=result["latest_actual"],
+                stats=result["stats"],
+                supply_factor=result["supply_factor"],
+                dof_gap_months=result["dof_gap_months"],
+                methodology=result["methodology"],
+            )
 
-        # Recent 12 months of actual history for chart context
-        full_history = predictor.vb.get_history(category=category)
-        recent_history = full_history[-12:]
-        historical = [
-            {
-                "bulletin_month": r["bulletin_month"],
-                "category": r.get("category", category),
-                "fad": r["fad"].isoformat() if r["fad"] else None,
-                "dof": r["dof"].isoformat() if r["dof"] else None,
-            }
-            for r in recent_history
-        ]
-
-        return VBForecastResponse(
-            category=category,
-            country="India",
-            forecast=[VBForecastPoint(**pt) for pt in result["forecast"]],
-            historical=historical,
-            latest_actual=result["latest_actual"],
-            stats=result["stats"],
-            supply_factor=result["supply_factor"],
-            dof_gap_months=result["dof_gap_months"],
-            methodology=result["methodology"],
-        )
+        return _cached_call(cache_key, _compute)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1301,6 +1497,7 @@ class OppenheimPredictionPoint(BaseModel):
     materialization_rate: float
     fiscal_year: int
     remaining_annual_supply: int | None = None
+    is_unavailable: bool = False
 
 
 class OppenheimResponse(BaseModel):
@@ -1329,34 +1526,282 @@ async def get_oppenheim_prediction(
     unless overridden.
     """
     try:
-        solver = OppenheimSolver(
-            category=category,
-            apply_real_restrictions=apply_real_restrictions,
+        cache_key = (
+            f"oppenheim:{category}:{months_ahead}:"
+            f"{materialization_rate}:{apply_real_restrictions}"
         )
 
-        # Calibrate against current VB
-        cal = solver.calibrate()
+        def _compute() -> OppenheimResponse:
+            solver = OppenheimSolver(
+                category=category,
+                apply_real_restrictions=apply_real_restrictions,
+            )
+            # Reuse process-wide DOS load
+            solver._supply_calc = _get_supply_calc()
 
-        # Use calibrated rate unless overridden
-        rate = materialization_rate if materialization_rate is not None else cal.get("calibrated_rate", 0.65)
-        solver.materialization_rate = rate
+            cal = solver.calibrate()
+            rate = (
+                materialization_rate
+                if materialization_rate is not None
+                else cal.get("calibrated_rate", 0.65)
+            )
+            solver.materialization_rate = rate
+            next_fad = solver.predict_next_fad()
+            traj = solver.predict_trajectory(months_ahead=months_ahead)
+            return OppenheimResponse(
+                category=category,
+                country="India",
+                calibration=cal,
+                next_fad=next_fad,
+                trajectory=[OppenheimPredictionPoint(**pt) for pt in traj],
+                methodology=next_fad.get("methodology", ""),
+            )
 
-        # Predict next month
-        next_fad = solver.predict_next_fad()
-
-        # Predict trajectory
-        traj = solver.predict_trajectory(months_ahead=months_ahead)
-
-        return OppenheimResponse(
-            category=category,
-            country="India",
-            calibration=cal,
-            next_fad=next_fad,
-            trajectory=[OppenheimPredictionPoint(**pt) for pt in traj],
-            methodology=next_fad.get("methodology", ""),
-        )
+        return _cached_call(cache_key, _compute)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# I-140 RADP (receipts / approvals / denials / pending)
+# ──────────────────────────────────────────────
+
+
+class RADPMetrics(BaseModel):
+    received: int | None = None
+    approved: int | None = None
+    denied: int | None = None
+    pending: int | None = None
+
+
+class RADPCountryFlow(BaseModel):
+    country: str
+    receipts: dict[str, Any]
+    approvals: dict[str, Any]
+
+
+class I140RADPResponse(BaseModel):
+    period: str | None
+    source_file: str
+    quarters: dict[str, dict[str, RADPMetrics]]
+    receipts_by_country: dict[str, Any]
+    approvals_by_country: dict[str, Any]
+    india: RADPCountryFlow
+
+
+@app.get("/api/i140-radp", response_model=I140RADPResponse)
+async def get_i140_radp():
+    """I-140 receipts, approvals, denials, and pending by EB subcategory.
+
+    Distinct from /api/pipeline (backlog totals) and /api/i140-receipts: this
+    exposes the live pending I-140 queue per preference and per beneficiary
+    country of birth, which is the inflow that becomes future I-485 demand.
+    """
+    def _compute():
+        parser = I140RADPParser.latest()
+        if parser is None:
+            raise HTTPException(status_code=404, detail="No I-140 RADP data file found")
+        india = parser.get_country_flow("India")
+        return I140RADPResponse(
+            period=parser.period,
+            source_file=parser.path.name,
+            quarters={
+                q: {k: RADPMetrics(**v) for k, v in data.items()}
+                for q, data in parser.get_summary().items()
+            },
+            receipts_by_country=parser.get_receipts_by_country(),
+            approvals_by_country=parser.get_approvals_by_country(),
+            india=RADPCountryFlow(
+                country="India",
+                receipts=india["receipts"],
+                approvals=india["approvals"],
+            ),
+        )
+
+    try:
+        return _cached_call("i140_radp", _compute)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# USCIS service-wide quarterly all-forms report
+# ──────────────────────────────────────────────
+
+
+class AllFormsRow(BaseModel):
+    form: str
+    form_title: str | None = None
+    category: str | None = None
+    received: int | None = None
+    approved: int | None = None
+    denied: int | None = None
+    completions: int | None = None
+    pending: int | None = None
+    processing_time_months: float | None = None
+
+
+class AllFormsResponse(BaseModel):
+    period: str | None
+    source_file: str
+    totals: AllFormsRow | None
+    forms: List[AllFormsRow]
+    eb_path: List[AllFormsRow]
+
+
+@app.get("/api/all-forms", response_model=AllFormsResponse)
+async def get_all_forms():
+    """USCIS service-wide quarterly volumes by form.
+
+    Provides the agency-wide context around the EB path: pending queues and
+    published median processing times for I-140, I-485, I-765, I-131 and the
+    rest, rather than inferring them.
+    """
+    def _compute():
+        parser = AllFormsParser.latest()
+        if parser is None:
+            raise HTTPException(status_code=404, detail="No all-forms data file found")
+        totals = parser.get_totals()
+        return AllFormsResponse(
+            period=parser.period,
+            source_file=parser.path.name,
+            totals=AllFormsRow(**totals) if totals else None,
+            forms=[AllFormsRow(**r) for r in parser.get_all_forms()],
+            eb_path=[AllFormsRow(**r) for r in parser.get_eb_path_forms()],
+        )
+
+    try:
+        return _cached_call("all_forms", _compute)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# EB inventory trend across monthly snapshots
+# ──────────────────────────────────────────────
+
+
+class InventorySnapshot(BaseModel):
+    year: int
+    month: int
+    label: str
+    file: str
+    backlogs: dict[str, dict[str, int]]
+
+
+class BurnRatePoint(BaseModel):
+    year: int
+    month: int
+    label: str
+    pending: int
+
+
+class BurnRate(BaseModel):
+    country: str
+    category: str
+    points: List[BurnRatePoint]
+    months_covered: int
+    months_elapsed: int | None = None
+    change: int | None = None
+    per_month: float | None = None
+
+
+class InventorySeriesResponse(BaseModel):
+    snapshots: List[InventorySnapshot]
+    burn_rates: List[BurnRate]
+
+
+@app.get("/api/inventory-series", response_model=InventorySeriesResponse)
+async def get_inventory_series(
+    country: str = Query("India", description="Country group for burn-rate detail"),
+):
+    """EB I-485 inventory across every monthly snapshot on disk.
+
+    /api/inventory-context reports the current queue depth; this reports its
+    direction. `per_month` is the observed net change per month (negative means
+    the queue is draining). It is net movement, not gross visa issuance, since
+    new filings enter the same queue.
+    """
+    def _compute():
+        snapshots = InventoryParser.snapshots()
+        rates = []
+        for category in ("EB1", "EB2", "EB3"):
+            r = InventoryParser.burn_rate(country, category)
+            if r["months_covered"]:
+                rates.append(BurnRate(**r))
+        return InventorySeriesResponse(
+            snapshots=[InventorySnapshot(**s) for s in snapshots],
+            burn_rates=rates,
+        )
+
+    try:
+        return _cached_call(f"inventory_series:{country}", _compute)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────
+# DHS EB consular vs adjustment-of-status split
+# ──────────────────────────────────────────────
+
+
+class EBPathSplit(BaseModel):
+    fiscal_year: int
+    total: int | None = None
+    aos: int | None = None
+    consular: int | None = None
+    source_file: str
+
+
+class EBPathSplitResponse(BaseModel):
+    national: List[EBPathSplit]
+    by_country: dict[str, List[EBPathSplit]]
+    coverage: List[int]
+
+
+@app.get("/api/eb-path-split", response_model=EBPathSplitResponse)
+async def get_eb_path_split(
+    countries: str = Query("India,China", description="Comma-separated countries of birth"),
+):
+    """EB green cards issued abroad (consular) vs adjusted in the US (AOS).
+
+    Sourced from DHS Yearbook Tables 8-11. DOS publishes consular issuance only
+    and USCIS publishes AOS only, so this is the one place the two paths are
+    reported on a common basis. Used to keep EB-4/5 spillover on total usage
+    rather than consular-only figures.
+    """
+    def _compute():
+        parser = DHSNewAdjParser()
+        requested = [c.strip() for c in countries.split(",") if c.strip()]
+        return EBPathSplitResponse(
+            national=[EBPathSplit(**s.as_dict()) for s in parser.get_eb_splits()],
+            by_country={
+                c: [EBPathSplit(**s.as_dict()) for s in parser.get_eb_splits_for_country(c)]
+                for c in requested
+            },
+            coverage=parser.get_coverage(),
+        )
+
+    try:
+        return _cached_call(f"eb_path_split:{countries}", _compute)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ready")
+async def ready():
+    """Liveness + whether startup warm cache finished (keys present)."""
+    return {
+        "ready": len(_RESPONSE_CACHE) > 0,
+        "cache_keys": sorted(_RESPONSE_CACHE.keys()),
+        "cache_size": len(_RESPONSE_CACHE),
+        "dos_loaded": _SHARED_SUPPLY is not None
+        and getattr(_SHARED_SUPPLY, "_dos_df", None) is not None,
+    }
 
 
 if __name__ == "__main__":

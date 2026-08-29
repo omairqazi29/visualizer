@@ -159,7 +159,7 @@ export default function VBForecastPage() {
             <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:bg-crimson-600 transition-colors" />
             <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4" />
           </div>
-          <span className="text-sm text-slate-600">Current Policy (91 Countries)</span>
+          <span className="text-sm text-slate-600">Current Policy (39 Countries)</span>
         </label>
 
         {loading && (
@@ -211,7 +211,7 @@ export default function VBForecastPage() {
               </CardTitle>
               <CardDescription>
                 Historical dates (solid) and forecast (dashed) with confidence band.{' '}
-                {applyRestrictions && <span className="text-crimson-600 font-medium">91-country restrictions applied.</span>}
+                {applyRestrictions && <span className="text-crimson-600 font-medium">39-country restrictions applied.</span>}
               </CardDescription>
             </CardHeader>
             <CardContent>

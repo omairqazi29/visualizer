@@ -9,6 +9,8 @@ from src.constants import (
     DEPENDENT_MULTIPLIER,
     DEFAULT_INDIA_EB1_SUPPLY,
     ACTUAL_RESTRICTED_COUNTRIES,
+    PROCLAMATION_RESTRICTED_COUNTRIES,
+    DOS_IV_PAUSE_COUNTRIES_2026,
     EB45_DEPENDENT_MULTIPLIER,
     get_data_driven_multipliers,
 )
@@ -66,18 +68,19 @@ def test_data_driven_multipliers():
 
 
 def test_actual_restricted_countries():
-    # Union of 39-country Proclamation ban + 75-country DOS IV pause = 91 countries
+    # Proclamations 10949 + 10998 only = 39 countries. The DOS 75-country public
+    # charge IV pause was vacated Aug 21, 2026 (CLINIC v. Rubio) and is no longer
+    # part of the current-policy set.
     assert isinstance(ACTUAL_RESTRICTED_COUNTRIES, set)
-    assert len(ACTUAL_RESTRICTED_COUNTRIES) == 91
+    assert len(ACTUAL_RESTRICTED_COUNTRIES) == 39
+    assert ACTUAL_RESTRICTED_COUNTRIES == PROCLAMATION_RESTRICTED_COUNTRIES
     # Proclamation ban countries
     assert "Haiti" in ACTUAL_RESTRICTED_COUNTRIES
     assert "Nigeria" in ACTUAL_RESTRICTED_COUNTRIES
     assert "Venezuela" in ACTUAL_RESTRICTED_COUNTRIES
-    # DOS IV pause countries (not on Proclamation)
-    assert "Brazil" in ACTUAL_RESTRICTED_COUNTRIES
-    assert "Pakistan" in ACTUAL_RESTRICTED_COUNTRIES
-    assert "Bangladesh" in ACTUAL_RESTRICTED_COUNTRIES
-    assert "Egypt" in ACTUAL_RESTRICTED_COUNTRIES
+    # IV-pause-only countries must NOT be restricted post-vacatur
+    for country in ("Brazil", "Pakistan", "Bangladesh", "Egypt"):
+        assert country not in ACTUAL_RESTRICTED_COUNTRIES
     # Beneficiaries must never be on the list
     assert "India" not in ACTUAL_RESTRICTED_COUNTRIES
     assert "China - mainland born" not in ACTUAL_RESTRICTED_COUNTRIES
@@ -85,3 +88,11 @@ def test_actual_restricted_countries():
     assert "Philippines" not in ACTUAL_RESTRICTED_COUNTRIES
     assert "Mexico" not in ACTUAL_RESTRICTED_COUNTRIES
 
+
+def test_vacated_iv_pause_list_kept_for_history():
+    # Historical only: in force Jan 21 - Aug 21, 2026, so FY2026 DOS data reflects it.
+    assert len(DOS_IV_PAUSE_COUNTRIES_2026) == 75
+    assert "Brazil" in DOS_IV_PAUSE_COUNTRIES_2026
+    assert "India" not in DOS_IV_PAUSE_COUNTRIES_2026
+    # 23 countries appeared on both lists
+    assert len(DOS_IV_PAUSE_COUNTRIES_2026 & PROCLAMATION_RESTRICTED_COUNTRIES) == 23

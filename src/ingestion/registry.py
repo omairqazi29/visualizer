@@ -115,6 +115,26 @@ def refresh_paths_from_env() -> None:
         pass
 
 
+def _normalize_uscis_monthly_report_name(url: str, link_text: str = "") -> str:
+    """USCIS service-wide monthly report -> the filename I485FlowParser expects.
+
+    USCIS publishes "Number of Service-Wide Forms by Month, Form Status, and
+    Processing Time" as `appropriation_requirement_<month>_<year>_v<n>.csv`.
+    `I485FlowParser._parse_monthly_csv` keys off `monthly_<month>_<year>.csv`,
+    so rename on the way in rather than teaching the parser a second pattern.
+    """
+    import re
+    from urllib.parse import unquote
+
+    name = unquote(url.rsplit("/", 1)[-1])
+    m = re.match(
+        r"appropriation_requirement_([a-z]+)_(\d{4})(?:_v[\d.]+)?\.csv$", name, re.I
+    )
+    if m:
+        return f"monthly_{m.group(1).lower()}_{m.group(2)}.csv"
+    return name
+
+
 def _normalize_dos_fsc_name(url: str, link_text: str = "") -> str:
     """Normalize DOS FSC Excel filename; strip URL encoding."""
     from urllib.parse import unquote
@@ -298,13 +318,18 @@ SOURCE_REGISTRY: Dict[str, DataSource] = {
             r"i485_performancedata",
             r"i485_performance_data",
             r"i-485.*performance",
+            r"quarterly_all_forms",
+            r"all.?forms.*fy\d{4}",
         ),
         extensions=(".xlsx", ".xls"),
         normalize_fn=_normalize_uscis_name,
         dedup_key_fn=_uscis_dedup_key,
         engine_notes=(
-            "I485FlowParser / I-485 performance files in data/USCIS_I485/ — "
-            "inflow vs outflow for I-485 queue trends"
+            "I485FlowParser / I-485 performance files in data/USCIS_I485/ "
+            "(inflow vs outflow for I-485 queue trends). AllFormsParser reads "
+            "the quarterly_all_forms_* service-wide report from the same "
+            "directory. Duplicate quarters across filename variants are "
+            "deduped by reporting period."
         ),
         schedule_hint="weekly",
         allowed_hosts=("uscis.gov", "www.uscis.gov"),
@@ -323,13 +348,16 @@ SOURCE_REGISTRY: Dict[str, DataSource] = {
             r"i140_rec_by_class_country",
             r"i140_rec_",
             r"i140_.*performance",
+            r"i140_fy\d{4}",
         ),
         extensions=(".xlsx", ".xls"),
         normalize_fn=_normalize_uscis_name,
         dedup_key_fn=_uscis_dedup_key,
         engine_notes=(
-            "PipelineParser / I140ReceiptsParser via data_discovery — "
-            "eb_i140_* and i140_rec_* in data/ for pipeline backlog + new filings"
+            "PipelineParser / I140ReceiptsParser via data_discovery: "
+            "eb_i140_* and i140_rec_* in data/ for pipeline backlog + new "
+            "filings. I140RADPParser reads i140_fy*.xlsx (the RADP report) for "
+            "receipts/approvals/denials/pending by EB subcategory and country."
         ),
         schedule_hint="weekly",
         allowed_hosts=("uscis.gov", "www.uscis.gov"),
@@ -366,13 +394,16 @@ SOURCE_REGISTRY: Dict[str, DataSource] = {
             r"table.?7",
             r"\bliar\b",
             r"immigration.?statistics",
+            r"tables8-11",
+            r"newadj",
         ),
         extensions=(".xlsx", ".xls"),
         normalize_fn=_normalize_uscis_name,
         dedup_key_fn=_uscis_dedup_key,
         engine_notes=(
             "DHSYearbookParser; dhs_eb_category_usage.csv for EB-4/5 spillover totals. "
-            "CSV may still need manual/scripted regeneration from new xlsx."
+            "DHSNewAdjParser reads *tables8-11*.xlsx for the EB consular vs AOS split. "
+            "Regenerate the EB_TOTAL rows with: python3 -m src.scripts.build_dhs_eb_usage"
         ),
         schedule_hint="monthly",
         follow_links=True,
@@ -418,17 +449,29 @@ SOURCE_REGISTRY: Dict[str, DataSource] = {
     "uscis_i485_monthly_csv": DataSource(
         source_id="uscis_i485_monthly_csv",
         agency="USCIS",
-        description="USCIS I-485 monthly flow CSVs (disabled stub)",
+        description=(
+            "USCIS service-wide monthly forms report (Report to Congress) — the "
+            "source of the I-485 monthly receipts/approvals/pending flow"
+        ),
         scan_url=(
             "https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data"
         ),
         target_dir="data/USCIS_I485",
-        link_patterns=(r"monthly_.*\.csv", r"i485.*monthly"),
+        link_patterns=(
+            r"appropriation_requirement_[a-z]+_\d{4}",
+            r"monthly_.*\.csv",
+            r"i485.*monthly",
+        ),
         extensions=(".csv",),
-        engine_notes="I485FlowParser — monthly_*.csv in data/USCIS_I485/",
+        normalize_fn=_normalize_uscis_monthly_report_name,
+        engine_notes=(
+            "I485FlowParser — monthly_*.csv in data/USCIS_I485/. USCIS links only "
+            "the newest month on the data page; older months stay reachable at the "
+            "same appropriation_requirement_<month>_<year>_v1.0.csv path."
+        ),
         allowed_hosts=("uscis.gov", "www.uscis.gov"),
-        enabled=False,
-        tags=("uscis", "i485", "stub"),
+        enabled=True,
+        tags=("uscis", "i485", "monthly"),
     ),
     "uscis_processing_times": DataSource(
         source_id="uscis_processing_times",

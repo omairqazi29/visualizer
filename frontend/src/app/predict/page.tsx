@@ -21,7 +21,7 @@ export default function PredictorPage() {
     try {
       const [std, frz] = await Promise.all([
         predictPD(dateStr, false, false),  // Baseline (no restrictions)
-        predictPD(dateStr, false, true)    // Current policy (91-country real restrictions)
+        predictPD(dateStr, false, true)    // Current policy (39-country real restrictions)
       ]);
       setStandardResult(std);
       setFreezeResult(frz);
@@ -43,7 +43,7 @@ export default function PredictorPage() {
     <div className="space-y-6 max-w-5xl">
       <div>
         <h2 className="text-3xl font-bold tracking-tight text-navy-900">Personal PD Predictor</h2>
-        <p className="text-slate-500">Predicts when the <span className="font-semibold">Final Action Date (FAD)</span> and <span className="font-semibold">Date of Filing (DOF)</span> reach your priority date. Compare baseline vs. current 91-country policy.</p>
+        <p className="text-slate-500">Predicts when the <span className="font-semibold">Final Action Date (FAD)</span> and <span className="font-semibold">Date of Filing (DOF)</span> reach your priority date. Compare baseline vs. current 39-country policy.</p>
       </div>
 
       <Card className="max-w-md">
@@ -153,9 +153,9 @@ export default function PredictorPage() {
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   Current Policy
-                  <Badge className="bg-crimson-600">91 Countries</Badge>
+                  <Badge className="bg-crimson-600">39 Countries</Badge>
                 </CardTitle>
-                <CardDescription>91-country restrictions (Proclamation ban + DOS IV pause) — savings from DOS data.</CardDescription>
+                <CardDescription>39-country Proclamation restrictions — savings from DOS data.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-4">

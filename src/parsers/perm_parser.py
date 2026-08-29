@@ -102,14 +102,129 @@ def _parse_fy_from_filename(name: str) -> Optional[tuple[int, int]]:
     """Extract (fiscal_year, quarter) from PERM filename.
 
     e.g. 'PERM_Disclosure_Data_FY2025_Q4.xlsx' -> (2025, 4)
+
+    DOL used a two-digit fiscal year before FY2018 ('PERM_Disclosure_Data_FY16',
+    'PERM_Disclosure_Data_FY15_Q4'), so those are matched too and expanded to
+    20xx. Without this the older files fall through to fiscal_year 0 and collapse
+    into a single phantom bucket in every by-FY aggregation.
+
+    The four-digit forms are tried first, and each pattern is anchored with a
+    negative lookahead so 'FY2018' can never be read as year 20.
     """
-    m = re.search(r"FY(\d{4})_Q(\d)", name, re.IGNORECASE)
-    if m:
-        return int(m.group(1)), int(m.group(2))
-    m = re.search(r"FY(\d{4})", name, re.IGNORECASE)
-    if m:
-        return int(m.group(1)), 4  # Assume full year
+    patterns = [
+        (r"FY(\d{4})[_-]?Q(\d)(?!\d)", False),
+        (r"FY(\d{2})[_-]?Q(\d)(?!\d)", True),
+    ]
+    for pattern, two_digit in patterns:
+        m = re.search(pattern, name, re.IGNORECASE)
+        if m:
+            year = int(m.group(1))
+            return (2000 + year if two_digit else year), int(m.group(2))
+
+    for pattern, two_digit in [(r"FY(\d{4})(?!\d)", False), (r"FY(\d{2})(?!\d)", True)]:
+        m = re.search(pattern, name, re.IGNORECASE)
+        if m:
+            year = int(m.group(1))
+            return (2000 + year if two_digit else year), 4  # Assume full year
     return None
+
+
+# Process-wide memo of the concatenated PERM corpus, keyed by the exact set of
+# files on disk (path + mtime + size). The corpus spans FY2015 onward and runs
+# to hundreds of MB of Excel, so re-reading it per PERMParser() instance makes
+# request handlers unusably slow. Dropping in a new release changes the key and
+# invalidates the entry on its own.
+_SHARED_FRAMES: dict[tuple, pd.DataFrame] = {}
+
+
+def _corpus_key(data_dir: Path, files: list[str]) -> tuple:
+    """Build a cache key that changes whenever the file set or its contents change."""
+    stamps = []
+    for f in files:
+        try:
+            st = Path(f).stat()
+            stamps.append((f, st.st_mtime, st.st_size))
+        except OSError:
+            stamps.append((f, 0.0, 0))
+    return (str(data_dir.resolve()), tuple(stamps))
+
+
+# Columns kept from each disclosure file. The raw workbooks carry ~150 columns
+# per case; everything downstream only reads these.
+_KEEP_COLUMNS = [
+    "case_status", "country", "education", "inferred_eb",
+    "decision_date", "received_date", "soc_title", "employer",
+    "fiscal_year", "quarter", "source_file",
+]
+
+_DATE_COLUMNS = ["decision_date", "received_date"]
+
+# Subdirectory (under data_dir) holding the slim per-file caches.
+_CACHE_SUBDIR = ".cache"
+
+# Bump whenever the normalization in _load_single_file changes (column set,
+# country aliasing, EB inference, fiscal-year parsing). The cached rows are
+# post-normalization, so without this a logic fix would be masked by caches
+# written by the previous version.
+_CACHE_VERSION = 2
+
+
+def _slim_cache_path(data_dir: Path, source: Path) -> Optional[Path]:
+    """Path of the slim cache for one disclosure file, or None if it cannot be stat'ed.
+
+    The mtime and size are baked into the filename, so a re-downloaded or
+    revised workbook simply misses the cache rather than reading stale rows.
+    """
+    try:
+        st = source.stat()
+    except OSError:
+        return None
+    stamp = f"v{_CACHE_VERSION}_{int(st.st_mtime)}_{st.st_size}"
+    return data_dir / _CACHE_SUBDIR / f"{source.stem}__{stamp}.csv.gz"
+
+
+def _read_slim_cache(path: Path) -> Optional[pd.DataFrame]:
+    """Read a slim cache file, returning None if it is missing or unreadable."""
+    if not path.is_file():
+        return None
+    try:
+        df = pd.read_csv(path, compression="gzip", low_memory=False)
+    except Exception:
+        # A truncated or corrupt cache must never break the parse: fall through
+        # to reading the source workbook.
+        return None
+    for col in _DATE_COLUMNS:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+    return df
+
+
+def _write_slim_cache(path: Path, df: pd.DataFrame) -> None:
+    """Persist a slim frame, discarding partial output on failure."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        df.to_csv(tmp, index=False, compression="gzip")
+        tmp.replace(path)
+    except Exception:
+        # Caching is an optimization; never let it fail the caller.
+        try:
+            tmp.unlink(missing_ok=True)
+        except (OSError, NameError, UnboundLocalError):
+            pass
+
+
+def _prune_stale_caches(data_dir: Path, keep: set[Path]) -> None:
+    """Delete slim caches for revisions of files that are no longer current."""
+    cache_dir = data_dir / _CACHE_SUBDIR
+    if not cache_dir.is_dir():
+        return
+    for entry in cache_dir.glob("*.csv.gz"):
+        if entry not in keep:
+            try:
+                entry.unlink()
+            except OSError:
+                pass
 
 
 class PERMParser:
@@ -151,7 +266,18 @@ class PERMParser:
         return None
 
     def _load_single_file(self, filepath: Path) -> Optional[pd.DataFrame]:
-        """Load and normalize a single PERM disclosure file."""
+        """Load and normalize a single PERM disclosure file.
+
+        The normalized (slim) result is cached to disk next to the source data,
+        because reading one 90MB disclosure workbook costs tens of seconds while
+        re-reading its 11-column cache costs well under a second.
+        """
+        cache_path = _slim_cache_path(self.data_dir, filepath)
+        if cache_path is not None:
+            cached = _read_slim_cache(cache_path)
+            if cached is not None:
+                return cached
+
         try:
             df = pd.read_excel(filepath, dtype=str)
         except Exception:
@@ -219,19 +345,16 @@ class PERMParser:
                 df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
 
         # Keep only relevant columns that exist
-        keep = [
-            "case_status", "country", "education", "inferred_eb",
-            "decision_date", "received_date", "soc_title", "employer",
-            "fiscal_year", "quarter", "source_file",
-        ]
-        keep = [c for c in keep if c in df.columns]
-        return df[keep]
+        keep = [c for c in _KEEP_COLUMNS if c in df.columns]
+        slim = df[keep]
 
-    def _load_all(self) -> pd.DataFrame:
-        """Load and concatenate all PERM files from data directory."""
-        if self._cache is not None:
-            return self._cache
+        if cache_path is not None:
+            _write_slim_cache(cache_path, slim)
 
+        return slim
+
+    def _discover_files(self) -> list[str]:
+        """Return the PERM disclosure files to load, newest naming variants included."""
         # Glob both standard and "New Form" files
         pattern1 = str(self.data_dir / "PERM_Disclosure_Data*.xlsx")
         pattern2 = str(self.data_dir / "PERM_Disclosure_Data_New_Form*.xlsx")
@@ -239,19 +362,50 @@ class PERMParser:
         if not files:
             pattern = str(self.data_dir / "perm*.xlsx")
             files = sorted(glob.glob(pattern))
+        return files
+
+    def _load_all(self) -> pd.DataFrame:
+        """Load and concatenate all PERM files from data directory.
+
+        Each disclosure file is one row per PERM case and the full corpus is
+        hundreds of MB, so the concatenated frame is memoized process-wide
+        (see _SHARED_FRAMES). API handlers construct a fresh PERMParser per
+        request; without this they would re-read every workbook each time.
+        The cache key includes each file's mtime and size, so dropping in a
+        new quarterly release invalidates it automatically.
+        """
+        if self._cache is not None:
+            return self._cache
+
+        files = self._discover_files()
 
         if not files:
             self._cache = pd.DataFrame()
             return self._cache
 
+        cache_key = _corpus_key(self.data_dir, files)
+        cached = _SHARED_FRAMES.get(cache_key)
+        if cached is not None:
+            self._cache = cached
+            return self._cache
+
         frames = []
+        current_caches = set()
         for f in files:
-            df = self._load_single_file(Path(f))
+            source = Path(f)
+            cache_path = _slim_cache_path(self.data_dir, source)
+            if cache_path is not None:
+                current_caches.add(cache_path)
+            df = self._load_single_file(source)
             if df is not None and not df.empty:
                 frames.append(df)
 
+        # Drop caches left behind by superseded revisions of these files
+        _prune_stale_caches(self.data_dir, current_caches)
+
         if not frames:
             self._cache = pd.DataFrame()
+            _SHARED_FRAMES[cache_key] = self._cache
             return self._cache
 
         self._cache = pd.concat(frames, ignore_index=True)
@@ -263,6 +417,7 @@ class PERMParser:
         if "inferred_eb" in self._cache.columns:
             self._cache["inferred_eb"] = self._cache["inferred_eb"].fillna("Unknown")
 
+        _SHARED_FRAMES[cache_key] = self._cache
         return self._cache
 
     def _certified(self) -> pd.DataFrame:

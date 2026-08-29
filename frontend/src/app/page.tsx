@@ -17,7 +17,7 @@ export default function Overview() {
     Promise.all([
       getWaterfallData(false, false),  // Baseline (no restrictions)
       getSupplyDemandData(false, false), // Baseline
-      getWaterfallData(false, true),   // Current policy (91-country real restrictions)
+      getWaterfallData(false, true),   // Current policy (39-country real restrictions)
       getSupplyDemandData(false, true)  // Current policy
     ])
       .then(([w, sd, fw, fsd]) => {
@@ -57,7 +57,7 @@ export default function Overview() {
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-navy-900">Dashboard Overview</h2>
-          <p className="text-slate-500">India EB-1 projections under current 91-country IV restrictions (Proclamations + DOS pause)</p>
+          <p className="text-slate-500">India EB-1 projections under current 39-country IV restrictions (Proclamations 10949/10998)</p>
         </div>
         <div className="flex gap-2">
           <div className="px-3 py-1 bg-crimson-600 text-white text-xs font-bold rounded-full flex items-center gap-1 animate-pulse">
@@ -75,7 +75,7 @@ export default function Overview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-navy-900">+{windfall?.toLocaleString()}</div>
-            <p className="text-xs text-crimson-600 font-medium">Extra visas from 91-country restrictions</p>
+            <p className="text-xs text-crimson-600 font-medium">Extra visas from 39-country restrictions</p>
           </CardContent>
         </Card>
         
@@ -122,7 +122,7 @@ export default function Overview() {
           </CardHeader>
           <CardContent className="space-y-4 text-slate-600">
             <p>
-              <strong>Current Policy:</strong> 91 countries have consular IV issuance paused or suspended (39-country Proclamation entry ban + 75-country DOS public charge IV pause, eff. Jan 2026). India/China excluded. Savings computed from actual DOS issuance data (INA 201/203 spillover). See <a href="/methodology" className="underline text-navy-900 hover:text-crimson-600">Methodology</a>.
+              <strong>Current Policy:</strong> 39 countries have consular IV issuance suspended under Presidential Proclamations 10949/10998. The 75-country DOS public charge IV pause (eff. Jan 21, 2026) was vacated Aug 21, 2026 in CLINIC v. Rubio and is no longer modeled. India/China excluded. Savings computed from actual DOS issuance data (INA 201/203 spillover). See <a href="/methodology" className="underline text-navy-900 hover:text-crimson-600">Methodology</a>.
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 border rounded-lg bg-slate-50">

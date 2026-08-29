@@ -9,7 +9,7 @@ A modern web application to visualize and predict the impact of U.S. Immigrant V
 
 ## Features
 - **Waterfall Visualization**: INA-compliant path from FB/EB limits to India EB-1 supply (with/without Restriction Scenario).
-- **Current Policy Mode**: 91-country real restrictions (39-country Proclamation ban + 75-country DOS IV pause). India/China excluded.
+- **Current Policy Mode**: 39-country real restrictions (Proclamations 10949/10998). The 75-country DOS public-charge IV pause was vacated Aug 21, 2026 (*CLINIC v. Rubio*) and is no longer applied. India/China excluded.
 - **Maximum Scenario**: Additional hypothetical freeze on top-consuming countries (Philippines, Mexico, etc.) beyond real restrictions.
 - **Inventory + Pipeline**: Auto-discovered latest USCIS EB I-485 + I-140 files (drop new eb_inventory_*.xlsx or performance data into data/ — no code change), data-driven dependent multipliers from DHS Yearbook Table 7.
 - **PD Predictor**: FY2027 confidence with per-FY supply schedule + backlog_ahead by PD year.

@@ -119,8 +119,9 @@ def test_compute_india_share_data_driven():
     """SupplyCalculator.compute_india_share uses inventory data, not hardcoded."""
     from src.engine.supply import SupplyCalculator
     share = SupplyCalculator.compute_india_share()
-    # Should be between 0.80 and 0.90 given current data (India ~22k vs China ~4k EB-1)
-    assert 0.75 < share < 0.95
+    # Data-driven from the latest inventory snapshot; band is deliberately wide.
+    # Aug 2026 inventory: India 19,261 vs China 6,539 EB-1 pending -> 0.747.
+    assert 0.70 < share < 0.95
 
 
 def test_demand_modeler_per_fy_supply():
@@ -161,8 +162,10 @@ def test_supply_by_fy_returns_per_fy_dict():
     assert fy_base[2024] == 6952
     assert 5000 < fy_base[2025] < 10000
 
-    # Current policy: FY2025 should be much higher due to restrictions
-    assert fy_policy[2025] > 30000
+    # Current policy: FY2025 higher than baseline due to restrictions. The band
+    # dropped after the 75-country DOS IV pause was vacated (Aug 21, 2026), which
+    # cut ACTUAL_RESTRICTED_COUNTRIES from 91 back to the 39 Proclamation countries.
+    assert fy_policy[2025] > 15000
     # FY2024 should still be baseline (historical, pre-restriction)
     assert fy_policy[2024] == 6952
 
@@ -212,3 +215,38 @@ def test_predict_various_pds_and_flags(pd_str, apply_real, expected_max_months):
     model = DemandModeler(total_q, bd.india_eb1_supply, dist)
     proj = model.project_clearance(backlog=ba)
     assert proj["months_to_clear"] <= expected_max_months
+
+
+def test_partial_fiscal_year_is_excluded_from_annual_math():
+    """DOS publishes monthly, so the in-progress FY is partial.
+
+    Regression: data/DOS holds Jan+Feb 2026 (2 months of FY2026). Scoping the
+    annual statutory comparison to max(available_fys) would measure 2 months of
+    FB usage against the 226,000 annual limit and manufacture ~206k of phantom
+    spillover instead of the real ~47k.
+    """
+    from src.engine.supply import SupplyCalculator
+
+    calc = SupplyCalculator()
+    calc._ensure_dos_loaded()
+    dos = calc.dos_parser
+    counts = dos.get_fy_month_counts()
+    if not counts:
+        pytest.skip("No DOS data present")
+
+    complete = dos.get_complete_fys()
+    for fy in complete:
+        assert counts[fy] >= 12, f"FY{fy} reported complete with {counts[fy]} months"
+    partial = [fy for fy, n in counts.items() if n < 12]
+    for fy in partial:
+        assert fy not in complete
+
+    # Per-FY supply must never be keyed on a partial FY.
+    fy_supply = calc.get_supply_by_fy(apply_real_restrictions=True)
+    for fy in partial:
+        assert fy not in fy_supply
+
+    # And the headline breakdown must stay on a complete FY: FB spillover cannot
+    # exceed the statutory limit minus a plausible full year of FB usage.
+    breakdown = calc.get_supply_breakdown(apply_real_restrictions=False)
+    assert breakdown.fb_spillover < 150_000

@@ -211,12 +211,16 @@ class I485FlowParser:
         - Row 7: Total aggregate row with category breakdowns
           Cols 3-6: FB | 7-10: EB | 11-14: Humanitarian | 15-18: Others | 19-22: Total
 
+        USCIS republishes the same quarter under varying filenames
+        (i485_performance_fy2026_q1.xlsx vs i485_performance_data_fy2026_q1_v1.xlsx),
+        and the automated scanner keeps the original government name. Both match
+        the glob, so records are deduped by (year, month): freshest file wins.
+
         Returns sorted list of dicts with flow metrics per quarter.
         """
         if self._quarterly_cache is not None:
             return self._quarterly_cache
 
-        results = []
         pattern = str(self.data_dir / "i485_performance*.xlsx")
         files = sorted(glob.glob(pattern))
 
@@ -224,15 +228,26 @@ class I485FlowParser:
             self._quarterly_cache = []
             return self._quarterly_cache
 
+        by_period: dict[tuple[int, int], tuple[float, str, dict]] = {}
         for filepath in files:
             try:
                 record = self._parse_quarterly_xlsx(filepath)
-                if record:
-                    results.append(record)
             except Exception:
                 # Skip corrupt / unreadable files
                 continue
+            if not record:
+                continue
+            key = (record["year"], record["month"])
+            try:
+                mtime = Path(filepath).stat().st_mtime
+            except OSError:
+                mtime = 0.0
+            # Newest mtime wins; filename breaks ties for determinism
+            rank = (mtime, Path(filepath).name)
+            if key not in by_period or rank > by_period[key][:2]:
+                by_period[key] = (rank[0], rank[1], record)
 
+        results = [entry[2] for entry in by_period.values()]
         results.sort(key=lambda r: (r["year"], r["month"]))
         self._quarterly_cache = results
         return self._quarterly_cache

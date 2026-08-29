@@ -5,6 +5,8 @@ const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 const api = axios.create({
   baseURL,
+  // Heavy endpoints (Oppenheim / DOS load) can take a while; fail instead of infinite spinner.
+  timeout: 90_000,
 });
 
 // ---------------------------------------------------------------------------
@@ -449,6 +451,7 @@ export const getVBForecast = (category: string = 'EB-1', monthsAhead: number = 2
 // dates) aren't prefetched but get cached on first call.
 // ---------------------------------------------------------------------------
 export function prefetchAll() {
+  // Core pages first (what home / sidebar hit immediately).
   getWaterfallData(false, false);
   getWaterfallData(false, true);
   getSupplyDemandData(false, false);
@@ -457,13 +460,21 @@ export function prefetchAll() {
   getDependentMultipliers();
   getI485Flow();
   getProcessingTimes();
+  // Secondary — still warm, but not required for first paint.
   getPERMPipeline();
   getH1BDemand();
   getLegislation();
   getCEACScheduling();
   getI140Receipts();
   getVBForecast('EB-1', 24, false);
-  getOppenheimPrediction('EB-1', 12, undefined, true);
+  // Defer Oppenheim: demand-supply solver is the heaviest call and was starving
+  // other endpoints on single-worker uvicorn (infinite "loading" on home).
+  if (typeof window !== 'undefined') {
+    window.setTimeout(() => {
+      getOppenheimPrediction('EB-1', 12, undefined, true);
+      getVBForecast('EB-1', 24, true);
+    }, 2500);
+  }
 }
 
 // CEAC Scheduling
@@ -591,6 +602,7 @@ export interface OppenheimPredictionPoint {
   bulletin_month: string;
   predicted_fad: string | null;
   is_current: boolean;
+  is_unavailable?: boolean;
   fad_low: string | null;
   fad_high: string | null;
   cumulative_demand: number;
@@ -618,6 +630,7 @@ export interface OppenheimData {
     bulletin_month: string;
     predicted_fad: string | null;
     is_current: boolean;
+    is_unavailable?: boolean;
     fad_low: string | null;
     fad_high: string | null;
     cumulative_demand: number;
@@ -625,6 +638,7 @@ export interface OppenheimData {
     annual_supply: number;
     materialization_rate: number;
     fiscal_year: number;
+    remaining_annual_supply?: number;
     current_fad: string | null;
     latest_bulletin: string | null;
     advancement_days: number | null;
@@ -634,3 +648,125 @@ export interface OppenheimData {
   trajectory: OppenheimPredictionPoint[];
   methodology: string;
 }
+
+// ---------------------------------------------------------------------------
+// I-140 RADP (receipts / approvals / denials / pending by EB subcategory)
+// ---------------------------------------------------------------------------
+export interface RADPMetrics {
+  received: number | null;
+  approved: number | null;
+  denied: number | null;
+  pending: number | null;
+}
+
+// Preference-level totals plus a per-visa-code breakdown (E11, E12, NIW, ...)
+export interface RADPCountryEntry {
+  EB1?: number | null;
+  EB2?: number | null;
+  EB3?: number | null;
+  detail?: Record<string, number>;
+}
+
+export interface I140RADPData {
+  period: string | null;
+  source_file: string;
+  // Keyed by quarter label ("1st Quarter"), then by EB1/EB2/EB3/TOTAL/visa code
+  quarters: Record<string, Record<string, RADPMetrics>>;
+  receipts_by_country: Record<string, RADPCountryEntry>;
+  approvals_by_country: Record<string, RADPCountryEntry>;
+  india: {
+    country: string;
+    receipts: RADPCountryEntry;
+    approvals: RADPCountryEntry;
+  };
+}
+
+export const getI140RADP = () =>
+  cached('i140-radp', () => api.get('/i140-radp').then(res => res.data as I140RADPData));
+
+// ---------------------------------------------------------------------------
+// USCIS service-wide quarterly all-forms report
+// ---------------------------------------------------------------------------
+export interface AllFormsRow {
+  form: string;
+  form_title: string | null;
+  category: string | null;
+  received: number | null;
+  approved: number | null;
+  denied: number | null;
+  completions: number | null;
+  pending: number | null;
+  processing_time_months: number | null;
+}
+
+export interface AllFormsData {
+  period: string | null;
+  source_file: string;
+  totals: AllFormsRow | null;
+  forms: AllFormsRow[];
+  // I-140, I-129, I-526, I-485, I-765, I-131 (a form may appear more than once,
+  // since USCIS reports separate rows per filing basis)
+  eb_path: AllFormsRow[];
+}
+
+export const getAllForms = () =>
+  cached('all-forms', () => api.get('/all-forms').then(res => res.data as AllFormsData));
+
+// ---------------------------------------------------------------------------
+// EB inventory trend across monthly snapshots
+// ---------------------------------------------------------------------------
+export interface InventorySnapshot {
+  year: number;
+  month: number;
+  label: string;
+  file: string;
+  backlogs: Record<string, Record<string, number>>;
+}
+
+export interface BurnRatePoint {
+  year: number;
+  month: number;
+  label: string;
+  pending: number;
+}
+
+export interface BurnRate {
+  country: string;
+  category: string;
+  points: BurnRatePoint[];
+  months_covered: number;
+  months_elapsed: number | null;
+  change: number | null;
+  // Net change per month; negative means the queue is draining
+  per_month: number | null;
+}
+
+export interface InventorySeriesData {
+  snapshots: InventorySnapshot[];
+  burn_rates: BurnRate[];
+}
+
+export const getInventorySeries = (country: string = 'India') =>
+  cached(`inventory-series:${country}`, () =>
+    api.get('/inventory-series', { params: { country } }).then(res => res.data as InventorySeriesData));
+
+// ---------------------------------------------------------------------------
+// DHS EB consular vs adjustment-of-status split
+// ---------------------------------------------------------------------------
+export interface EBPathSplit {
+  fiscal_year: number;
+  total: number | null;
+  aos: number | null;
+  consular: number | null;
+  source_file: string;
+}
+
+export interface EBPathSplitData {
+  national: EBPathSplit[];
+  by_country: Record<string, EBPathSplit[]>;
+  coverage: number[];
+}
+
+export const getEBPathSplit = (countries: string = 'India,China') =>
+  cached(`eb-path-split:${countries}`, () =>
+    api.get('/eb-path-split', { params: { countries } }).then(res => res.data as EBPathSplitData));

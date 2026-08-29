@@ -8,6 +8,7 @@ venv/
 ENV/
 .streamlit/
 data/mock_*.csv
+data/**/.cache/
 .pytest_cache/
 trace-analaysis/
 

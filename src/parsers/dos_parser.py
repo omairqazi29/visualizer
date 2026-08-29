@@ -165,3 +165,23 @@ class DOSParser(BaseParser):
             return []
         fys = self.df.apply(lambda r: self._assign_fy(int(r["report_month"]), int(r["report_year"])), axis=1)
         return sorted(fys.unique().tolist())
+
+    def get_fy_month_counts(self) -> dict[int, int]:
+        """Return {fy_year: number of distinct report months present}."""
+        if self.df is None or "report_month" not in self.df.columns:
+            return {}
+        counts: dict[int, set] = {}
+        for year, month in zip(self.df["report_year"], self.df["report_month"]):
+            month, year = int(month), int(year)
+            counts.setdefault(self._assign_fy(month, year), set()).add((year, month))
+        return {fy: len(months) for fy, months in counts.items()}
+
+    def get_complete_fys(self, min_months: int = 12) -> list[int]:
+        """Fiscal years with a full 12 months of monthly issuance files.
+
+        DOS publishes monthly, so the in-progress fiscal year is always partial.
+        Comparing a partial year's usage against an ANNUAL statutory limit (e.g.
+        226,000 FB) understates usage and wildly inflates computed spillover, so
+        any annual-limit calculation must scope to a complete FY.
+        """
+        return sorted(fy for fy, n in self.get_fy_month_counts().items() if n >= min_months)

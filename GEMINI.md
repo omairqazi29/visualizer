@@ -17,7 +17,7 @@ When asked to update numbers, verify policies, or respond to legal/policy change
 1. **Read `docs/POLICY_VERIFICATION.md` first** — it is the canonical process for all data and policy updates.
 2. **DOS data is ground truth.** The model derives restriction savings from actual DOS consular IV issuance data (`data/DOS/*.xlsx`). Never apply artificial dampening factors to DOS-derived numbers.
 3. **Distinguish consular vs domestic.** Presidential Proclamation entry bans affect consular IVs (DOS data, model uses this). USCIS adjudicative holds affect domestic I-485 processing (NOT in DOS data, no model impact). Court rulings must be evaluated against this distinction.
-4. **Country list lives in `src/constants.py`** as `ACTUAL_RESTRICTED_COUNTRIES`. Must match current Presidential Proclamations. India and China-mainland must always be EXCLUDED.
+4. **Country list lives in `src/constants.py`** as `ACTUAL_RESTRICTED_COUNTRIES`. Must match the Presidential Proclamations currently in effect (the DOS 75-country IV pause was vacated Aug 21, 2026 and is kept only as the historical `DOS_IV_PAUSE_COUNTRIES_2026` set). India and China-mainland must always be EXCLUDED.
 5. **Data updates are drop-in.** New DOS/USCIS Excel files go in `data/` — auto-discovered by parsers. No code changes needed for new data files.
 6. **Always run tests** after any change: `python3 -m pytest tests/ -v`
 7. **Update the changelog** at the bottom of `docs/POLICY_VERIFICATION.md` after any policy or data change.

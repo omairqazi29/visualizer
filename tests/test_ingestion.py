@@ -1229,3 +1229,31 @@ def test_disabled_stub_ceac_present():
 
     assert "ceac_scheduling" in REG
     assert REG["ceac_scheduling"].enabled is False
+
+
+def test_uscis_monthly_report_name_maps_to_parser_filename():
+    """USCIS publishes the monthly flow as appropriation_requirement_*.csv.
+
+    I485FlowParser keys off monthly_<month>_<year>.csv, so the source must
+    rename on ingest or the file lands and is silently ignored.
+    """
+    from src.ingestion.registry import (
+        SOURCE_REGISTRY,
+        _normalize_uscis_monthly_report_name,
+    )
+
+    base = "https://www.uscis.gov/sites/default/files/document/data/"
+    assert (
+        _normalize_uscis_monthly_report_name(base + "appropriation_requirement_july_2026_v1.0.csv")
+        == "monthly_july_2026.csv"
+    )
+    assert (
+        _normalize_uscis_monthly_report_name(base + "appropriation_requirement_MAY_2026.csv")
+        == "monthly_may_2026.csv"
+    )
+    # Unrelated names pass through untouched.
+    assert _normalize_uscis_monthly_report_name(base + "i140_fy2026_q2_v1.xlsx") == "i140_fy2026_q2_v1.xlsx"
+
+    src = SOURCE_REGISTRY["uscis_i485_monthly_csv"]
+    assert src.enabled
+    assert src.normalize_fn is _normalize_uscis_monthly_report_name

@@ -176,13 +176,13 @@ export default function Methodology() {
             <ShieldAlert className="w-5 h-5" />
             Restricted Countries ({data.restricted_countries_count})
             <Badge variant="outline" className="text-[10px] ml-2">
-              Proclamations + DOS IV Pause
+              Proclamations 10949/10998
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-slate-500 mb-4">
-            Union of 39-country Proclamation entry ban + 75-country DOS public charge IV pause.
+            39-country Proclamation entry ban. The 75-country DOS public charge IV pause was vacated Aug 21, 2026 (CLINIC v. Rubio) and is no longer applied.
             India and China are explicitly excluded. Consular IV savings from these countries
             are computed from actual DOS issuance data and redistributed via INA 202(a)(5) surplus rules.
           </p>

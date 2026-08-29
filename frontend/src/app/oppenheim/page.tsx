@@ -148,7 +148,7 @@ export default function OppenheimPage() {
             <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:bg-crimson-600 transition-colors" />
             <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4" />
           </div>
-          <span className="text-sm text-slate-600">Current Policy (91 Countries)</span>
+          <span className="text-sm text-slate-600">Current Policy (39 Countries)</span>
         </label>
 
         {loading && (
@@ -178,7 +178,7 @@ export default function OppenheimPage() {
                   <div>
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Predicted Next</span>
                     <p className="font-semibold text-navy-900">
-                      {next.is_current ? 'Current' : formatDateDisplay(next.predicted_fad)}
+                      {next.is_unavailable ? 'Unavailable (U)' : next.is_current ? 'Current' : formatDateDisplay(next.predicted_fad)}
                     </p>
                   </div>
                   {next.advancement_days !== null && next.advancement_days !== undefined && (
@@ -270,7 +270,7 @@ export default function OppenheimPage() {
               </CardTitle>
               <CardDescription>
                 Oppenheim equilibrium forecast with confidence band (70%&ndash;140% of calibrated materialization rate).
-                {applyRestrictions && <span className="text-crimson-600 font-medium ml-1">91-country restrictions applied.</span>}
+                {applyRestrictions && <span className="text-crimson-600 font-medium ml-1">39-country restrictions applied.</span>}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -415,13 +415,13 @@ export default function OppenheimPage() {
                             )}
                           </td>
                           <td className="py-2.5 pr-4 text-navy-900 font-semibold">
-                            {pt.is_current ? 'Current' : formatDateDisplay(pt.predicted_fad)}
+                            {pt.is_unavailable ? 'Unavailable (U)' : pt.is_current ? 'Current' : formatDateDisplay(pt.predicted_fad)}
                           </td>
                           <td className="py-2.5 pr-4 text-slate-500 text-xs">
-                            {pt.is_current ? '—' : formatDateDisplay(pt.fad_low)}
+                            {pt.is_unavailable || pt.is_current ? '—' : formatDateDisplay(pt.fad_low)}
                           </td>
                           <td className="py-2.5 pr-4 text-slate-500 text-xs">
-                            {pt.is_current ? '—' : formatDateDisplay(pt.fad_high)}
+                            {pt.is_unavailable || pt.is_current ? '—' : formatDateDisplay(pt.fad_high)}
                           </td>
                           <td className="py-2.5 pr-4 text-slate-600">
                             {pt.cumulative_demand.toLocaleString()}

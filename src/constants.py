@@ -60,7 +60,7 @@ DEFAULT_INDIA_EB1_SUPPLY: int = 6952
 # Default restricted countries for the hypothetical "Maximum Restriction Scenario".
 # This models "what-if" demand reduction on the LARGEST FB/EB4-5 consuming countries
 # (Philippines, Mexico, Dominican Republic, Vietnam, China-mainland) that are NOT on
-# any real restriction list. Combined with ACTUAL_RESTRICTED_COUNTRIES (91 real countries),
+# any real restriction list. Combined with ACTUAL_RESTRICTED_COUNTRIES (39 real countries),
 # this represents the most extreme supply scenario.
 # India deliberately excluded: it is the primary beneficiary of modeled surplus redistribution.
 DEFAULT_RESTRICTED_COUNTRIES: set[str] = {
@@ -73,32 +73,38 @@ DEFAULT_RESTRICTED_COUNTRIES: set[str] = {
 }
 
 # Countries whose consular immigrant visa issuance is currently paused or suspended.
-# UNION of two overlapping real policies (India/China-mainland explicitly NOT on either):
 #
-# POLICY 1 — Presidential Proclamations 10949 (Jun 2025) + 10998 (Dec 2025):
-#   39 countries with entry suspension (security/vetting). Full or partial IV ban.
+# POLICY 1 — Presidential Proclamations 10949 (Jun 4, 2025) + 10998 (eff. Jan 1, 2026):
+#   39 countries with entry/visa-issuance suspension (security/vetting). Full or
+#   partial IV ban. STILL IN EFFECT as of Aug 2026 (cited in the Sep 2026 Visa
+#   Bulletin note 4.C / 5.C).
 #   Source: whitehouse.gov/presidential-actions, travel.state.gov visa news
 #
-# POLICY 2 — DOS 75-Country IV Pause (eff. Jan 21, 2026, still in effect Jun 2026):
-#   75 countries with consular immigrant visa issuance paused (public charge risk).
-#   Source: travel.state.gov → "Immigrant Visa Processing Updates for Nationalities
-#   at High Risk of U.S. Public Benefits Reliance" (last updated Feb 2, 2026)
-#   Lawsuit pending: CLINIC v. Rubio (1:26-cv-00858, S.D.N.Y.) — no nationwide
-#   injunction as of Jun 2026.
+# POLICY 2 — DOS 75-Country IV Pause (public charge), eff. Jan 21, 2026:
+#   *** VACATED Aug 21, 2026 — NO LONGER IN EFFECT ***
+#   CLINIC et al. v. Rubio et al. (1:26-cv-00858, S.D.N.Y., Judge Jeannette A.
+#   Vargas) held the categorical suspension contrary to law and in excess of
+#   statutory authority under the INA/APA, vacated it, and set aside refusals
+#   based solely on it. DOS confirmed on its "Immigrant Visa Processing Updates
+#   for Nationalities at High Risk of U.S. Public Benefits Reliance" page
+#   (last updated Aug 28, 2026): "As of August 21, 2026, in accordance with the
+#   Court's order in CLINIC et al. v. Rubio, et al., the January 2026 pause of
+#   immigrant visa issuance to nationals of 75 countries is no longer in effect."
+#   No stay or appeal on the public record as of Aug 29, 2026. DOS has separately
+#   paused IV *interviews* globally for public-charge retraining — a scheduling
+#   delay, not a numerical restriction, so it is not modeled here.
+#   The 75-country list is retained below as DOS_IV_PAUSE_COUNTRIES_2026 for
+#   historical FY2026 analysis (it was in force Jan 21 – Aug 21, 2026, so FY2026
+#   DOS issuance data still reflects it) but is NOT part of the current-policy set.
 #
-# Union = 91 countries. Both policies halt consular IV issuances (= DOS data).
-# 16 countries only on Proclamation ban (not IV pause): Angola, Benin, Burkina Faso,
-#   Burundi, Chad, Equatorial Guinea, Gabon, Malawi, Mali, Mauritania, Niger, Tonga,
-#   Turkmenistan, Venezuela, Zambia, Zimbabwe
-# 52 countries only on IV pause (not Proclamation): Albania, Algeria, Armenia, ...
-#   Brazil, Pakistan, Bangladesh, Egypt, Ethiopia, Colombia, Ghana, etc.
-# 23 countries on BOTH lists.
+# India/China-mainland are explicitly on NEITHER list.
 #
 # USCIS adjudicative hold (PM-602-0192/0194) for the 39 Proclamation countries was
 # vacated nationwide Jun 5, 2026 (Dorcas v. USCIS). No model impact — savings are
 # derived from DOS consular data, not domestic I-485 processing.
-ACTUAL_RESTRICTED_COUNTRIES: set[str] = {
-    # --- On BOTH Proclamation ban AND DOS IV pause ---
+
+# 23 countries on BOTH the Proclamation ban and the (now-vacated) DOS IV pause.
+_PROCLAMATION_AND_IV_PAUSE: set[str] = {
     "Afghanistan",
     "Antigua and Barbuda",
     "Burma",
@@ -122,7 +128,10 @@ ACTUAL_RESTRICTED_COUNTRIES: set[str] = {
     "Tanzania",
     "Togo",
     "Yemen",
-    # --- Proclamation ban only (39-list, not on 75-country IV pause) ---
+}
+
+# 16 countries on the Proclamation ban only (not on the DOS IV pause list).
+_PROCLAMATION_ONLY: set[str] = {
     "Angola",
     "Benin",
     "Burkina Faso",
@@ -139,7 +148,11 @@ ACTUAL_RESTRICTED_COUNTRIES: set[str] = {
     "Venezuela",
     "Zambia",
     "Zimbabwe",
-    # --- DOS 75-country IV pause only (not on Proclamation ban) ---
+}
+
+# 52 countries that were on the DOS IV pause only (not on the Proclamation ban).
+# HISTORICAL — the pause covering these was vacated Aug 21, 2026.
+_IV_PAUSE_ONLY: set[str] = {
     "Albania",
     "Algeria",
     "Armenia",
@@ -193,6 +206,17 @@ ACTUAL_RESTRICTED_COUNTRIES: set[str] = {
     "Uruguay",
     "Uzbekistan",
 }
+
+# 39 countries — Presidential Proclamations 10949 + 10998. Currently in effect.
+PROCLAMATION_RESTRICTED_COUNTRIES: set[str] = _PROCLAMATION_AND_IV_PAUSE | _PROCLAMATION_ONLY
+
+# 75 countries — DOS public-charge IV pause, eff. Jan 21, 2026, VACATED Aug 21, 2026.
+# Kept for historical/FY2026 attribution only. Do not use for current-policy scenarios.
+DOS_IV_PAUSE_COUNTRIES_2026: set[str] = _PROCLAMATION_AND_IV_PAUSE | _IV_PAUSE_ONLY
+
+# Current-policy restriction set used by the engine = Proclamation countries only
+# (39). Was the 91-country union until the Aug 21, 2026 vacatur of the IV pause.
+ACTUAL_RESTRICTED_COUNTRIES: set[str] = set(PROCLAMATION_RESTRICTED_COUNTRIES)
 
 
 # DOS visa symbol codes by EB preference category.
@@ -275,6 +299,8 @@ __all__ = [
     "DEFAULT_INDIA_EB1_SUPPLY",
     "DEFAULT_RESTRICTED_COUNTRIES",
     "ACTUAL_RESTRICTED_COUNTRIES",
+    "PROCLAMATION_RESTRICTED_COUNTRIES",
+    "DOS_IV_PAUSE_COUNTRIES_2026",
 
     "EB2_CATEGORIES",
     "EB3_CATEGORIES",

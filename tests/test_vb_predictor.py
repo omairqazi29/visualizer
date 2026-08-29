@@ -187,6 +187,48 @@ def test_oppenheim_predict_trajectory():
         assert "cumulative_demand" in pt
         assert "fiscal_year" in pt
         assert "remaining_annual_supply" in pt
+        assert "is_unavailable" in pt
+        # Remaining never negative; monthly clamp respects remaining
+        assert pt["remaining_annual_supply"] >= 0
+        assert pt["target_monthly_supply"] >= 0
+
+
+def test_oppenheim_remaining_clamp_non_increasing_within_fy():
+    """Within a FY, remaining_annual_supply should not increase after issuance."""
+    from src.engine.oppenheim import OppenheimSolver
+    solver = OppenheimSolver(category="EB-1", apply_real_restrictions=True)
+    cal = solver.calibrate()
+    solver.materialization_rate = cal.get("calibrated_rate", 0.65)
+    traj = solver.predict_trajectory(months_ahead=18)
+    by_fy: dict[int, list[int]] = {}
+    for pt in traj:
+        by_fy.setdefault(pt["fiscal_year"], []).append(pt["remaining_annual_supply"])
+    for fy, rem_list in by_fy.items():
+        for i in range(1, len(rem_list)):
+            assert rem_list[i] <= rem_list[i - 1], (
+                f"FY{fy} remaining rose: {rem_list[i - 1]} → {rem_list[i]}"
+            )
+
+
+def test_oppenheim_eb2_unavailable_until_fy_reset():
+    """India EB-2 is U in latest VB — stay U until next Oct FY boundary."""
+    from src.engine.oppenheim import OppenheimSolver
+    solver = OppenheimSolver(category="EB-2", apply_real_restrictions=True)
+    state = solver._latest_vb_state()
+    if not state.get("fad_unavailable"):
+        pytest.skip("EB-2 not currently Unavailable in VB history")
+    traj = solver.predict_trajectory(months_ahead=6)
+    reopen_y, reopen_m = solver._numbers_reopen_month(state["year"], state["month"])
+    reopen_ord = solver._month_ord(reopen_y, reopen_m)
+    for pt in traj:
+        y, m = map(int, pt["bulletin_month"].split("-"))
+        if solver._month_ord(y, m) < reopen_ord:
+            assert pt["is_unavailable"] is True
+            assert pt["target_monthly_supply"] == 0
+            assert pt["is_current"] is False
+        else:
+            # After reopen, numbers may flow again
+            assert pt["is_unavailable"] is False or pt["target_monthly_supply"] >= 0
 
 
 def test_oppenheim_fad_advances_over_trajectory():
@@ -196,7 +238,7 @@ def test_oppenheim_fad_advances_over_trajectory():
     cal = solver.calibrate()
     solver.materialization_rate = cal["calibrated_rate"]
     traj = solver.predict_trajectory(months_ahead=6)
-    fads = [pt["predicted_fad"] for pt in traj if pt["predicted_fad"]]
+    fads = [pt["predicted_fad"] for pt in traj if pt["predicted_fad"] and not pt.get("is_unavailable")]
     # Non-Current FADs should be non-decreasing
     for i in range(1, len(fads)):
         assert fads[i] >= fads[i - 1], f"FAD went backwards: {fads[i - 1]} → {fads[i]}"

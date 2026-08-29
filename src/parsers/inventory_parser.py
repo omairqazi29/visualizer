@@ -1,7 +1,17 @@
 from .base import BaseParser
 import pandas as pd
 
-from ..data_discovery import get_latest_inventory_path
+from ..data_discovery import (
+    date_from_filename,
+    get_inventory_paths,
+    get_latest_inventory_path,
+)
+
+# Month names for labelling snapshots, indexed 1-12
+_MONTH_NAMES = [
+    "", "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+]
 
 
 # Sheet names in USCIS EB I-485 inventory files
@@ -26,15 +36,22 @@ _CATEGORY_FILTERS = {
 
 
 def _parse_val(v) -> int:
-    """Parse inventory cell value, handling D/dash/nan."""
+    """Parse inventory cell value, handling D/dash/nan.
+
+    Counts must be parsed via float() before int(). USCIS changed cell storage
+    with the February 2026 release: counts that were text ("1802") are now
+    numeric, so pandas surfaces them as "1802.0". int("1802.0") raises, and
+    swallowing that exception silently zeroed every such cell, which collapsed
+    the India EB2/EB3 totals by ~98%.
+    """
     if pd.isna(v) or str(v).strip() in ["-", ""]:
         return 0
     s = str(v).strip().upper()
     if s == "D":
         return 1
     try:
-        return int(str(v).replace(",", ""))
-    except Exception:
+        return int(round(float(str(v).replace(",", ""))))
+    except (ValueError, TypeError):
         return 0
 
 
@@ -56,6 +73,95 @@ class InventoryParser(BaseParser):
         """Thin wrapper: return parser for the latest discovered (or fallback) inventory file under data_dir."""
         path = get_latest_inventory_path(data_dir)
         return cls(path)
+
+    # ──────────────────────────────────────────────
+    # Snapshot series (queue trend across monthly releases)
+    # ──────────────────────────────────────────────
+
+    @classmethod
+    def snapshots(cls, data_dir: str = "data") -> list[dict]:
+        """Every inventory release on disk as a dated series, oldest first.
+
+        USCIS publishes the EB I-485 inventory as a monthly point-in-time
+        snapshot. Reading only the newest one (see `latest`) gives the queue
+        depth but not its direction; the series makes the observed drawdown
+        measurable instead of assumed.
+
+        Returns [{"year", "month", "label", "file", "backlogs"}], where backlogs
+        is the nested {country: {category: pending}} structure from
+        `get_all_eb_backlogs`. Snapshots whose filenames carry no parseable date
+        are skipped, since they cannot be placed on a timeline.
+        """
+        series = []
+        for path in get_inventory_paths(data_dir):
+            date = date_from_filename(path)
+            if date is None:
+                continue
+            year, month = date
+            try:
+                backlogs = cls(str(path)).get_all_eb_backlogs()
+            except Exception:
+                # A malformed or partial release must not break the series
+                continue
+            series.append({
+                "year": year,
+                "month": month,
+                "label": f"{_MONTH_NAMES[month]} {year}",
+                "file": path.name,
+                "backlogs": backlogs,
+            })
+        series.sort(key=lambda s: (s["year"], s["month"]))
+        return series
+
+    @classmethod
+    def burn_rate(
+        cls,
+        country: str = "India",
+        category: str = "EB1",
+        data_dir: str = "data",
+    ) -> dict:
+        """Observed change in one queue between the oldest and newest snapshot.
+
+        A negative `per_month` means the queue is draining (visas issued faster
+        than new filings arrive); positive means it is growing.
+
+        Note this is *net* movement, not visa issuance: the queue also grows from
+        new I-485 filings, so this understates gross throughput. It is the
+        observed trend, which is what a projection should be calibrated against.
+        """
+        series = cls.snapshots(data_dir)
+        points = [
+            {
+                "year": s["year"],
+                "month": s["month"],
+                "label": s["label"],
+                "pending": s["backlogs"].get(country, {}).get(category),
+            }
+            for s in series
+        ]
+        points = [p for p in points if p["pending"] is not None]
+
+        result = {
+            "country": country,
+            "category": category,
+            "points": points,
+            "months_covered": len(points),
+            "change": None,
+            "per_month": None,
+            "first": points[0] if points else None,
+            "last": points[-1] if points else None,
+        }
+        if len(points) < 2:
+            return result
+
+        first, last = points[0], points[-1]
+        elapsed = (last["year"] - first["year"]) * 12 + (last["month"] - first["month"])
+        change = last["pending"] - first["pending"]
+        result["change"] = change
+        if elapsed > 0:
+            result["per_month"] = round(change / elapsed, 1)
+            result["months_elapsed"] = elapsed
+        return result
 
     def _load_sheet(self, sheet_name: str) -> pd.DataFrame:
         """Load a sheet by name, with caching."""
