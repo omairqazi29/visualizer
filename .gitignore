@@ -9,6 +9,15 @@ ENV/
 .streamlit/
 data/mock_*.csv
 data/**/.cache/
+
+# DOL PERM disclosure workbooks — 50-150MB each, and FY2026_Q3 is 156MB, past
+# GitHub's 100MB hard push limit. PERMParser reads them from disk and caches a
+# slim extract, so they do not need to be in git. Refresh with:
+#   python -m src.scripts.scan_and_pr --scan --fetch --source dol_perm
+# NOTE: five older PERM workbooks were committed before this rule and remain
+# tracked; .gitignore does not untrack them. Removing them would need
+# `git rm --cached` plus a history rewrite to actually reclaim the space.
+data/DOL_PERM/*.xlsx
 .pytest_cache/
 trace-analaysis/
 
