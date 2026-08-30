@@ -138,6 +138,15 @@ export interface PredictData {
   pipeline_anchor_dof: string | null;
   pipeline_window_months: number;
   pipeline_overlap_removed: number;
+  // The DOF date is derived from the clearance date minus the observed
+  // DOF-over-FAD lead, not modeled in its own right. Prefer showing the
+  // earliest/latest range over the point estimate.
+  dof_estimate_earliest: string | null;
+  dof_estimate_latest: string | null;
+  dof_estimate_spread_months: number;
+  dof_estimate_confidence: 'moderate' | 'low' | 'very_low' | 'unknown';
+  dof_gap_window_medians: Record<string, number>;
+  dof_gap_inflated_by_retrogression: boolean;
 }
 
 export interface DataSource {
@@ -420,6 +429,10 @@ export interface VBForecastPoint {
   predicted_dof: string | null;
   fad_confidence_low: string;
   fad_confidence_high: string;
+  // DOF band compounds the FAD band with the observed spread in the
+  // DOF-over-FAD lead. Null when the category has no usable DOF history.
+  dof_confidence_low: string | null;
+  dof_confidence_high: string | null;
 }
 
 export interface VBForecastData {

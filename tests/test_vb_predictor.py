@@ -295,3 +295,71 @@ def test_oppenheim_api_returns_200():
     assert "trajectory" in data
     assert len(data["trajectory"]) == 6
     assert data["calibration"]["calibrated_rate"] > 0
+
+
+def test_seasonal_pattern_refuses_small_sample_claims():
+    """3 observations per fiscal month cannot support a 12-way decomposition.
+
+    Regression: the pattern used to be a MEAN over all 90 bulletins, including
+    the 2015-2018 era of year-long swings, yielding "seasonal" terms of +805
+    and -426 days. Blended at 30% and multiplied by the supply factor, that
+    made the forecast leap 23 months in a single bulletin.
+    """
+    from src.engine.vb_predictor import VBPredictor
+
+    p = VBPredictor(category="EB-1")
+    pattern = p.get_seasonal_pattern()
+    assert len(pattern) == 12
+    # Nothing absurd survives, whatever the sample counts turn out to be.
+    for fm, val in pattern.items():
+        assert abs(val) < 400, f"fiscal month {fm} seasonal {val} is an outlier, not a season"
+
+
+def test_base_rate_is_robust_to_a_single_outlier_bulletin():
+    from statistics import mean
+    from src.engine.vb_predictor import VBPredictor
+
+    p = VBPredictor(category="EB-1")
+    stats = p.get_advancement_stats()
+    raw = [r["advancement_days"] for r in p.get_advancement_rates()]
+    window = raw[-stats["base_rate_window"]:]
+
+    assert stats["base_rate_estimator"] == "winsorized_mean_p10_p90"
+    # Robust estimate must not exceed the raw mean, which one +323 bulletin drives.
+    assert abs(stats["base_rate_days_per_month"]) <= abs(mean(window)) + 1e-6
+    # Sanity: this series really is mostly frozen, and the stat should say so.
+    assert 0.0 <= stats["zero_movement_share"] <= 1.0
+
+
+def test_forecast_does_not_leap_years_in_one_bulletin():
+    """Guards the runaway the old mean+seasonal+3x-supply stack produced."""
+    from datetime import date
+    from src.engine.vb_predictor import VBPredictor
+
+    p = VBPredictor(category="EB-1")
+    res = p.forecast(months_ahead=12, annual_supply=19182)
+    assert res["supply_factor"] <= VBPredictor.MAX_SUPPLY_FACTOR
+
+    prev = date.fromisoformat(res["latest_actual"]["fad"])
+    for row in res["forecast"]:
+        nxt = date.fromisoformat(row["predicted_fad"])
+        assert (nxt - prev).days <= 200, (
+            f"{row['bulletin_month']} advanced {(nxt - prev).days} days in one bulletin"
+        )
+        prev = nxt
+
+
+def test_forecast_emits_dof_confidence_bands():
+    """The DOF used to ship with no uncertainty at all."""
+    from datetime import date
+    from src.engine.vb_predictor import VBPredictor
+
+    res = VBPredictor(category="EB-1").forecast(months_ahead=6, annual_supply=19182)
+    assert res["dof_gap_min_months"] <= res["dof_gap_months"] <= res["dof_gap_max_months"]
+    for row in res["forecast"]:
+        if row["predicted_dof"] is None:
+            continue
+        assert row["dof_confidence_low"] and row["dof_confidence_high"]
+        lo = date.fromisoformat(row["dof_confidence_low"])
+        hi = date.fromisoformat(row["dof_confidence_high"])
+        assert lo <= date.fromisoformat(row["predicted_dof"]) <= hi

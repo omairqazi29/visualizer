@@ -118,6 +118,62 @@ def _current_dof_anchor(category: str = "EB-1"):
         return None
 
 
+def _dof_gap_envelope(vb, category: str = "EB-1") -> dict:
+    """Honest bounds on the DOF-over-FAD lead used to derive the DOF date.
+
+    Two independent sources of slop, both real:
+
+    1. Window sensitivity. The median lead over the last 12 bulletins is not
+       the same as over 24, 36 or all of them; for India EB-1 those run
+       ~12.2 / 4.2 / 2.7 / 5.9 months. Picking a window moves the answer by
+       most of a year, so all of them go into the envelope.
+    2. Dispersion inside the window itself.
+
+    Also reports whether the FAD retrogressed recently, because that inflates
+    the lead without the DOF having moved at all — and since the lead is
+    SUBTRACTED from the clearance date, retrogression perversely makes the
+    derived DOF date look earlier.
+    """
+    out = {
+        "medians": {},
+        "gap_lo": 0.0,
+        "gap_hi": 0.0,
+        "retrogressed": False,
+    }
+    try:
+        gaps = vb.compute_gaps(category=category)
+    except Exception:  # noqa: BLE001
+        gaps = []
+    if not gaps:
+        return out
+
+    candidates: list[float] = []
+    for window in (12, 24, 36, len(gaps)):
+        if window < 2:
+            continue
+        stats = vb.get_dof_lead_months(recent_n=window, category=category)
+        if not stats.get("n_datapoints"):
+            continue
+        out["medians"][str(window)] = stats["median_gap"]
+        candidates.append(float(stats["median_gap"]))
+
+    recent = vb.get_dof_lead_months(recent_n=12, category=category)
+    if recent.get("n_datapoints"):
+        candidates.extend([float(recent["min_gap"]), float(recent["max_gap"])])
+
+    if candidates:
+        out["gap_lo"] = min(candidates)
+        out["gap_hi"] = max(candidates)
+
+    # FAD moving backwards anywhere in the recent window
+    recent_gaps = gaps[-12:]
+    for prev, curr in zip(recent_gaps, recent_gaps[1:]):
+        if curr["fad"] < prev["fad"]:
+            out["retrogressed"] = True
+            break
+    return out
+
+
 def _cache_get(key: str) -> Any | None:
     return _RESPONSE_CACHE.get(key)
 
@@ -347,6 +403,14 @@ class PredictResponse(BaseModel):
     pipeline_anchor_dof: str | None = None
     pipeline_window_months: int = 0
     pipeline_overlap_removed: int = 0
+    # DOF is derived (clearance date minus the observed DOF-over-FAD lead), not
+    # independently modeled. These expose how wide that really is.
+    dof_estimate_earliest: str | None = None
+    dof_estimate_latest: str | None = None
+    dof_estimate_spread_months: float = 0
+    dof_estimate_confidence: str = "unknown"
+    dof_gap_window_medians: dict = {}
+    dof_gap_inflated_by_retrogression: bool = False
 
 
 @app.get("/api/waterfall", response_model=WaterfallResponse)
@@ -587,6 +651,11 @@ async def predict_pd(
 
         # DOF estimate + current VB status from historical data
         vb_status = {}
+        dof_earliest_str = dof_latest_str = None
+        dof_spread_months = 0.0
+        dof_confidence = "unknown"
+        dof_window_medians: dict = {}
+        dof_retrogressed = False
         try:
             vb = VisaBulletinParser()
             dof_lead = vb.get_dof_lead_months(recent_n=12)
@@ -595,6 +664,26 @@ async def predict_pd(
             dof_est = clearance - timedelta(days=int(gap * 30.44))
             dof_est_str = dof_est.strftime("%Y-%m-%d")
             vb_status = vb.get_current_status(priority_date)
+
+            # A bigger lead is subtracted from the same clearance date, so the
+            # HIGH gap yields the EARLIEST date and vice versa.
+            env = _dof_gap_envelope(vb)
+            dof_window_medians = env["medians"]
+            dof_retrogressed = env["retrogressed"]
+            if env["gap_hi"] or env["gap_lo"]:
+                dof_earliest_str = (
+                    clearance - timedelta(days=int(env["gap_hi"] * 30.44))
+                ).strftime("%Y-%m-%d")
+                dof_latest_str = (
+                    clearance - timedelta(days=int(env["gap_lo"] * 30.44))
+                ).strftime("%Y-%m-%d")
+                dof_spread_months = round(env["gap_hi"] - env["gap_lo"], 1)
+                if dof_spread_months <= 3:
+                    dof_confidence = "moderate"
+                elif dof_spread_months <= 6:
+                    dof_confidence = "low"
+                else:
+                    dof_confidence = "very_low"
         except Exception:
             dof_lead = {"median_gap": 0, "min_gap": 0, "max_gap": 0, "n_datapoints": 0}
             dof_est_str = None
@@ -622,6 +711,12 @@ async def predict_pd(
             pipeline_anchor_dof=pipeline_anchor_dof,
             pipeline_window_months=int(pipeline_window_months),
             pipeline_overlap_removed=int(pipeline_overlap_removed),
+            dof_estimate_earliest=dof_earliest_str,
+            dof_estimate_latest=dof_latest_str,
+            dof_estimate_spread_months=float(dof_spread_months),
+            dof_estimate_confidence=dof_confidence,
+            dof_gap_window_medians=dof_window_medians,
+            dof_gap_inflated_by_retrogression=bool(dof_retrogressed),
             vb_fad_is_current=vb_status.get("fad_is_current", False),
             vb_dof_is_current=vb_status.get("dof_is_current", False),
             vb_fad_remaining_months=vb_status.get("fad_remaining_months", 0),

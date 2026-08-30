@@ -121,3 +121,15 @@ def test_predict_net_pipeline_overlap_reduces_backlog(client):
     assert netted["months_to_clear"] <= base["months_to_clear"]
     # Same observed inventory either way — only the modeled pipeline changes.
     assert netted["inventory_ahead"] == base["inventory_ahead"]
+
+
+def test_predict_reports_dof_range_not_just_a_point(client):
+    """The DOF date is derived, and its window sensitivity must be visible."""
+    d = client.get("/api/predict?priority_date=2025-01-01&apply_real_restrictions=true").json()
+
+    assert d["dof_estimate_earliest"] and d["dof_estimate_latest"]
+    assert d["dof_estimate_earliest"] <= d["dof_estimate_date"] <= d["dof_estimate_latest"]
+    # More than one window median must be reported, since picking one moves the answer.
+    assert len(d["dof_gap_window_medians"]) >= 2
+    assert d["dof_estimate_spread_months"] > 0
+    assert d["dof_estimate_confidence"] in {"moderate", "low", "very_low"}
