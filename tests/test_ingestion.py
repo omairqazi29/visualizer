@@ -773,6 +773,89 @@ def test_kind_for_path_and_missing():
     assert item.kind == "missing"
 
 
+def test_kind_for_all_forms_and_i140_radp():
+    """FY/quarter suffixes are not special-cased. Q3 names that failed run
+    35831682236 share kinds with the Q1/Q2 files already in data/.
+    """
+    from src.ingestion.validator import _kind_for_path
+
+    assert (
+        _kind_for_path(Path("data/USCIS_I485/quarterly_all_forms_fy2026_q3_v1.xlsx"))
+        == "all_forms"
+    )
+    assert (
+        _kind_for_path(Path("data/USCIS_I485/quarterly_all_forms_fy2026_q2_v1.xlsx"))
+        == "all_forms"
+    )
+    assert _kind_for_path(Path("data/all_forms_fy2027_q1.xlsx")) == "all_forms"
+    assert _kind_for_path(Path("data/i140_fy2026_q3_v1.xlsx")) == "i140_radp"
+    assert _kind_for_path(Path("data/i140_fy2026_q1_v1.xlsx")) == "i140_radp"
+    # Neighbor USCIS reports keep their own kinds.
+    assert (
+        _kind_for_path(Path("data/i140_rec_by_class_country_fy2026_q3_v1.xlsx"))
+        == "i140_receipts"
+    )
+    assert (
+        _kind_for_path(Path("data/eb_i140_i360_i526_performancedata_fy2026_q3_v1.xlsx"))
+        == "pipeline"
+    )
+    assert (
+        _kind_for_path(Path("data/USCIS_I485/i485_performance_data_fy2026_q3_v1.xlsx"))
+        == "i485_perf"
+    )
+
+
+def test_validate_all_forms_and_radp_strict(tmp_path):
+    """Strict/PR mode accepts real all-forms and RADP workbooks and still
+    refuses unknown names and unreadable downloads of the new kinds.
+    """
+    import openpyxl
+
+    from src.ingestion.validator import validate_path
+
+    q2_forms = Path("data/USCIS_I485/quarterly_all_forms_fy2026_q2_v1.xlsx")
+    q2_radp = Path("data/i140_fy2026_q2_v1.xlsx")
+    if not q2_forms.exists() or not q2_radp.exists():
+        pytest.skip("Q2 all-forms / RADP workbooks not in data/")
+
+    forms = validate_path(q2_forms, strict_unknown=True)
+    assert forms.ok is True
+    assert forms.kind == "all_forms"
+    assert "AllFormsParser OK" in forms.message
+
+    radp = validate_path(q2_radp, strict_unknown=True)
+    assert radp.ok is True
+    assert radp.kind == "i140_radp"
+    assert "I140RADPParser OK" in radp.message
+
+    # The exact filenames from the failed scan, with no real workbook bytes.
+    bad_forms = tmp_path / "quarterly_all_forms_fy2026_q3_v1.xlsx"
+    bad_forms.write_bytes(b"not an xlsx")
+    refused = validate_path(bad_forms, strict_unknown=True)
+    assert refused.kind == "all_forms"
+    assert refused.ok is False
+    assert "unknown kind" not in refused.message
+
+    bad_radp = tmp_path / "i140_fy2026_q3_v1.xlsx"
+    bad_radp.write_bytes(b"not an xlsx")
+    refused = validate_path(bad_radp, strict_unknown=True)
+    assert refused.kind == "i140_radp"
+    assert refused.ok is False
+
+    empty_forms = tmp_path / "quarterly_all_forms_fy2026_q4_v1.xlsx"
+    wb = openpyxl.Workbook()
+    wb.active["A1"] = "not a quarterly report"
+    wb.save(empty_forms)
+    empty = validate_path(empty_forms, strict_unknown=True)
+    assert empty.kind == "all_forms"
+    assert empty.ok is False
+    assert "no form rows" in empty.message
+
+    unknown = tmp_path / "random_notes.txt"
+    unknown.write_text("hello")
+    assert validate_path(unknown, strict_unknown=True).ok is False
+
+
 def test_validate_empty_file(tmp_path):
     from src.ingestion.validator import validate_path
 
