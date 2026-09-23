@@ -31,7 +31,7 @@ pipeline — no hardcoded supply numbers; files drop into `data/` and are picked
 | Piece | Location |
 |---|---|
 | Source registry (DOS/USCIS/DHS/DOL + disabled stubs) | `src/ingestion/registry.py` |
-| Scan / fetch / validate / security | `src/ingestion/scanner.py`, `fetcher.py`, `validator.py`, `security.py` |
+| Scan / fetch / validate / security | `src/ingestion/scanner.py`, `fetcher.py`, `validator.py`, `security.py`, `http_client.py` |
 | PR helper (`chore/data-*` + `gh pr create`) | `src/ingestion/pr_helper.py` |
 | CLI | `python -m src.scripts.scan_and_pr` (`--scan` / `--fetch` / `--validate` / `--pr` / `--dry-run`) |
 | Manual validate + automation pointer | `python -m src.scripts.update_data` |
@@ -39,8 +39,10 @@ pipeline — no hardcoded supply numbers; files drop into `data/` and are picked
 | Live smoke script | `scripts/verify_sources_live.py` |
 
 Flow: public HTML pages → link match + host allowlist → download under `data/` → parser QA → optional PR.
-Operational details, source groups (`all`, `all_including_vb`, `dos_iv`, `uscis`, …), and fail-closed
-behavior are documented in `docs/POLICY_VERIFICATION.md` § Automated Data Ingestion.
+HTTP 403 / Cloudflare challenges on known DOS hosts (`travel.state.gov`) are upstream access
+blocks: the scan logs `UPSTREAM ACCESS BLOCKED`, still opens a PR when another source downloads,
+and exits 0 when nothing new was ingested. Unexpected HTTP errors and validation failures stay
+fail-closed. Operational details are in `docs/POLICY_VERIFICATION.md` § Automated Data Ingestion.
 
 ## Core Components
 

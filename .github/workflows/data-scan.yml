@@ -119,6 +119,8 @@ jobs:
           fi
           echo "base_branch=$DB" >> "$GITHUB_OUTPUT"
 
+      # DOS travel.state.gov 403s (Cloudflare) are classified in scan_and_pr and do not
+      # fail this job when nothing else broke and nothing new was ingested.
       - name: Scan / fetch / validate / PR (single invocation)
         id: pipeline
         env:

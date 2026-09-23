@@ -14,7 +14,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.ingestion.registry import USER_AGENT, get_source
+from src.ingestion.http_client import html_request_headers
+from src.ingestion.registry import get_source
 from src.ingestion.scanner import extract_links, scan_source
 
 try:
@@ -26,7 +27,7 @@ except ImportError:
 
 def check_dos_fsc() -> bool:
     src = get_source("dos_iv_fsc")
-    r = requests.get(src.scan_url, headers={"User-Agent": USER_AGENT}, timeout=45)
+    r = requests.get(src.scan_url, headers=html_request_headers(), timeout=45)
     r.raise_for_status()
     links = extract_links(r.text, src.scan_url)
     fsc = [
@@ -43,7 +44,7 @@ def check_dos_fsc() -> bool:
 
 def check_uscis() -> bool:
     src = get_source("uscis_i140")
-    r = requests.get(src.scan_url, headers={"User-Agent": USER_AGENT}, timeout=45)
+    r = requests.get(src.scan_url, headers=html_request_headers(), timeout=45)
     r.raise_for_status()
     links = extract_links(r.text, src.scan_url)
     xlsx = [u for u, _ in links if u.lower().endswith((".xlsx", ".xls"))]

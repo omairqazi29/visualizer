@@ -7,7 +7,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Sequence
 
-from .registry import REQUEST_DELAY_SEC, REQUEST_TIMEOUT_SEC, USER_AGENT, get_source
+from .http_client import (
+    download_request_headers,
+    failure_from_response,
+    is_upstream_access_block,
+    response_status,
+)
+from .registry import REQUEST_DELAY_SEC, REQUEST_TIMEOUT_SEC, get_source
 from .scanner import RemoteCandidate, ScanResult
 from .security import (
     MAX_DOWNLOAD_BYTES,
@@ -33,6 +39,7 @@ class FetchResult:
     error: str = ""
     skipped: bool = False
     dry_run: bool = False
+    access_blocked: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -45,6 +52,7 @@ class FetchResult:
             "path": str(self.path) if self.path else None,
             "bytes_written": self.bytes_written,
             "error": self.error,
+            "access_blocked": self.access_blocked,
         }
 
 
@@ -113,7 +121,7 @@ def fetch_candidate(
         return FetchResult(candidate=candidate, success=False, error="requests not installed")
 
     sess = session or requests.Session()
-    headers = {"User-Agent": USER_AGENT, "Accept": "application/octet-stream,*/*"}
+    headers = download_request_headers()
     tmp: Optional[Path] = None
     try:
         if delay and delay > 0:
@@ -125,7 +133,17 @@ def fetch_candidate(
             stream=True,
             allow_redirects=True,
         )
-        resp.raise_for_status()
+        status = response_status(resp)
+        if status is not None and status >= 400:
+            message, blocked = failure_from_response(
+                resp, source_id=candidate.source_id, fallback_url=candidate.url
+            )
+            return FetchResult(
+                candidate=candidate,
+                success=False,
+                error=message,
+                access_blocked=blocked,
+            )
 
         final_ok, final_reason = is_allowed_url(resp.url, hosts)
         if not final_ok:
@@ -178,7 +196,25 @@ def fetch_candidate(
         candidate.status = "fetched"
         return FetchResult(candidate=candidate, success=True, path=dest, bytes_written=size)
     except Exception as e:  # noqa: BLE001
-        return FetchResult(candidate=candidate, success=False, error=f"{type(e).__name__}: {e}")
+        resp = getattr(e, "response", None)
+        if resp is not None and (response_status(resp) or 0) >= 400:
+            message, blocked = failure_from_response(
+                resp, source_id=candidate.source_id, fallback_url=candidate.url
+            )
+            return FetchResult(
+                candidate=candidate,
+                success=False,
+                error=message,
+                access_blocked=blocked,
+            )
+        message = f"{type(e).__name__}: {e}"
+        blocked = is_upstream_access_block(message, candidate.url)
+        return FetchResult(
+            candidate=candidate,
+            success=False,
+            error=message,
+            access_blocked=blocked,
+        )
     finally:
         if tmp is not None and tmp.exists():
             try:
@@ -266,6 +302,20 @@ def any_fetch_failed(results: Sequence[FetchResult]) -> bool:
     return any(not r.success and not r.skipped for r in results)
 
 
+def unexpected_fetch_failures(results: Sequence[FetchResult]) -> List[FetchResult]:
+    """Failed downloads that are not classified DOS upstream access blocks."""
+    return [
+        r
+        for r in results
+        if not r.success and not r.skipped and not r.dry_run and not r.access_blocked
+    ]
+
+
+def access_blocked_fetches(results: Sequence[FetchResult]) -> List[FetchResult]:
+    """Downloads refused by a known DOS host (HTTP 403 / Cloudflare)."""
+    return [r for r in results if r.access_blocked and not r.success]
+
+
 def summarize_fetch(results: List[FetchResult]) -> str:
     lines = ["=== Fetch Summary ==="]
     ok = sum(1 for r in results if r.success and not r.skipped and not r.dry_run)
@@ -279,5 +329,7 @@ def summarize_fetch(results: List[FetchResult]) -> str:
             tag = "DRY"
         if r.skipped:
             tag = "SKIP"
+        if r.access_blocked and not r.success:
+            tag = "BLOCKED"
         lines.append(f"  [{tag}] {r.candidate.filename}: {r.error or r.path}")
     return "\n".join(lines)

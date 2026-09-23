@@ -31,12 +31,18 @@ from src.ingestion.registry import (  # noqa: E402
     list_sources,
     resolve_source_ids,
 )
-from src.ingestion.scanner import scan_sources, summarize_scan  # noqa: E402
+from src.ingestion.scanner import (  # noqa: E402
+    partition_unfetched,
+    scan_sources,
+    summarize_scan,
+)
 from src.ingestion.fetcher import (  # noqa: E402
-    any_fetch_failed,
+    access_blocked_fetches,
     fetch_from_scan_results,
     summarize_fetch,
+    unexpected_fetch_failures,
 )
+from src.ingestion.http_client import format_access_block  # noqa: E402
 from src.ingestion.validator import (  # noqa: E402
     validate_downloaded_files,
     summarize_validation,
@@ -107,7 +113,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--allow-scan-errors",
         action="store_true",
-        help="Exit 0 even when some source scans fail (default: exit 1 on scan failure)",
+        help=(
+            "Exit 0 even when some source scans fail. "
+            "Known DOS HTTP 403 / Cloudflare blocks already exit 0 on their own "
+            "when nothing else failed; this flag also ignores unexpected scan errors."
+        ),
     )
     return p
 
@@ -167,13 +177,45 @@ def main(argv: list | None = None) -> int:
         print(summarize_scan(scan_results))
         payload["scan"] = [r.to_dict() for r in scan_results]
 
-        scan_failed = any(not r.page_fetched for r in scan_results)
-        if scan_failed and not args.allow_scan_errors:
-            print("ERROR: one or more source scans failed", file=sys.stderr)
+        blocked_scans, unexpected_scans = partition_unfetched(scan_results)
+        if blocked_scans:
+            payload["exit_hints"].append("upstream_access_blocked")
+            payload["access_blocked_sources"] = [r.source_id for r in blocked_scans]
+            print(
+                "UPSTREAM ACCESS BLOCKED: "
+                + ", ".join(r.source_id for r in blocked_scans)
+                + ". Known DOS host returned HTTP 403 / Cloudflare. "
+                "No new files ingested for those sources. "
+                "This is an upstream access block, not a scanner bug.",
+                file=sys.stderr,
+            )
+            for r in blocked_scans:
+                for err in r.errors:
+                    if err.startswith("UPSTREAM ACCESS BLOCKED:"):
+                        print(err, file=sys.stderr)
+                    else:
+                        print(
+                            format_access_block(
+                                source_id=r.source_id,
+                                url=r.scan_url,
+                                status=403,
+                                cloudflare="cloudflare" in err.lower() or "cf-ray" in err.lower(),
+                            ),
+                            file=sys.stderr,
+                        )
+        if unexpected_scans and not args.allow_scan_errors:
+            print(
+                "ERROR: unexpected source scan failure "
+                "(not an upstream DOS access block):",
+                file=sys.stderr,
+            )
+            for r in unexpected_scans:
+                detail = "; ".join(r.errors) or "page not fetched"
+                print(f"  {r.source_id}: {detail}", file=sys.stderr)
             exit_code = 1
             payload["exit_hints"].append("scan_failed")
-            # Still allow fetch/validate/pr on partial success only if not failing closed early
-            # For fail-closed: stop before PR when scan failed
+            # Fail closed before PR on unexpected scan errors. DOS 403s do not
+            # take this path — those continue so other sources can still open a PR.
             if args.pr and not args.dry_run:
                 if args.as_json:
                     print(json.dumps(payload, indent=2, default=str))
@@ -190,11 +232,26 @@ def main(argv: list | None = None) -> int:
         print(summarize_fetch(fetch_results))
         payload["fetch"] = [r.to_dict() for r in fetch_results]
 
-        if any_fetch_failed(fetch_results) and not args.dry_run:
+        if not args.dry_run:
             ok_n = sum(1 for r in fetch_results if r.success and not r.skipped and not r.dry_run)
-            fail_n = sum(1 for r in fetch_results if not r.success and not r.skipped)
-            # Partial success: still allow PR for successful downloads; only hard-fail if nothing worked
-            if ok_n == 0 and fail_n > 0:
+            hard_fails = unexpected_fetch_failures(fetch_results)
+            blocked_fetches = access_blocked_fetches(fetch_results)
+            for fr in blocked_fetches:
+                if fr.error.startswith("UPSTREAM ACCESS BLOCKED:"):
+                    print(fr.error, file=sys.stderr)
+                else:
+                    print(
+                        format_access_block(
+                            source_id=fr.candidate.source_id,
+                            url=fr.candidate.url,
+                            status=403,
+                            cloudflare="cloudflare" in (fr.error or "").lower(),
+                        ),
+                        file=sys.stderr,
+                    )
+            if blocked_fetches:
+                payload["exit_hints"].append("fetch_upstream_access_blocked")
+            if hard_fails and ok_n == 0:
                 print("ERROR: all fetches failed — refusing PR", file=sys.stderr)
                 exit_code = 1
                 payload["exit_hints"].append("fetch_all_failed")
@@ -202,13 +259,14 @@ def main(argv: list | None = None) -> int:
                     if args.as_json:
                         print(json.dumps(payload, indent=2, default=str))
                     return 1
-            else:
+            elif hard_fails:
                 print(
-                    f"WARNING: {fail_n} fetch(es) failed; continuing with {ok_n} successful download(s)",
+                    f"WARNING: {len(hard_fails)} fetch(es) failed; "
+                    f"continuing with {ok_n} successful download(s)",
                     file=sys.stderr,
                 )
                 payload["exit_hints"].append("fetch_partial_failed")
-                exit_code = 1  # non-zero overall so CI shows warning; PR may still proceed below
+                exit_code = 1  # non-zero overall so CI shows the unexpected fetch failure
 
     if args.validate:
         print("\nValidating...")
@@ -246,16 +304,44 @@ def main(argv: list | None = None) -> int:
                 return 1
 
     if args.pr:
-        # Fail closed only when every attempted fetch failed (partial success is OK)
+        # Fail closed only when every attempted fetch failed for a non-block reason.
         if args.fetch and fetch_results and not args.dry_run:
             ok_n = sum(1 for r in fetch_results if r.success and not r.skipped and not r.dry_run)
-            fail_n = sum(1 for r in fetch_results if not r.success and not r.skipped)
-            if ok_n == 0 and fail_n > 0:
+            hard_fails = unexpected_fetch_failures(fetch_results)
+            if ok_n == 0 and hard_fails:
                 if args.as_json:
                     print(json.dumps(payload, indent=2, default=str))
                 return 1
 
         files = paths_from_fetch_results(fetch_results)
+        blocked_only = (
+            not args.dry_run
+            and not files
+            and exit_code == 0
+            and (
+                "upstream_access_blocked" in payload["exit_hints"]
+                or "fetch_upstream_access_blocked" in payload["exit_hints"]
+            )
+        )
+        if blocked_only:
+            print(
+                "No new data to PR (upstream DOS access block; "
+                "other scanned sources had nothing new to ingest)."
+            )
+            payload["pr"] = {
+                "success": True,
+                "skipped": True,
+                "message": (
+                    "nothing staged to commit "
+                    "(upstream access blocked; no other new files)"
+                ),
+                "branch": args.branch_name or propose_branch_name(source_ids),
+            }
+            payload["exit_hints"].append("nothing_new_after_access_block")
+            if args.as_json:
+                print(json.dumps(payload, indent=2, default=str))
+            return 0
+
         branch = args.branch_name or propose_branch_name(source_ids)
         base = args.base_branch
         if base in (None, "", "auto"):

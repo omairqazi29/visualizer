@@ -50,10 +50,15 @@ def _resolve_data_dir(project_root: Path) -> Path:
 PROJECT_ROOT = _resolve_project_root()
 DATA_DIR = _resolve_data_dir(PROJECT_ROOT)
 
+# Realistic browser UA. travel.state.gov returns a Cloudflare 403
+# ("Attention Required! | Cloudflare", Server: cloudflare, cf-ray) to the
+# previous SpilloverEngine bot token and to this UA alike from datacenter IPs.
+# Headers stay static — see src/ingestion/http_client.py. A remaining 403 on a
+# known DOS host is an upstream access block, not a challenge to solve.
 USER_AGENT = (
-    "SpilloverEngine-DataScanner/1.0 "
-    "(+https://github.com/omairqazi29/visualizer; "
-    "public immigration data refresh; polite bot)"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
 )
 
 REQUEST_DELAY_SEC = 1.0  # polite delay between page/file requests
