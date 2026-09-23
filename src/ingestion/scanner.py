@@ -11,11 +11,16 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 from urllib.parse import urljoin, urlparse, unquote
 
+from .http_client import (
+    failure_from_response,
+    html_request_headers,
+    is_upstream_access_block,
+    response_status,
+)
 from .registry import (
     PROJECT_ROOT,
     REQUEST_DELAY_SEC,
     REQUEST_TIMEOUT_SEC,
-    USER_AGENT,
     DataSource,
     get_source,
     list_sources,
@@ -69,6 +74,8 @@ class ScanResult:
     links_examined: int = 0
     page_fetched: bool = False
     pages_scanned: int = 0
+    # Primary page was refused by a known DOS host (HTTP 403 / Cloudflare).
+    access_blocked: bool = False
 
     @property
     def new_candidates(self) -> List[RemoteCandidate]:
@@ -89,6 +96,7 @@ class ScanResult:
             "links_examined": self.links_examined,
             "page_fetched": self.page_fetched,
             "pages_scanned": self.pages_scanned,
+            "access_blocked": self.access_blocked,
             "errors": self.errors,
             "new_count": len(self.new_candidates),
             "existing_count": len(self.existing_candidates),
@@ -189,11 +197,17 @@ def _fetch_html(
     if requests is None:
         return None, "requests library not installed"
     sess = session or requests.Session()
-    headers = {"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,*/*"}
+    headers = html_request_headers()
     try:
         if delay and delay > 0:
             time.sleep(delay)
         resp = sess.get(url, headers=headers, timeout=REQUEST_TIMEOUT_SEC, allow_redirects=True)
+        status = response_status(resp)
+        if status is not None and status >= 400:
+            message, _blocked = failure_from_response(
+                resp, source_id=source.source_id, fallback_url=url
+            )
+            return None, message
         resp.raise_for_status()
         # Validate final URL after redirects
         final_ok, final_reason = is_allowed_url(resp.url, source.allowed_hosts or ())
@@ -201,6 +215,12 @@ def _fetch_html(
             return None, f"redirect blocked: {final_reason} ({resp.url[:80]})"
         return resp.text, None
     except Exception as e:  # noqa: BLE001
+        resp = getattr(e, "response", None)
+        if resp is not None and (response_status(resp) or 0) >= 400:
+            message, _blocked = failure_from_response(
+                resp, source_id=source.source_id, fallback_url=url
+            )
+            return None, message
         return None, f"{type(e).__name__}: {e}"
 
 
@@ -278,6 +298,9 @@ def scan_source(
     )
     result.errors.extend(fetch_errors)
     if not pages:
+        result.access_blocked = bool(fetch_errors) and all(
+            is_upstream_access_block(err, source.scan_url) for err in fetch_errors
+        )
         return result
 
     result.page_fetched = True
@@ -455,6 +478,17 @@ def scan_sources(
     return results
 
 
+def _is_access_blocked_result(result: ScanResult) -> bool:
+    """True when the primary page was not fetched because of a DOS upstream block."""
+    if result.page_fetched:
+        return False
+    if result.access_blocked:
+        return True
+    return bool(result.errors) and all(
+        is_upstream_access_block(err, result.scan_url) for err in result.errors
+    )
+
+
 def summarize_scan(results: List[ScanResult]) -> str:
     lines = ["=== Data Source Scan Summary ==="]
     total_new = 0
@@ -465,8 +499,12 @@ def summarize_scan(results: List[ScanResult]) -> str:
         n_ex = len(r.existing_candidates)
         total_new += n_new
         total_exist += n_ex
-        status = "OK" if r.page_fetched else "FAIL"
-        if not r.page_fetched:
+        if _is_access_blocked_result(r):
+            status = "BLOCKED"
+        elif r.page_fetched:
+            status = "OK"
+        else:
+            status = "FAIL"
             any_fail = True
         lines.append(
             f"[{status}] {r.source_id}: {n_new} new, {n_ex} already present "
@@ -481,6 +519,29 @@ def summarize_scan(results: List[ScanResult]) -> str:
         if len(r.new_candidates) > 12:
             lines.append(f"       ... and {len(r.new_candidates) - 12} more new")
     lines.append(f"TOTAL: {total_new} new file(s)/bulletin(s), {total_exist} already present")
+    blocked = [r for r in results if _is_access_blocked_result(r)]
+    if blocked:
+        lines.append(
+            "UPSTREAM ACCESS BLOCKED: "
+            + ", ".join(r.source_id for r in blocked)
+            + " — HTTP 403 / Cloudflare on a known DOS host. "
+            "No new files were ingested for those sources. "
+            "This is an upstream access block, not a broken scanner URL or a validation error."
+        )
     if any_fail:
         lines.append("WARNING: one or more source scans failed (see errors above)")
     return "\n".join(lines)
+
+
+def partition_unfetched(results: Sequence[ScanResult]) -> Tuple[List[ScanResult], List[ScanResult]]:
+    """Split sources whose page was not fetched into (access_blocked, unexpected)."""
+    blocked: List[ScanResult] = []
+    unexpected: List[ScanResult] = []
+    for result in results:
+        if result.page_fetched:
+            continue
+        if _is_access_blocked_result(result):
+            blocked.append(result)
+        else:
+            unexpected.append(result)
+    return blocked, unexpected
