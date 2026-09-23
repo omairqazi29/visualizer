@@ -7,6 +7,7 @@ In PR mode, unknown kinds and paths outside data/ fail closed.
 
 from __future__ import annotations
 
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -52,6 +53,17 @@ class ValidationReport:
         return {"ok": self.ok, "items": [i.to_dict() for i in self.items]}
 
 
+# Same filename shapes the scanner already accepts (registry link patterns) and
+# the parsers already discover. FY / quarter / version suffixes are not listed
+# one-off: any matching drop-in is a known kind.
+#   AllFormsParser glob: quarterly_all_forms*.xlsx
+#   registry uscis_i485_perf: quarterly_all_forms | all.?forms.*fy\d{4}
+#   I140RADPParser glob: i140_fy*.xlsx
+#   registry uscis_i140: i140_fy\d{4}
+_ALL_FORMS_NAME = re.compile(r"quarterly_all_forms|all.?forms.*fy\d{4}")
+_I140_RADP_NAME = re.compile(r"i140_fy\d{4}")
+
+
 def _kind_for_path(path: Path) -> str:
     name = path.name.lower()
     parent = path.parent.name
@@ -65,6 +77,11 @@ def _kind_for_path(path: Path) -> str:
         return "i140_receipts"
     if "eb_i140" in name or ("performance" in name and "i140" in name):
         return "pipeline"
+    # After receipts/performance so i140_rec_* and eb_i140_* keep their kinds.
+    if _I140_RADP_NAME.search(name):
+        return "i140_radp"
+    if _ALL_FORMS_NAME.search(name):
+        return "all_forms"
     if parent == "DHS_Yearbook":
         return "dhs"
     if parent == "DOL_PERM" or "perm_disclosure" in name.lower() or "perm_disclosure" in name:
@@ -170,6 +187,41 @@ def validate_path(path: Path, *, strict_unknown: bool = False) -> ValidationItem
 
         if kind == "i485_perf":
             return _validate_xlsx_openable(path, kind, "I-485 perf")
+
+        if kind == "all_forms":
+            # AllFormsParser swallows unreadable workbooks and returns []. Require
+            # rows so a truncated or wrong-schema download fails the PR gate.
+            item = _validate_xlsx_openable(path, kind, "All forms")
+            if not item.ok:
+                return item
+            from src.parsers.all_forms_parser import AllFormsParser
+
+            rows = AllFormsParser(str(path)).get_all_forms()
+            if not rows:
+                return ValidationItem(
+                    str(path), kind, False, "AllFormsParser returned no form rows"
+                )
+            return ValidationItem(
+                str(path), kind, True, f"AllFormsParser OK ({len(rows)} forms)"
+            )
+
+        if kind == "i140_radp":
+            item = _validate_xlsx_openable(path, kind, "I-140 RADP")
+            if not item.ok:
+                return item
+            from src.parsers.i140_radp_parser import I140RADPParser
+
+            summary = I140RADPParser(str(path)).get_summary()
+            if not summary:
+                return ValidationItem(
+                    str(path), kind, False, "I140RADPParser returned no quarters"
+                )
+            return ValidationItem(
+                str(path),
+                kind,
+                True,
+                f"I140RADPParser OK ({len(summary)} quarter(s))",
+            )
 
         if kind == "dhs":
             return _validate_xlsx_openable(path, kind, "DHS xlsx")
