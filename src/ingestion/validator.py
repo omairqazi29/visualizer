@@ -60,8 +60,19 @@ class ValidationReport:
 #   registry uscis_i485_perf: quarterly_all_forms | all.?forms.*fy\d{4}
 #   I140RADPParser glob: i140_fy*.xlsx
 #   registry uscis_i140: i140_fy\d{4}
+#   I485FlowParser glob: data/USCIS_I485/monthly_*.csv
+#   I485FlowParser._parse_monthly_csv: monthly_{month}_{year}.csv
+#   registry uscis_i485_monthly_csv renames appropriation_requirement_* to that shape
 _ALL_FORMS_NAME = re.compile(r"quarterly_all_forms|all.?forms.*fy\d{4}")
 _I140_RADP_NAME = re.compile(r"i140_fy\d{4}")
+# Full English month names, any year. Matches the names already on disk
+# (monthly_july_2026.csv, …) and the rename in _normalize_uscis_monthly_report_name.
+_I485_MONTHLY_NAME = re.compile(
+    r"^monthly_("
+    r"january|february|march|april|may|june|july|august|"
+    r"september|october|november|december"
+    r")_\d{4}\.csv$"
+)
 
 
 def _kind_for_path(path: Path) -> str:
@@ -82,6 +93,10 @@ def _kind_for_path(path: Path) -> str:
         return "i140_radp"
     if _ALL_FORMS_NAME.search(name):
         return "all_forms"
+    # After the workbook kinds above so i485_perf / all_forms in the same
+    # directory keep their names. I485FlowParser only reads this shape here.
+    if parent == "USCIS_I485" and _I485_MONTHLY_NAME.match(name):
+        return "i485_monthly"
     if parent == "DHS_Yearbook":
         return "dhs"
     if parent == "DOL_PERM" or "perm_disclosure" in name.lower() or "perm_disclosure" in name:
@@ -221,6 +236,27 @@ def validate_path(path: Path, *, strict_unknown: bool = False) -> ValidationItem
                 kind,
                 True,
                 f"I140RADPParser OK ({len(summary)} quarter(s))",
+            )
+
+        if kind == "i485_monthly":
+            # Same single-file path I485FlowParser uses for monthly_*.csv.
+            # A truncated or wrong-schema download returns None (no I-485 rows)
+            # and must fail the PR gate rather than pass as "file present".
+            from src.parsers.i485_parser import I485FlowParser
+
+            record = I485FlowParser()._parse_monthly_csv(str(path))
+            if not record:
+                return ValidationItem(
+                    str(path),
+                    kind,
+                    False,
+                    "I485FlowParser returned no monthly I-485 rows",
+                )
+            return ValidationItem(
+                str(path),
+                kind,
+                True,
+                f"I485FlowParser OK ({record.get('period', '?')})",
             )
 
         if kind == "dhs":
