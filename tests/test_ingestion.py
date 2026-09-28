@@ -805,6 +805,102 @@ def test_kind_for_all_forms_and_i140_radp():
     )
 
 
+def test_kind_for_i485_monthly_csv():
+    """Report-to-Congress monthly CSVs share the filename I485FlowParser already
+    parses. Any month/year under data/USCIS_I485/, including the August 2026
+    name that failed run 36478256503. Neighbor kinds stay put.
+    """
+    from src.ingestion.validator import _kind_for_path
+
+    assert (
+        _kind_for_path(Path("data/USCIS_I485/monthly_august_2026.csv"))
+        == "i485_monthly"
+    )
+    for name in (
+        "monthly_january_2024.csv",
+        "monthly_may_2026.csv",
+        "monthly_july_2026.csv",
+        "monthly_december_2031.csv",
+    ):
+        assert _kind_for_path(Path("data/USCIS_I485") / name) == "i485_monthly"
+
+    on_disk = sorted(Path("data/USCIS_I485").glob("monthly_*.csv"))
+    assert on_disk, "expected monthly_*.csv files already on master"
+    for path in on_disk:
+        assert _kind_for_path(path) == "i485_monthly"
+
+    # Same basename outside the I-485 directory is not this series.
+    assert _kind_for_path(Path("data/monthly_august_2026.csv")) == "unknown"
+    # Neighbor reports in the same directory keep their kinds.
+    assert (
+        _kind_for_path(Path("data/USCIS_I485/i485_performance_data_fy2026_q3_v1.xlsx"))
+        == "i485_perf"
+    )
+    assert (
+        _kind_for_path(Path("data/USCIS_I485/quarterly_all_forms_fy2026_q3_v1.xlsx"))
+        == "all_forms"
+    )
+    assert (
+        _kind_for_path(
+            Path("data/eb_i140_i360_i526_performancedata_fy2026_q3_v1.xlsx")
+        )
+        == "pipeline"
+    )
+    assert (
+        _kind_for_path(Path("data/i140_rec_by_class_country_fy2026_q3_v1.xlsx"))
+        == "i140_receipts"
+    )
+    assert _kind_for_path(Path("data/i140_fy2026_q3_v1.xlsx")) == "i140_radp"
+    assert _kind_for_path(Path("data/eb_inventory_august_2026.xlsx")) == "inventory"
+
+
+def test_validate_i485_monthly_strict(tmp_path):
+    """Strict/PR mode accepts a real monthly flow CSV and refuses a download
+    that only matches the filename, without falling through to unknown kind.
+    """
+    from src.ingestion.validator import validate_path
+
+    july = Path("data/USCIS_I485/monthly_july_2026.csv")
+    if not july.exists():
+        pytest.skip("July 2026 monthly I-485 CSV not in data/")
+
+    ok = validate_path(july, strict_unknown=True)
+    assert ok.kind == "i485_monthly"
+    assert ok.ok is True
+    assert "I485FlowParser OK" in ok.message
+    assert "2026-07" in ok.message
+    assert "unknown kind" not in ok.message
+
+    # The exact filename from the failed scan, with no real report bytes.
+    bad_dir = tmp_path / "USCIS_I485"
+    bad_dir.mkdir()
+    bad = bad_dir / "monthly_august_2026.csv"
+    bad.write_bytes(b"not a monthly report")
+    refused = validate_path(bad, strict_unknown=True)
+    assert refused.kind == "i485_monthly"
+    assert refused.ok is False
+    assert "unknown kind" not in refused.message
+
+    empty_schema = bad_dir / "monthly_september_2026.csv"
+    empty_schema.write_text(
+        "Report to Congress\n"
+        "Number of Service-Wide Forms\n"
+        "By Month\n"
+        "For the Month of September 2026\n"
+        "Form Number,Description,Forms Received\n"
+        "I-130,Petition for Alien Relative,1\n",
+        encoding="utf-8",
+    )
+    empty = validate_path(empty_schema, strict_unknown=True)
+    assert empty.kind == "i485_monthly"
+    assert empty.ok is False
+    assert "no monthly I-485 rows" in empty.message
+
+    unknown = tmp_path / "random_notes.txt"
+    unknown.write_text("hello")
+    assert validate_path(unknown, strict_unknown=True).ok is False
+
+
 def test_validate_all_forms_and_radp_strict(tmp_path):
     """Strict/PR mode accepts real all-forms and RADP workbooks and still
     refuses unknown names and unreadable downloads of the new kinds.
