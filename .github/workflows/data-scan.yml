@@ -2,7 +2,11 @@
 # Single invocation: scan + fetch + validate + pr (avoids re-scan classifying files as exists).
 # Visa Bulletin is excluded from `all` — use data-scan-visa-bulletin.yml.
 #
-# Permissions: contents:write + pull-requests:write
+# Permissions: contents:write + pull-requests:write + actions:write
+# actions:write is required to dispatch ci.yml after a PR is opened.
+# PRs are created with GITHUB_TOKEN (no GH_TOKEN secret). A pull_request run
+# from that token waits for "Approve workflows to run", and a push run does
+# not start, so this job dispatches ci.yml on the PR head. scan_and_pr is unchanged.
 
 name: Data source scan
 
@@ -44,6 +48,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 concurrency:
   group: data-scan-${{ github.event.inputs.source || 'all' }}
@@ -134,6 +139,7 @@ jobs:
         run: |
           set -o pipefail
           BRANCH="chore/data-${SOURCE}-${BRANCH_DATE}-${GITHUB_RUN_ID}"
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
           # shellcheck: SOURCE is allowlisted above; passed via env not inline expression injection
           if [ -n "$DRY_FLAG" ]; then
             python -m src.scripts.scan_and_pr \
@@ -159,6 +165,13 @@ jobs:
               --include-baseline-validate \
               --json | tee /tmp/pipeline_result.json
           fi
+
+      # No-op when the scan did not open a PR (dry-run, skip-pr, or nothing new).
+      - name: Trigger CI on data PR
+        if: success()
+        uses: ./.github/actions/dispatch-ci
+        with:
+          branch: ${{ steps.pipeline.outputs.branch }}
 
       - name: Job summary
         if: always()

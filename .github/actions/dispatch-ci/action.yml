@@ -1,0 +1,56 @@
+name: Dispatch CI on data PR
+description: >-
+  Queue ci.yml on a branch when that branch has an open pull request.
+  Used by the data-scan workflows so a GITHUB_TOKEN-opened PR still gets
+  a pytest run. workflow_dispatch is one of the events GITHUB_TOKEN is
+  allowed to start; pull_request and push from that token are not.
+
+inputs:
+  branch:
+    description: Head branch name passed to scan_and_pr (--branch-name)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Dispatch ci.yml
+      shell: bash
+      env:
+        BRANCH: ${{ inputs.branch }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        if [ -z "${BRANCH}" ]; then
+          echo "No branch name recorded; skipping CI dispatch."
+          exit 0
+        fi
+
+        PR_URL=$(gh pr list --head "$BRANCH" --state open --json url --jq '.[0].url // empty')
+        if [ -z "${PR_URL}" ]; then
+          echo "No open pull request for ${BRANCH}; skipping CI dispatch."
+          exit 0
+        fi
+
+        echo "Dispatching CI for ${PR_URL} on ref ${BRANCH}"
+        ok=0
+        for attempt in 1 2 3; do
+          if gh workflow run ci.yml --ref "$BRANCH"; then
+            ok=1
+            break
+          fi
+          echo "ci.yml dispatch attempt ${attempt} failed; retrying..." >&2
+          sleep $((attempt * 5))
+        done
+        if [ "$ok" -ne 1 ]; then
+          echo "Could not dispatch ci.yml on ${BRANCH}." >&2
+          echo "The workflow file must exist on the default branch and on this ref." >&2
+          exit 1
+        fi
+
+        {
+          echo "### CI"
+          echo ""
+          echo "Queued \`ci.yml\` (\`workflow_dispatch\`) on \`${BRANCH}\` for ${PR_URL}."
+          echo "Job checks from that event are not shown in the pull request rollup;"
+          echo "the run posts a \`pytest\` commit status on the head SHA, which is."
+        } >> "$GITHUB_STEP_SUMMARY"
