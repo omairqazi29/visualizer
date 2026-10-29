@@ -1,0 +1,95 @@
+# Pytest for human pull requests, pushes to master, and manual runs.
+#
+# Data-scan PRs are opened with the built-in GITHUB_TOKEN (there is no GH_TOKEN
+# secret). Events caused by that token do not start pull_request or push
+# workflows, except an approval-gated pull_request run ("Approve workflows to
+# run"). workflow_dispatch does start. The scan workflows queue this file on
+# the PR head with `gh workflow run`.
+#
+# Job checks from a workflow_dispatch run are not listed on the pull request
+# and cannot satisfy a ruleset required check. This workflow therefore also
+# posts a commit status named "pytest" on that head SHA, which does show on
+# the PR. See the scan workflow comments for the branch-protection limitation.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Commit status on workflow_dispatch runs (the PR-visible pytest result).
+  statuses: write
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt 'httpx==0.27.2'
+          # fastapi==0.109.2 pins starlette<0.37. That TestClient passes app=
+          # into httpx, which httpx 0.28 removed. 0.27.2 keeps
+          # tests/test_vb_predictor.py and tests/test_api.py running.
+          # httpx is test-only; it is not a runtime requirement of the API.
+
+      - name: Mark pytest pending on the head commit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context=pytest \
+            -f description="pytest running" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Run pytest
+        id: tests
+        run: python -m pytest tests/ -v
+
+      - name: Publish pytest result on the head commit
+        if: always() && github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          case "${{ steps.tests.outcome }}" in
+            success)
+              STATE=success
+              DESC="pytest passed"
+              ;;
+            *)
+              STATE=failure
+              DESC="pytest failed"
+              ;;
+          esac
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$STATE" \
+            -f context=pytest \
+            -f description="$DESC" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

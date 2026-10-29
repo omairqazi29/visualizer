@@ -416,9 +416,17 @@ def test_fetch_candidates_new_only():
 # ── PR helper ───────────────────────────────────────────────────────────────
 
 
-def test_propose_branch_name():
+def test_propose_branch_name(monkeypatch):
+    """Date-only names apply when no CI run id is set.
+
+    propose_branch_name appends GITHUB_RUN_ID or CI_RUN_ID when those are
+    present (see test_propose_branch_name_includes_run_id). GitHub Actions
+    sets GITHUB_RUN_ID, so this case has to clear both or it only passes locally.
+    """
     from datetime import date
 
+    monkeypatch.delenv("GITHUB_RUN_ID", raising=False)
+    monkeypatch.delenv("CI_RUN_ID", raising=False)
     name = propose_branch_name(["dos_iv_fsc"], when=date(2026, 6, 23))
     assert name == "chore/data-dos_iv_fsc-2026-06-23"
     multi = propose_branch_name(["a", "b"], when=date(2026, 1, 1))
