@@ -54,7 +54,7 @@ DATA_DIR = _resolve_data_dir(PROJECT_ROOT)
 # ("Attention Required! | Cloudflare", Server: cloudflare, cf-ray) to the
 # previous SpilloverEngine bot token and to this UA alike from datacenter IPs.
 # Headers stay static — see src/ingestion/http_client.py. A remaining 403 on a
-# known DOS host is an upstream access block, not a challenge to solve.
+# known DOS, USCIS, or DHS host is an upstream access block, not a challenge to solve.
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "

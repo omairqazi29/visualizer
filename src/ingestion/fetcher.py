@@ -303,7 +303,7 @@ def any_fetch_failed(results: Sequence[FetchResult]) -> bool:
 
 
 def unexpected_fetch_failures(results: Sequence[FetchResult]) -> List[FetchResult]:
-    """Failed downloads that are not classified DOS upstream access blocks."""
+    """Failed downloads that are not classified upstream access blocks."""
     return [
         r
         for r in results
@@ -312,7 +312,7 @@ def unexpected_fetch_failures(results: Sequence[FetchResult]) -> List[FetchResul
 
 
 def access_blocked_fetches(results: Sequence[FetchResult]) -> List[FetchResult]:
-    """Downloads refused by a known DOS host (HTTP 403 / Cloudflare)."""
+    """Downloads refused by a known DOS, USCIS, or DHS host (HTTP 403 / Cloudflare)."""
     return [r for r in results if r.access_blocked and not r.success]
 
 

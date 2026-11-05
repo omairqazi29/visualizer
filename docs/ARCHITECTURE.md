@@ -39,9 +39,11 @@ pipeline — no hardcoded supply numbers; files drop into `data/` and are picked
 | Live smoke script | `scripts/verify_sources_live.py` |
 
 Flow: public HTML pages → link match + host allowlist → download under `data/` → parser QA → optional PR.
-HTTP 403 / Cloudflare challenges on known DOS hosts (`travel.state.gov`) are upstream access
-blocks: the scan logs `UPSTREAM ACCESS BLOCKED`, still opens a PR when another source downloads,
-and exits 0 when nothing new was ingested. Unexpected HTTP errors and validation failures stay
+HTTP 403 / Cloudflare challenges on known DOS hosts (`travel.state.gov`) and HTTP 403
+from the USCIS and DHS hosts those scanners already use (`uscis.gov`, `ohss.dhs.gov`)
+are upstream access blocks: the scan logs `UPSTREAM ACCESS BLOCKED`, still opens a PR
+when another source downloads, and exits 0 when nothing new was ingested. Unexpected
+HTTP errors (including a 403 from any other host), timeouts, and validation failures stay
 fail-closed. Operational details are in `docs/POLICY_VERIFICATION.md` § Automated Data Ingestion.
 
 ## Core Components
