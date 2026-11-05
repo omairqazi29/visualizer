@@ -115,7 +115,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Exit 0 even when some source scans fail. "
-            "Known DOS HTTP 403 / Cloudflare blocks already exit 0 on their own "
+            "Known DOS, USCIS, and DHS HTTP 403 blocks already exit 0 on their own "
             "when nothing else failed; this flag also ignores unexpected scan errors."
         ),
     )
@@ -184,9 +184,10 @@ def main(argv: list | None = None) -> int:
             print(
                 "UPSTREAM ACCESS BLOCKED: "
                 + ", ".join(r.source_id for r in blocked_scans)
-                + ". Known DOS host returned HTTP 403 / Cloudflare. "
+                + ". Known DOS, USCIS, or DHS host returned HTTP 403 / Cloudflare. "
                 "No new files ingested for those sources. "
-                "This is an upstream access block, not a scanner bug.",
+                "This is an upstream access block, not a scanner bug. "
+                "Drop the file under data/ manually while the host refuses this client.",
                 file=sys.stderr,
             )
             for r in blocked_scans:
@@ -206,7 +207,7 @@ def main(argv: list | None = None) -> int:
         if unexpected_scans and not args.allow_scan_errors:
             print(
                 "ERROR: unexpected source scan failure "
-                "(not an upstream DOS access block):",
+                "(not an upstream access block):",
                 file=sys.stderr,
             )
             for r in unexpected_scans:
@@ -214,8 +215,9 @@ def main(argv: list | None = None) -> int:
                 print(f"  {r.source_id}: {detail}", file=sys.stderr)
             exit_code = 1
             payload["exit_hints"].append("scan_failed")
-            # Fail closed before PR on unexpected scan errors. DOS 403s do not
-            # take this path — those continue so other sources can still open a PR.
+            # Fail closed before PR on unexpected scan errors. DOS / USCIS / DHS
+            # 403s do not take this path — those continue so other sources can
+            # still open a PR.
             if args.pr and not args.dry_run:
                 if args.as_json:
                     print(json.dumps(payload, indent=2, default=str))
@@ -325,7 +327,7 @@ def main(argv: list | None = None) -> int:
         )
         if blocked_only:
             print(
-                "No new data to PR (upstream DOS access block; "
+                "No new data to PR (upstream access block; "
                 "other scanned sources had nothing new to ingest)."
             )
             payload["pr"] = {

@@ -74,7 +74,7 @@ class ScanResult:
     links_examined: int = 0
     page_fetched: bool = False
     pages_scanned: int = 0
-    # Primary page was refused by a known DOS host (HTTP 403 / Cloudflare).
+    # Primary page was refused by a known DOS, USCIS, or DHS host (HTTP 403 / Cloudflare).
     access_blocked: bool = False
 
     @property
@@ -479,7 +479,7 @@ def scan_sources(
 
 
 def _is_access_blocked_result(result: ScanResult) -> bool:
-    """True when the primary page was not fetched because of a DOS upstream block."""
+    """True when the primary page was not fetched because of an upstream access block."""
     if result.page_fetched:
         return False
     if result.access_blocked:
@@ -524,7 +524,7 @@ def summarize_scan(results: List[ScanResult]) -> str:
         lines.append(
             "UPSTREAM ACCESS BLOCKED: "
             + ", ".join(r.source_id for r in blocked)
-            + " — HTTP 403 / Cloudflare on a known DOS host. "
+            + " — HTTP 403 / Cloudflare on a known DOS, USCIS, or DHS host. "
             "No new files were ingested for those sources. "
             "This is an upstream access block, not a broken scanner URL or a validation error."
         )

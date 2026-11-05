@@ -78,9 +78,10 @@ After data merges, update the changelog in docs/POLICY_VERIFICATION.md if
 supply/demand inputs changed. Visa Bulletin still needs CSV history rows in
 data/visa_bulletin/ when a new bulletin posts (scanner records bulletin URLs).
 
-A Cloudflare HTTP 403 from travel.state.gov is an upstream access block: the
-scan exits 0 when nothing new was ingested. Other HTTP and validation errors
-still fail the run.
+An HTTP 403 from travel.state.gov (Cloudflare), www.uscis.gov, or ohss.dhs.gov
+is an upstream access block: the scan exits 0 when nothing new was ingested.
+Other HTTP errors, 403s from any other host, and validation errors still fail
+the run. Drop files under data/ manually while a host is blocked.
 """.strip()
     )
 

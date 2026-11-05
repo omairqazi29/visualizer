@@ -251,17 +251,21 @@ Source groups: `all` (excludes `visa_bulletin`) | `all_including_vb` | `dos_iv` 
 - **Idempotent:** files already present under the target dir (by normalized/dedup name) are skipped.
   USCIS dedup normalizes `performancedata`↔`performance_data` and strips `_vN` only (does **not**
   collapse distinct form prefixes like `eb_i140` vs `i140_rec`).
-- **Fail-closed:** unexpected scan failures (timeouts, 404/5xx, 403 from a non-DOS host),
-  failed downloads, and validation failures exit non-zero and block `--pr`
-  (use `--allow-scan-errors` only for exploratory scans).
-- **DOS upstream access blocks:** HTTP 403, and Cloudflare HTTP 503 challenges, from known DOS
-  hosts (`travel.state.gov`, `ceac.state.gov`) are classified separately. The run prints
-  `UPSTREAM ACCESS BLOCKED` and keeps scanning sources that responded. If those sources have
-  nothing new to ingest, the process exits 0 so scheduled GitHub Actions stays green while
-  travel.state.gov is unreachable from datacenter IPs. If another source downloads
-  successfully, `--pr` still opens a PR for those files. A realistic browser User-Agent and
-  Accept headers are sent; there is no Cloudflare challenge solver. A 403 from any other
-  host still fails the job.
+- **Fail-closed:** unexpected scan failures (timeouts, 404/5xx, 403 from a host outside
+  the DOS/USCIS/DHS set below, including DOL), failed downloads, and validation failures
+  exit non-zero and block `--pr` (use `--allow-scan-errors` only for exploratory scans).
+  Unknown file kinds still fail closed in strict/PR validation.
+- **Upstream access blocks:** HTTP 403, and Cloudflare HTTP 503 challenges, from known DOS
+  hosts (`travel.state.gov`, `ceac.state.gov`), USCIS hosts (`uscis.gov` and the subdomains
+  those sources already allow, including `www.uscis.gov` and `egov.uscis.gov`), and DHS
+  hosts (`ohss.dhs.gov`, `www.dhs.gov`, `dhs.gov`) are classified separately. The run prints
+  `UPSTREAM ACCESS BLOCKED` and keeps scanning sources that responded. If every unfetched
+  source is an access block and nothing new was ingested, the process exits 0 so scheduled
+  GitHub Actions stays green while those hosts refuse datacenter IPs. If another source
+  downloads successfully, `--pr` still opens a PR for those files. A realistic browser
+  User-Agent and Accept headers are sent; there is no Cloudflare challenge solver. A 403
+  from any other host (including `dol.gov`) still fails the job. Manual drop-in under
+  `data/` remains the ingest path while a host is blocked.
 - **Security:** per-source host allowlist; path traversal rejected; downloads capped at 80MB;
   `.xlsx`/`.xls` must start with zip/OLE magic; only paths under `data/` are staged for PRs.
 - **DOS:** only `IV Issuances by FSC or Place of Birth` Excel files (not Post-level tables).
